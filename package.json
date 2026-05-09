@@ -13,16 +13,20 @@
     "test:watch": "vitest",
     "format": "prettier --write \"**/*.{ts,tsx,js,mjs,json,md}\"",
     "sync-types": "node scripts/sync-types.mjs",
-    "sync-types:check": "node scripts/sync-types.mjs --check"
+    "sync-types:check": "node scripts/sync-types.mjs --check",
+    "android": "expo run:android",
+    "ios": "expo run:ios"
   },
   "dependencies": {
+    "@expo/metro-runtime": "~4.0.1",
     "@supabase/supabase-js": "^2.45.0",
     "expo": "~52.0.0",
     "expo-status-bar": "~2.0.0",
+    "expo-web-browser": "~14.0.2",
     "react": "18.3.1",
     "react-native": "0.76.0",
-    "react-native-web": "^0.19.13",
-    "@expo/metro-runtime": "~4.0.1"
+    "react-native-svg": "15.8.0",
+    "react-native-web": "^0.19.13"
   },
   "devDependencies": {
     "@eslint/js": "^9.18.0",
