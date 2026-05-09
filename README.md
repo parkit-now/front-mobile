@@ -79,6 +79,7 @@ adb reverse tcp:19000 tcp:19000
 5. Abrir Expo Go y correr la app.
 
 Notas:
+
 - Si `localhost` falla, probar `bun run dev -- --tunnel`.
 - Si usás backend local desde el teléfono sin reverse, usar la IP LAN de tu PC.
 
