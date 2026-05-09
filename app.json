@@ -1,0 +1,14 @@
+{
+  "expo": {
+    "name": "front-mobile",
+    "slug": "front-mobile",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "platforms": ["ios", "android", "web"],
+    "scheme": "parkit",
+    "updates": {
+      "fallbackToCacheTimeout": 0
+    },
+    "assetBundlePatterns": ["**/*"]
+  }
+}
