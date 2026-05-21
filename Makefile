@@ -5,20 +5,45 @@ SHELL := bash
 CYAN  := \033[36m
 RESET := \033[0m
 
-.PHONY: help install dev build lint typecheck test format env-check sync-types sync-types-check clean
+.PHONY: help install dev build lint typecheck test format env-check sync-types sync-types-check clean _detect-android-sdk
+
+# Bash snippet shared by install/dev: resuelve ANDROID_HOME en $$android_home
+# (respeta el del entorno; si está vacío, prueba rutas comunes con platform-tools/adb).
+DETECT_ANDROID_SDK := android_home="$${ANDROID_HOME:-}"; \
+	if [ -z "$$android_home" ]; then \
+		for candidate in /usr/lib/android-sdk "$$HOME/Android/Sdk" "$$HOME/Android/sdk" /opt/android-sdk; do \
+			if [ -x "$$candidate/platform-tools/adb" ]; then \
+				android_home="$$candidate"; \
+				break; \
+			fi; \
+		done; \
+	fi
 
 help: ## Mostrar comandos disponibles
 	@awk 'BEGIN {FS = ":.*?## "} \
 	     /^[a-zA-Z_-]+:.*?## / {printf "  $(CYAN)%-16s$(RESET) %s\\n", $$1, $$2}' $(MAKEFILE_LIST)
 
-install: ## Instalar dependencias y activar pre-commit
+install: ## Instalar dependencias, activar pre-commit y chequear Android SDK
 	@command -v bun >/dev/null 2>&1 || { echo "✗ Falta bun"; exit 1; }
 	@bun install
 	@git config core.hooksPath .githooks
+	@$(DETECT_ANDROID_SDK); \
+	if [ -n "$$android_home" ]; then \
+		echo "✓ Android SDK detectado en $$android_home (se autoinyecta en 'make dev')"; \
+	else \
+		echo "⚠ Android SDK no encontrado. Para correr en celular físico instalá adb (sudo apt install adb) o seteá ANDROID_HOME."; \
+	fi
 	@echo "✓ Dependencias instaladas + hook activado"
 
-dev: ## Levantar app en modo desarrollo
-	@bun run dev
+dev: ## Levantar app en modo desarrollo (autodetecta ANDROID_HOME si falta)
+	@$(DETECT_ANDROID_SDK); \
+	if [ -z "$$android_home" ]; then \
+		echo "⚠ No se encontró el Android SDK; instalá adb (sudo apt install adb) o seteá ANDROID_HOME"; \
+		bun run dev; \
+	else \
+		if [ -z "$${ANDROID_HOME:-}" ]; then echo "→ ANDROID_HOME=$$android_home (autodetectado)"; fi; \
+		ANDROID_HOME="$$android_home" bun run dev; \
+	fi
 
 build: ## Build de producción
 	@bun run build

@@ -55,30 +55,57 @@ OPENAPI_URL=http://localhost:3001/api-json make sync-types
 
 ## Expo con celular físico por cable (Android)
 
-1. Activar `USB debugging` en el celular.
-2. Conectar por cable y verificar:
+### Pre-requisitos en la PC
+
+1. Tener `adb` instalado. En Ubuntu/Debian alcanza con:
+
+   ```bash
+   sudo apt install adb
+   ```
+
+   Eso deja el SDK en `/usr/lib/android-sdk`. `make install` y `make dev` autodetectan esa ruta (también `~/Android/Sdk`, `~/Android/sdk`, `/opt/android-sdk`) y exportan `ANDROID_HOME` para la sesión de Expo — no hace falta tocar tu shell. Si querés persistirlo igual:
+
+   ```bash
+   echo 'export ANDROID_HOME=/usr/lib/android-sdk' >> ~/.bashrc
+   echo 'export PATH="$PATH:$ANDROID_HOME/platform-tools"' >> ~/.bashrc
+   ```
+
+2. `make install` te avisa con `Android SDK detectado en …` si la autodetección funcionó. Si dice `Android SDK no encontrado`, instalá `adb` o seteá `ANDROID_HOME` manualmente.
+
+### Pre-requisitos en el celular (una sola vez)
+
+1. **Settings → About phone → Software information** → tocar **Build number** 7 veces para habilitar **Developer options**.
+2. **Settings → Developer options** → activar el switch principal (arriba) y después activar **USB debugging**. Va a aparecer un diálogo de advertencia → **OK**.
+3. Conectar el cable USB. En el celular elegí cualquier modo USB que **no sea "Solo cargar"** (File transfer/MTP o PTP sirven).
+4. En la pantalla del **celular** va a aparecer un popup **"Allow USB debugging from this computer?"** con una huella RSA → marcá **Always allow from this computer** → **Allow**.
+
+   > Nota: ese popup aparece en el celular, no en la PC. Si te aparece en la PC un error de GVFS tipo `El objeto no existe en la ruta /org/gtk/vfs/mount/1`, ignoralo — es Nautilus intentando montar MTP, no tiene relación con adb.
+
+### Verificación
 
 ```bash
 adb devices
 ```
 
-3. Levantar Expo:
+Debe listar tu serial con estado `device`. Si dice `unauthorized`, te perdiste el popup del paso 4; desenchufá, volvé a enchufar y mirá la pantalla del celular.
+
+### Levantar la app
 
 ```bash
 make dev
 ```
 
-4. Si hace falta, levantar en localhost y hacer reverse:
+Vas a ver `→ ANDROID_HOME=… (autodetectado)` seguido del banner de Expo. Apretá **`a`** en la terminal y Expo va a instalar/abrir la app en el celular.
 
-```bash
-bun run dev -- --localhost
-adb reverse tcp:8081 tcp:8081
-adb reverse tcp:19000 tcp:19000
-```
+### Troubleshooting
 
-5. Abrir Expo Go y correr la app.
+- Si el cliente Expo no encuentra el bundler, levantá en localhost con port forwarding:
 
-Notas:
+  ```bash
+  bun run dev -- --localhost
+  adb reverse tcp:8081 tcp:8081
+  adb reverse tcp:19000 tcp:19000
+  ```
 
 - Si `localhost` falla, probar `bun run dev -- --tunnel`.
 - Si usás backend local desde el teléfono sin reverse, usar la IP LAN de tu PC.
