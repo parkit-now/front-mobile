@@ -66,8 +66,14 @@ dev: env-use-local ## Levantar app apuntando al backend LOCAL (autodetecta ANDRO
 		ANDROID_HOME="$$android_home" bun run dev; \
 	fi
 
-prod: env-use-prod ## Build de produccion apuntando al backend PROD
-	@bun run build
+prod: env-use-prod ## Levantar Expo en modo prod (--no-dev --minify) con link/QR
+	@$(DETECT_ANDROID_SDK); \
+	if [ -z "$$android_home" ]; then \
+		bunx expo start --no-dev --minify; \
+	else \
+		if [ -z "$${ANDROID_HOME:-}" ]; then echo "→ ANDROID_HOME=$$android_home (autodetectado)"; fi; \
+		ANDROID_HOME="$$android_home" bunx expo start --no-dev --minify; \
+	fi
 
 build: ## Build con el .env actual (sin tocar el entorno activo)
 	@bun run build
