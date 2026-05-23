@@ -86,7 +86,7 @@ function AppInner() {
         <BrandHeader />
 
         {loading ? (
-          <Text style={authStyles.muted}>Cargando sesion...</Text>
+          <Text style={authStyles.muted}>Cargando sesión...</Text>
         ) : session ? (
           <SessionView session={session} />
         ) : view === 'register' ? (

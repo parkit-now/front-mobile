@@ -79,7 +79,7 @@ export function RegisterScreen({ onSwitchToLogin }: Props) {
         <View style={authStyles.fieldGroup}>
           <TextInput
             style={[authStyles.input, errors.password && authStyles.inputError]}
-            accessibilityLabel="Contrasena"
+            accessibilityLabel="Contraseña"
             secureTextEntry
             autoCapitalize="none"
             textContentType="newPassword"
@@ -90,7 +90,7 @@ export function RegisterScreen({ onSwitchToLogin }: Props) {
                 setErrors((prev) => ({ ...prev, password: undefined }));
               }
             }}
-            placeholder="Contrasena (min. 8 caracteres)"
+            placeholder="Contraseña (mín. 8 caracteres)"
             placeholderTextColor="#98a2b3"
           />
           {errors.password ? (
@@ -115,7 +115,7 @@ export function RegisterScreen({ onSwitchToLogin }: Props) {
       </View>
 
       <View style={authStyles.helperRow}>
-        <Text style={authStyles.helperText}>Ya tenes cuenta? </Text>
+        <Text style={authStyles.helperText}>¿Ya tenés cuenta? </Text>
         <Pressable onPress={onSwitchToLogin} disabled={pending} hitSlop={4}>
           <Text style={authStyles.linkText}>Ingresar</Text>
         </Pressable>

@@ -43,7 +43,7 @@ export function SessionView({ session }: Props) {
         disabled={pendingSignOut}
       >
         <Text style={authStyles.signOutButtonText}>
-          {pendingSignOut ? 'Cerrando...' : 'Cerrar sesion'}
+          {pendingSignOut ? 'Cerrando...' : 'Cerrar sesión'}
         </Text>
       </Pressable>
     </>

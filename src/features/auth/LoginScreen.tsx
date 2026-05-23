@@ -80,7 +80,7 @@ export function LoginScreen({ onSwitchToRegister }: Props) {
 
   return (
     <>
-      <Text style={authStyles.heading}>Iniciar sesion</Text>
+      <Text style={authStyles.heading}>Iniciar sesión</Text>
 
       <View style={authStyles.form}>
         <View style={authStyles.fieldGroup}>
@@ -109,7 +109,7 @@ export function LoginScreen({ onSwitchToRegister }: Props) {
         <View style={authStyles.fieldGroup}>
           <TextInput
             style={[authStyles.input, errors.password && authStyles.inputError]}
-            accessibilityLabel="Contrasena"
+            accessibilityLabel="Contraseña"
             secureTextEntry
             autoCapitalize="none"
             textContentType="password"
@@ -120,7 +120,7 @@ export function LoginScreen({ onSwitchToRegister }: Props) {
                 setErrors((prev) => ({ ...prev, password: undefined }));
               }
             }}
-            placeholder="Contrasena"
+            placeholder="Contraseña"
             placeholderTextColor="#98a2b3"
           />
           {errors.password ? (
@@ -145,7 +145,7 @@ export function LoginScreen({ onSwitchToRegister }: Props) {
       </View>
 
       <View style={authStyles.helperRow}>
-        <Text style={authStyles.helperText}>No tenes cuenta? </Text>
+        <Text style={authStyles.helperText}>¿No tenés cuenta? </Text>
         <Pressable
           onPress={onSwitchToRegister}
           disabled={anyPending}
