@@ -8,6 +8,7 @@ import { RegisterScreen } from './src/features/auth/RegisterScreen';
 import { SessionView } from './src/features/auth/SessionView';
 import { getErrorMessage } from './src/features/auth/errors';
 import { authStyles } from './src/features/auth/styles';
+import { ToastProvider, useToast } from './src/lib/notifications/ToastProvider';
 import {
   getSession,
   hydrateSessionFromUrl,
@@ -17,10 +18,18 @@ import {
 type AuthView = 'login' | 'register';
 
 export default function App() {
+  return (
+    <ToastProvider>
+      <AppInner />
+    </ToastProvider>
+  );
+}
+
+function AppInner() {
+  const { showToast } = useToast();
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState<AuthView>('login');
-  const [bootError, setBootError] = useState('');
 
   useEffect(() => {
     let isMounted = true;
@@ -36,7 +45,7 @@ export default function App() {
         }
       } catch (error) {
         if (isMounted) {
-          setBootError(getErrorMessage(error));
+          showToast({ message: getErrorMessage(error), kind: 'error' });
         }
       } finally {
         if (isMounted) {
@@ -52,7 +61,7 @@ export default function App() {
         try {
           await hydrateSessionFromUrl(event.url);
         } catch (error) {
-          setBootError(getErrorMessage(error));
+          showToast({ message: getErrorMessage(error), kind: 'error' });
         }
       })();
     });
@@ -69,61 +78,32 @@ export default function App() {
       urlSubscription.remove();
       unsubscribeAuth();
     };
-  }, []);
+  }, [showToast]);
 
   return (
     <SafeAreaView style={authStyles.page}>
-      <ViewCard
-        loading={loading}
-        session={session}
-        view={view}
-        onSwitchToLogin={() => {
-          setView('login');
-        }}
-        onSwitchToRegister={() => {
-          setView('register');
-        }}
-        bootError={bootError}
-      />
+      <View style={authStyles.card}>
+        <BrandHeader />
+
+        {loading ? (
+          <Text style={authStyles.muted}>Cargando sesion...</Text>
+        ) : session ? (
+          <SessionView session={session} />
+        ) : view === 'register' ? (
+          <RegisterScreen
+            onSwitchToLogin={() => {
+              setView('login');
+            }}
+          />
+        ) : (
+          <LoginScreen
+            onSwitchToRegister={() => {
+              setView('register');
+            }}
+          />
+        )}
+      </View>
       <StatusBar style="dark" />
     </SafeAreaView>
-  );
-}
-
-type CardProps = {
-  loading: boolean;
-  session: Session | null;
-  view: AuthView;
-  onSwitchToLogin: () => void;
-  onSwitchToRegister: () => void;
-  bootError: string;
-};
-
-function ViewCard({
-  loading,
-  session,
-  view,
-  onSwitchToLogin,
-  onSwitchToRegister,
-  bootError,
-}: CardProps) {
-  return (
-    <View style={authStyles.card}>
-      <BrandHeader />
-
-      {loading ? (
-        <Text style={authStyles.muted}>Cargando sesion...</Text>
-      ) : session ? (
-        <SessionView session={session} />
-      ) : view === 'register' ? (
-        <RegisterScreen onSwitchToLogin={onSwitchToLogin} />
-      ) : (
-        <LoginScreen onSwitchToRegister={onSwitchToRegister} />
-      )}
-
-      {bootError ? (
-        <Text style={authStyles.errorBanner}>{bootError}</Text>
-      ) : null}
-    </View>
   );
 }

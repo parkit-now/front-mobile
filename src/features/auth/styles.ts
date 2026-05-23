@@ -87,6 +87,17 @@ export const authStyles = StyleSheet.create({
     color: '#101828',
     fontSize: 15,
   },
+  inputError: {
+    borderColor: '#f6c7bf',
+    backgroundColor: '#fff1ef',
+  },
+  fieldGroup: {
+    gap: 6,
+  },
+  fieldError: {
+    fontSize: 13,
+    color: '#b42318',
+  },
   rolePickerRow: {
     flexDirection: 'row',
     gap: 8,

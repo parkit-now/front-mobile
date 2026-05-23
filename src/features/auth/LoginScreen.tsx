@@ -1,12 +1,18 @@
 import { useState } from 'react';
 import { Pressable, Text, TextInput, View } from 'react-native';
+import { useToast } from '../../lib/notifications/ToastProvider';
 import {
   signInWithEmail,
   signInWithProvider,
 } from '../../lib/supabase/session';
-import { getErrorMessage } from './errors';
+import { getErrorMessage, mapAuthError } from './errors';
 import { ProviderIcon, type SocialProvider } from './ProviderIcon';
 import { authStyles } from './styles';
+import {
+  validateEmail,
+  validatePassword,
+  type FieldErrors,
+} from './validation';
 
 type OAuthOption = {
   provider: SocialProvider;
@@ -23,33 +29,48 @@ type Props = {
 };
 
 export function LoginScreen({ onSwitchToRegister }: Props) {
+  const { showToast } = useToast();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [errors, setErrors] = useState<FieldErrors>({});
   const [pendingEmail, setPendingEmail] = useState(false);
   const [pendingProvider, setPendingProvider] = useState<SocialProvider | null>(
     null,
   );
-  const [message, setMessage] = useState('');
 
   async function handleEmailSubmit() {
-    setMessage('');
+    const next: FieldErrors = {};
+    const emailError = validateEmail(email);
+    if (emailError) next.email = emailError;
+    const passwordError = validatePassword(password);
+    if (passwordError) next.password = passwordError;
+    if (Object.keys(next).length > 0) {
+      setErrors(next);
+      return;
+    }
+    setErrors({});
     setPendingEmail(true);
     try {
       await signInWithEmail(email, password);
     } catch (error) {
-      setMessage(getErrorMessage(error));
+      const mapped = mapAuthError(error, 'login');
+      if (mapped.fieldErrors) {
+        setErrors(mapped.fieldErrors);
+      }
+      if (mapped.toastMessage) {
+        showToast({ message: mapped.toastMessage, kind: 'error' });
+      }
     } finally {
       setPendingEmail(false);
     }
   }
 
   async function handleProvider(provider: SocialProvider) {
-    setMessage('');
     setPendingProvider(provider);
     try {
       await signInWithProvider(provider);
     } catch (error) {
-      setMessage(getErrorMessage(error));
+      showToast({ message: getErrorMessage(error), kind: 'error' });
     } finally {
       setPendingProvider(null);
     }
@@ -62,30 +83,50 @@ export function LoginScreen({ onSwitchToRegister }: Props) {
       <Text style={authStyles.heading}>Iniciar sesion</Text>
 
       <View style={authStyles.form}>
-        <TextInput
-          style={authStyles.input}
-          accessibilityLabel="Email"
-          autoCapitalize="none"
-          autoCorrect={false}
-          keyboardType="email-address"
-          textContentType="emailAddress"
-          value={email}
-          onChangeText={setEmail}
-          placeholder="Email"
-          placeholderTextColor="#98a2b3"
-        />
+        <View style={authStyles.fieldGroup}>
+          <TextInput
+            style={[authStyles.input, errors.email && authStyles.inputError]}
+            accessibilityLabel="Email"
+            autoCapitalize="none"
+            autoCorrect={false}
+            keyboardType="email-address"
+            textContentType="emailAddress"
+            value={email}
+            onChangeText={(value) => {
+              setEmail(value);
+              if (errors.email) {
+                setErrors((prev) => ({ ...prev, email: undefined }));
+              }
+            }}
+            placeholder="Email"
+            placeholderTextColor="#98a2b3"
+          />
+          {errors.email ? (
+            <Text style={authStyles.fieldError}>{errors.email}</Text>
+          ) : null}
+        </View>
 
-        <TextInput
-          style={authStyles.input}
-          accessibilityLabel="Contrasena"
-          secureTextEntry
-          autoCapitalize="none"
-          textContentType="password"
-          value={password}
-          onChangeText={setPassword}
-          placeholder="Contrasena"
-          placeholderTextColor="#98a2b3"
-        />
+        <View style={authStyles.fieldGroup}>
+          <TextInput
+            style={[authStyles.input, errors.password && authStyles.inputError]}
+            accessibilityLabel="Contrasena"
+            secureTextEntry
+            autoCapitalize="none"
+            textContentType="password"
+            value={password}
+            onChangeText={(value) => {
+              setPassword(value);
+              if (errors.password) {
+                setErrors((prev) => ({ ...prev, password: undefined }));
+              }
+            }}
+            placeholder="Contrasena"
+            placeholderTextColor="#98a2b3"
+          />
+          {errors.password ? (
+            <Text style={authStyles.fieldError}>{errors.password}</Text>
+          ) : null}
+        </View>
 
         <Pressable
           style={[
@@ -142,8 +183,6 @@ export function LoginScreen({ onSwitchToRegister }: Props) {
           </Pressable>
         ))}
       </View>
-
-      {message ? <Text style={authStyles.errorBanner}>{message}</Text> : null}
     </>
   );
 }
