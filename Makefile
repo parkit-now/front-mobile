@@ -5,7 +5,12 @@ SHELL := bash
 CYAN  := \033[36m
 RESET := \033[0m
 
-.PHONY: help install dev build lint typecheck test format env-check sync-types sync-types-check clean _detect-android-sdk
+ENV_LOCAL := .env.local
+ENV_PROD  := .env.production
+
+.PHONY: help install dev prod build lint typecheck test format \
+        env-check env-use-local env-use-prod \
+        sync-types sync-types-check clean _detect-android-sdk
 
 # Bash snippet shared by install/dev: resuelve ANDROID_HOME en $$android_home
 # (respeta el del entorno; si está vacío, prueba rutas comunes con platform-tools/adb).
@@ -35,7 +40,23 @@ install: ## Instalar dependencias, activar pre-commit y chequear Android SDK
 	fi
 	@echo "✓ Dependencias instaladas + hook activado"
 
-dev: ## Levantar app en modo desarrollo (autodetecta ANDROID_HOME si falta)
+env-use-local: ## Activar entorno local (copia .env.local → .env)
+	@if [ ! -f $(ENV_LOCAL) ]; then \
+		echo "✗ Falta $(ENV_LOCAL). Copialo desde .env.example y completá los valores locales."; \
+		exit 1; \
+	fi
+	@cp $(ENV_LOCAL) .env
+	@echo "✓ .env apunta a entorno LOCAL ($(ENV_LOCAL))"
+
+env-use-prod: ## Activar entorno produccion (copia .env.production → .env)
+	@if [ ! -f $(ENV_PROD) ]; then \
+		echo "✗ Falta $(ENV_PROD). Copialo desde .env.example y completá los valores de prod."; \
+		exit 1; \
+	fi
+	@cp $(ENV_PROD) .env
+	@echo "✓ .env apunta a entorno PRODUCCION ($(ENV_PROD))"
+
+dev: env-use-local ## Levantar app apuntando al backend LOCAL (autodetecta ANDROID_HOME)
 	@$(DETECT_ANDROID_SDK); \
 	if [ -z "$$android_home" ]; then \
 		echo "⚠ No se encontró el Android SDK; instalá adb (sudo apt install adb) o seteá ANDROID_HOME"; \
@@ -45,7 +66,10 @@ dev: ## Levantar app en modo desarrollo (autodetecta ANDROID_HOME si falta)
 		ANDROID_HOME="$$android_home" bun run dev; \
 	fi
 
-build: ## Build de producción
+prod: env-use-prod ## Build de produccion apuntando al backend PROD
+	@bun run build
+
+build: ## Build con el .env actual (sin tocar el entorno activo)
 	@bun run build
 
 lint: ## Ejecutar ESLint
@@ -60,9 +84,9 @@ test: ## Ejecutar tests
 format: ## Formatear archivos
 	@bun run format
 
-env-check: ## Validar variables mínimas de Supabase
+env-check: ## Validar variables mínimas del .env activo
 	@if [ ! -f .env ]; then \
-		echo "✗ Falta .env (copiá .env.example)"; exit 1; fi
+		echo "✗ Falta .env activo. Corré: make env-use-local  ó  make env-use-prod"; exit 1; fi
 	@set -a; . ./.env; set +a; \
 	if [ -z "$${VITE_SUPABASE_URL:-}" ] && [ -z "$${EXPO_PUBLIC_SUPABASE_URL:-}" ]; then \
 		echo "✗ Falta URL de Supabase: VITE_SUPABASE_URL o EXPO_PUBLIC_SUPABASE_URL"; exit 1; \
