@@ -37,9 +37,6 @@ export function BrandHeader() {
       </View>
       <View style={authStyles.brandCopy}>
         <Text style={authStyles.title}>Parkit</Text>
-        <Text style={authStyles.subtitle}>
-          Acceso seguro para tu operacion diaria
-        </Text>
       </View>
     </View>
   );

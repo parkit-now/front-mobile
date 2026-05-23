@@ -1,15 +1,8 @@
 import { useState } from 'react';
 import { Pressable, Text, TextInput, View } from 'react-native';
-import type { RegisterRole } from '../../lib/api/auth';
 import { registerWithEmail } from '../../lib/supabase/session';
 import { getErrorMessage } from './errors';
 import { authStyles } from './styles';
-
-const ROLE_OPTIONS: Array<{ value: RegisterRole; label: string }> = [
-  { value: 'driver', label: 'Conductor' },
-  { value: 'operator', label: 'Operador' },
-  { value: 'owner', label: 'Dueno' },
-];
 
 type Props = {
   onSwitchToLogin: () => void;
@@ -18,7 +11,6 @@ type Props = {
 export function RegisterScreen({ onSwitchToLogin }: Props) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [role, setRole] = useState<RegisterRole>('driver');
   const [pending, setPending] = useState(false);
   const [message, setMessage] = useState('');
 
@@ -26,7 +18,7 @@ export function RegisterScreen({ onSwitchToLogin }: Props) {
     setMessage('');
     setPending(true);
     try {
-      await registerWithEmail(email, password, role);
+      await registerWithEmail(email, password);
     } catch (error) {
       setMessage(getErrorMessage(error));
     } finally {
@@ -37,68 +29,32 @@ export function RegisterScreen({ onSwitchToLogin }: Props) {
   return (
     <>
       <Text style={authStyles.heading}>Crear cuenta</Text>
-      <Text style={authStyles.muted}>Completa tus datos para empezar.</Text>
 
       <View style={authStyles.form}>
-        <View>
-          <Text style={authStyles.fieldLabel}>Email</Text>
-          <TextInput
-            style={authStyles.input}
-            autoCapitalize="none"
-            autoCorrect={false}
-            keyboardType="email-address"
-            textContentType="emailAddress"
-            value={email}
-            onChangeText={setEmail}
-            placeholder="jane.doe@parkit.com"
-            placeholderTextColor="#98a2b3"
-          />
-        </View>
+        <TextInput
+          style={authStyles.input}
+          accessibilityLabel="Email"
+          autoCapitalize="none"
+          autoCorrect={false}
+          keyboardType="email-address"
+          textContentType="emailAddress"
+          value={email}
+          onChangeText={setEmail}
+          placeholder="Email"
+          placeholderTextColor="#98a2b3"
+        />
 
-        <View>
-          <Text style={authStyles.fieldLabel}>Contrasena</Text>
-          <TextInput
-            style={authStyles.input}
-            secureTextEntry
-            autoCapitalize="none"
-            textContentType="newPassword"
-            value={password}
-            onChangeText={setPassword}
-            placeholder="Minimo 8 caracteres"
-            placeholderTextColor="#98a2b3"
-          />
-        </View>
-
-        <View>
-          <Text style={authStyles.fieldLabel}>Rol</Text>
-          <View style={authStyles.rolePickerRow}>
-            {ROLE_OPTIONS.map((option) => {
-              const active = option.value === role;
-              return (
-                <Pressable
-                  key={option.value}
-                  style={[
-                    authStyles.roleChip,
-                    active && authStyles.roleChipActive,
-                  ]}
-                  onPress={() => {
-                    setRole(option.value);
-                  }}
-                  disabled={pending}
-                >
-                  <Text
-                    style={[
-                      authStyles.roleChipText,
-                      active && authStyles.roleChipTextActive,
-                    ]}
-                  >
-                    {option.label}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
-        </View>
+        <TextInput
+          style={authStyles.input}
+          accessibilityLabel="Contrasena"
+          secureTextEntry
+          autoCapitalize="none"
+          textContentType="newPassword"
+          value={password}
+          onChangeText={setPassword}
+          placeholder="Contrasena"
+          placeholderTextColor="#98a2b3"
+        />
 
         <Pressable
           style={[

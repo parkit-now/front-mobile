@@ -60,39 +60,32 @@ export function LoginScreen({ onSwitchToRegister }: Props) {
   return (
     <>
       <Text style={authStyles.heading}>Iniciar sesion</Text>
-      <Text style={authStyles.muted}>
-        Ingresa con tu correo o un proveedor.
-      </Text>
 
       <View style={authStyles.form}>
-        <View>
-          <Text style={authStyles.fieldLabel}>Email</Text>
-          <TextInput
-            style={authStyles.input}
-            autoCapitalize="none"
-            autoCorrect={false}
-            keyboardType="email-address"
-            textContentType="emailAddress"
-            value={email}
-            onChangeText={setEmail}
-            placeholder="jane.doe@parkit.com"
-            placeholderTextColor="#98a2b3"
-          />
-        </View>
+        <TextInput
+          style={authStyles.input}
+          accessibilityLabel="Email"
+          autoCapitalize="none"
+          autoCorrect={false}
+          keyboardType="email-address"
+          textContentType="emailAddress"
+          value={email}
+          onChangeText={setEmail}
+          placeholder="Email"
+          placeholderTextColor="#98a2b3"
+        />
 
-        <View>
-          <Text style={authStyles.fieldLabel}>Contrasena</Text>
-          <TextInput
-            style={authStyles.input}
-            secureTextEntry
-            autoCapitalize="none"
-            textContentType="password"
-            value={password}
-            onChangeText={setPassword}
-            placeholder="Minimo 8 caracteres"
-            placeholderTextColor="#98a2b3"
-          />
-        </View>
+        <TextInput
+          style={authStyles.input}
+          accessibilityLabel="Contrasena"
+          secureTextEntry
+          autoCapitalize="none"
+          textContentType="password"
+          value={password}
+          onChangeText={setPassword}
+          placeholder="Contrasena"
+          placeholderTextColor="#98a2b3"
+        />
 
         <Pressable
           style={[
@@ -123,7 +116,7 @@ export function LoginScreen({ onSwitchToRegister }: Props) {
 
       <View style={authStyles.divider} accessibilityElementsHidden>
         <View style={authStyles.dividerLine} />
-        <Text style={authStyles.dividerLabel}>O CONTINUAR CON</Text>
+        <Text style={authStyles.dividerLabel}>O</Text>
         <View style={authStyles.dividerLine} />
       </View>
 
