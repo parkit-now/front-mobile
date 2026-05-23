@@ -3,6 +3,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
 import { Linking, SafeAreaView, Text, View } from 'react-native';
 import { BrandHeader } from './src/features/auth/BrandHeader';
+import { ForgotPasswordScreen } from './src/features/auth/ForgotPasswordScreen';
 import { LoginScreen } from './src/features/auth/LoginScreen';
 import { RegisterScreen } from './src/features/auth/RegisterScreen';
 import { SessionView } from './src/features/auth/SessionView';
@@ -15,7 +16,7 @@ import {
   onSessionChange,
 } from './src/lib/supabase/session';
 
-type AuthView = 'login' | 'register';
+type AuthView = 'login' | 'register' | 'forgot';
 
 export default function App() {
   return (
@@ -95,10 +96,19 @@ function AppInner() {
               setView('login');
             }}
           />
+        ) : view === 'forgot' ? (
+          <ForgotPasswordScreen
+            onBackToLogin={() => {
+              setView('login');
+            }}
+          />
         ) : (
           <LoginScreen
             onSwitchToRegister={() => {
               setView('register');
+            }}
+            onForgotPassword={() => {
+              setView('forgot');
             }}
           />
         )}
