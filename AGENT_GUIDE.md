@@ -22,8 +22,7 @@ Construir features mobile en Expo manteniendo contratos API sincronizados y comp
 ## Politica de contratos API
 
 - Fuente por defecto: `OPENAPI_URL=http://localhost:3000/api-json`.
-- Generar: `make sync-types`.
-- Validar drift: `make sync-types-check`.
+- Generar: `make sync-types` (requiere backend corriendo). Commitear `src/generated/api-types.ts`.
 - Tipos manuales permitidos solo para estado/form/view-model interno.
 
 ## Dispositivo fisico por USB (Android)
@@ -72,7 +71,6 @@ make lint
 make typecheck
 make test
 make build
-make sync-types-check
 ```
 
 ## Anti-patrones

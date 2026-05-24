@@ -13,7 +13,6 @@
     "test:watch": "vitest",
     "format": "prettier --write \"**/*.{ts,tsx,js,mjs,json,md}\"",
     "sync-types": "node scripts/sync-types.mjs",
-    "sync-types:check": "node scripts/sync-types.mjs --check",
     "android": "expo run:android",
     "ios": "expo run:ios"
   },

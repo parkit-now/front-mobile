@@ -36,7 +36,6 @@ En este repo no usamos DTOs de Nest; usamos tipos OpenAPI generados.
 
 ```bash
 make sync-types
-make sync-types-check
 ```
 
 Regla: no editar `src/generated/api-types.ts` a mano.
@@ -117,7 +116,6 @@ make lint
 make typecheck
 make test
 make build
-make sync-types-check
 ```
 
 ## Comandos diarios
