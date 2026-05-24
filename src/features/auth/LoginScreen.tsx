@@ -146,11 +146,7 @@ export function LoginScreen({ onSwitchToRegister, onForgotPassword }: Props) {
       </View>
 
       <View style={authStyles.helperRow}>
-        <Pressable
-          onPress={onForgotPassword}
-          disabled={anyPending}
-          hitSlop={4}
-        >
+        <Pressable onPress={onForgotPassword} disabled={anyPending} hitSlop={4}>
           <Text style={authStyles.linkText}>¿Olvidaste tu contraseña?</Text>
         </Pressable>
       </View>
