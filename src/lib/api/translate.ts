@@ -21,8 +21,7 @@ export type EndpointKey =
   | 'auth.refresh'
   | 'auth.logout'
   | 'auth.forgotPassword'
-  | 'auth.me'
-  | 'users.me';
+  | 'auth.me';
 
 export type TranslateContext = {
   endpoint?: EndpointKey;
@@ -86,7 +85,6 @@ const CONTEXT_MESSAGES: Record<string, string> = {
   'auth.refresh:401': 'Tu sesión expiró. Volvé a iniciar sesión.',
   'auth.logout:401': 'Tu sesión ya no es válida.',
   'auth.me:401': 'Tu sesión expiró. Volvé a iniciar sesión.',
-  'users.me:401': 'Tu sesión expiró. Volvé a iniciar sesión.',
 };
 
 // Fallback final por HTTP status.
