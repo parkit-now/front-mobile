@@ -13,6 +13,21 @@ const DEFAULT_OAUTH_REDIRECT_URL = 'parkit://auth/callback';
 
 WebBrowser.maybeCompleteAuthSession();
 
+/**
+ * Global platform role carried in the Supabase JWT as `app_metadata.role`.
+ * A "driver" is simply a `user` with no memberships.
+ */
+export type AppRole = 'admin' | 'user';
+
+/**
+ * Reads the global role from the session's `app_metadata.role` claim.
+ * Returns `null` when the claim is absent or unrecognized.
+ */
+export function getRoleFromSession(session: Session | null): AppRole | null {
+  const role: unknown = session?.user?.app_metadata?.role;
+  return role === 'admin' || role === 'user' ? role : null;
+}
+
 export function getOAuthRedirectUrl(): string {
   const customRedirect = process.env.EXPO_PUBLIC_SUPABASE_OAUTH_REDIRECT_URL;
 
@@ -177,7 +192,6 @@ export async function registerWithEmail(
   const result = await registerWithPassword({
     email,
     password,
-    role: 'driver',
   });
   return applyBackendSession(result.session);
 }

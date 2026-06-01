@@ -9,7 +9,7 @@ export type SessionDto = components['schemas']['SessionDto'];
 export type AuthSessionResponseDto =
   components['schemas']['AuthSessionResponseDto'];
 
-export type RegisterRole = RegisterDto['role'];
+export type MeResponseDto = components['schemas']['MeResponseDto'];
 
 export function loginWithPassword(input: LoginDto): Promise<SessionDto> {
   return apiRequest<SessionDto>({
@@ -41,6 +41,14 @@ export function logoutBackend(accessToken: string): Promise<void> {
   return apiRequest<void>({
     method: 'POST',
     path: '/auth/logout',
+    bearer: accessToken,
+  });
+}
+
+export function getMe(accessToken: string): Promise<MeResponseDto> {
+  return apiRequest<MeResponseDto>({
+    method: 'GET',
+    path: '/auth/me',
     bearer: accessToken,
   });
 }
