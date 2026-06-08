@@ -21,7 +21,7 @@ export type EndpointKey =
   | 'auth.refresh'
   | 'auth.logout'
   | 'auth.forgotPassword'
-  | 'users.me';
+  | 'auth.me';
 
 export type TranslateContext = {
   endpoint?: EndpointKey;
@@ -84,7 +84,7 @@ const CONTEXT_MESSAGES: Record<string, string> = {
   'auth.register:409': 'Ya existe una cuenta con ese email.',
   'auth.refresh:401': 'Tu sesión expiró. Volvé a iniciar sesión.',
   'auth.logout:401': 'Tu sesión ya no es válida.',
-  'users.me:401': 'Tu sesión expiró. Volvé a iniciar sesión.',
+  'auth.me:401': 'Tu sesión expiró. Volvé a iniciar sesión.',
 };
 
 // Fallback final por HTTP status.
