@@ -743,6 +743,156 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/tenants/{tenantId}/entries/lpr": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Register a vehicle entry from an LPR detection event */
+        post: operations["EntriesController_createFromLpr"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tenants/{tenantId}/lpr-events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List LPR detection events for owner/operator review */
+        get: operations["LprEventsController_list"];
+        put?: never;
+        /** Create or update an auditable LPR detection event */
+        post: operations["LprEventsController_upsert"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tenants/{tenantId}/lpr-events/{eventId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Mark an LPR detection event as registered, dismissed, or suppressed */
+        patch: operations["LprEventsController_updateStatus"];
+        trace?: never;
+    };
+    "/tenants/{tenantId}/lpr-events/{eventId}/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Archive a dismissed LPR detection event after owner review
+         * @description Hides a dismissed event from the owner review inbox without deleting the auditable event or its stored evidence image.
+         */
+        patch: operations["LprEventsController_archive"];
+        trace?: never;
+    };
+    "/tenants/{tenantId}/lpr-events/{eventId}/image": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Upload an LPR detection event's photo
+         * @description Accepts the raw JPEG bytes (`Content-Type: image/jpeg`, max 2MB) captured by the desktop camera service, uploads them to the private `lpr-detection-images` bucket, and persists `imageStoragePath` on the event.
+         *
+         *     Object path is deterministic (`<tenantId>/<eventId>.jpg`), so retrying after a dropped connection just overwrites the same object — safe to call again from the offline sync queue.
+         */
+        post: operations["LprEventsController_uploadImage"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tenants/{tenantId}/lpr-events/{eventId}/image-signed-url": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Mint a signed URL to preview an LPR detection event's photo
+         * @description Returns a short-lived signed URL (5 minutes) pointing at the photo binary in Supabase Storage.
+         *
+         *     The photo is never exposed via a permanent public URL — it can contain plate and vehicle identity, so URLs are minted on demand with the service role, which bypasses the bucket's deny-by-default storage RLS.
+         */
+        get: operations["LprEventsController_imageSignedUrl"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tenants/{tenantId}/lpr-events/{eventId}/unarchive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Move an archived LPR detection event back to owner review */
+        patch: operations["LprEventsController_unarchive"];
+        trace?: never;
+    };
+    "/tenants/{tenantId}/lpr-events/changes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Pull incremental LPR detection event changes for sync */
+        get: operations["LprEventsController_pullChanges"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/tenants/{tenantId}/payment-methods": {
         parameters: {
             query?: never;
@@ -1718,6 +1868,11 @@ export interface components {
             color?: string;
             /** Format: date-time */
             enteredAt: string;
+            entryCameraId?: string;
+            /** @description URL of the entry photo captured by the LPR camera */
+            entryImageUrl?: string;
+            exitCameraId?: string;
+            exitImageUrl?: string;
             /** Format: uuid */
             id: string;
             /** Format: date-time */
@@ -1732,6 +1887,11 @@ export interface components {
             rateSnapshotHourPriceArs?: number;
             rateSnapshotName?: string;
             rateSnapshotStayPriceArs?: number;
+            /**
+             * @description auto = created by LPR; manual = operator-typed
+             * @example manual
+             */
+            source: string;
             syncSeq: number;
             /** Format: uuid */
             tenantId: string;
@@ -1748,7 +1908,14 @@ export interface components {
              * @example Bora
              */
             vehicleModel?: string;
+            /** @enum {string} */
+            vehicleType?: "auto" | "pickup" | "suv" | "van" | "moto" | "camioneta" | "otro";
             version: number;
+            /**
+             * Format: uuid
+             * @description Set when entry was authorized via whitelist
+             */
+            whitelistId?: string;
         };
         ForgotPasswordDto: {
             /**
@@ -1819,6 +1986,84 @@ export interface components {
              * @example CorrectHorseBatteryStaple1!
              */
             password: string;
+        };
+        LprDetectionEventChangesResponseDto: {
+            items: components["schemas"]["LprDetectionEventDto"][];
+            /** @description Highest sync sequence included in this page. */
+            maxSeq: number;
+        };
+        LprDetectionEventDto: {
+            /** Format: date-time */
+            archivedAt?: string | null;
+            /** Format: uuid */
+            archivedByUserId?: string | null;
+            bestCaptureId?: string | null;
+            cameraId: string;
+            candidates: Record<string, never>[];
+            confidence: number;
+            /** Format: date-time */
+            createdAt: string;
+            displayPlate?: string | null;
+            /** Format: uuid */
+            entryId?: string | null;
+            /** Format: date-time */
+            firstSeenAt: string;
+            /** @enum {string} */
+            formatType: "argentina_old" | "argentina_mercosur" | "unknown";
+            formatValid: boolean;
+            /** Format: uuid */
+            id: string;
+            /** Format: date-time */
+            imageDeletedAt?: string | null;
+            imageStoragePath?: string | null;
+            imageUrl?: string | null;
+            /** Format: date-time */
+            lastSeenAt: string;
+            location: string;
+            normalizedText?: string | null;
+            /** @enum {string} */
+            qualityStatus: "valid_high" | "valid_low" | "invalid_format" | "low_confidence";
+            rawText?: string | null;
+            /** Format: date-time */
+            reviewedAt?: string | null;
+            /** @description The reviewing operator's display name (falls back to email). Only resolved by the list endpoint — null elsewhere. */
+            reviewedByName?: string | null;
+            /** Format: uuid */
+            reviewedByUserId?: string | null;
+            /** @enum {string} */
+            status: "pending" | "registered" | "dismissed" | "suppressed_active_entry" | "suppressed_pending_event" | "suppressed_recent_exit";
+            syncSeq: number;
+            /** Format: uuid */
+            tenantId: string;
+            /** Format: date-time */
+            updatedAt: string;
+            version: number;
+        };
+        LprDetectionEventImageSignedUrlDto: {
+            /**
+             * @description Seconds the signed URL remains valid.
+             * @example 300
+             */
+            expiresIn: number;
+            /**
+             * @description Time-limited signed URL pointing at the photo binary in Supabase Storage.
+             * @example https://project.supabase.co/storage/v1/object/sign/lpr-detection-images/3f2504e0/9c858901.jpg?token=...
+             */
+            url: string;
+        };
+        LprEntryDto: {
+            cameraId?: string;
+            /** @description URL of the entry photo captured by the LPR camera */
+            imageUrl?: string;
+            /** @example ABC123 */
+            plate: string;
+            /**
+             * Format: date-time
+             * @description Detection timestamp (ISO 8601). Defaults to server time if omitted.
+             */
+            timestamp?: string;
+            /** @enum {string} */
+            vehicleType?: "auto" | "pickup" | "suv" | "van" | "moto" | "camioneta" | "otro";
         };
         MeMembershipDto: {
             /**
@@ -1896,6 +2141,24 @@ export interface components {
              * @example 7c9e6679-7425-40de-944b-e07fc1f90ae7
              */
             tenantId: string | null;
+        };
+        PaginatedLprDetectionEventsDto: {
+            items: components["schemas"]["LprDetectionEventDto"][];
+            /**
+             * @description Current 1-based page.
+             * @example 1
+             */
+            page: number;
+            /**
+             * @description Items per page.
+             * @example 20
+             */
+            pageSize: number;
+            /**
+             * @description Total number of events matching the query.
+             * @example 128
+             */
+            total: number;
         };
         PaginatedParkingsDto: {
             items: components["schemas"]["ParkingDto"][];
@@ -2343,6 +2606,23 @@ export interface components {
              */
             status?: "active" | "maintenance";
         };
+        UpdateLprDetectionEventDto: {
+            /**
+             * Format: uuid
+             * @description Entry created from this event, required by registered events.
+             */
+            entryId?: string;
+            /**
+             * Format: date-time
+             * @description Client-side action timestamp. Defaults to server time.
+             */
+            reviewedAt?: string;
+            /**
+             * @description New review/suppression status for the detection event.
+             * @enum {string}
+             */
+            status: "pending" | "registered" | "dismissed" | "suppressed_active_entry" | "suppressed_pending_event" | "suppressed_recent_exit";
+        };
         UpdateMembershipDto: {
             /**
              * @description New role at this parking lot: `owner` or `operator`.
@@ -2436,6 +2716,36 @@ export interface components {
              * @enum {string}
              */
             type?: "auto" | "pickup" | "suv" | "van" | "moto" | "camioneta" | "otro";
+        };
+        UpsertLprDetectionEventDto: {
+            bestCaptureId?: string;
+            cameraId: string;
+            candidates?: Record<string, never>[];
+            confidence: number;
+            displayPlate?: string;
+            /** Format: uuid */
+            entryId?: string;
+            /** Format: date-time */
+            firstSeenAt: string;
+            /** @enum {string} */
+            formatType: "argentina_old" | "argentina_mercosur" | "unknown";
+            formatValid: boolean;
+            /** Format: uuid */
+            id: string;
+            /** Format: date-time */
+            lastSeenAt: string;
+            location: string;
+            normalizedText?: string;
+            /** @enum {string} */
+            qualityStatus: "valid_high" | "valid_low" | "invalid_format" | "low_confidence";
+            rawText?: string;
+            /** Format: date-time */
+            reviewedAt?: string;
+            /**
+             * @default pending
+             * @enum {string}
+             */
+            status: "pending" | "registered" | "dismissed" | "suppressed_active_entry" | "suppressed_pending_event" | "suppressed_recent_exit";
         };
         UserDto: {
             /** Format: date-time */
@@ -4463,6 +4773,242 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EntryChangesResponseDto"];
+                };
+            };
+        };
+    };
+    EntriesController_createFromLpr: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Parking lot tenant ID */
+                tenantId: unknown;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LprEntryDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntryDto"];
+                };
+            };
+        };
+    };
+    LprEventsController_list: {
+        parameters: {
+            query?: {
+                /** @description When false (default), archived LPR events are hidden from review lists. Set true to list archived events instead. */
+                archived?: boolean;
+                /** @description Only include events first detected at or after this timestamp (ISO 8601, inclusive). */
+                firstSeenFrom?: string;
+                /** @description Only include events first detected at or before this timestamp (ISO 8601, inclusive). */
+                firstSeenTo?: string;
+                /** @description 1-based page number. */
+                page?: number;
+                /** @description Number of items per page (capped at 100). */
+                pageSize?: number;
+                status?: "pending" | "registered" | "dismissed" | "suppressed_active_entry" | "suppressed_pending_event" | "suppressed_recent_exit";
+            };
+            header?: never;
+            path: {
+                /** @description Parking lot tenant ID */
+                tenantId: unknown;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedLprDetectionEventsDto"];
+                };
+            };
+        };
+    };
+    LprEventsController_upsert: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Parking lot tenant ID */
+                tenantId: unknown;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpsertLprDetectionEventDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LprDetectionEventDto"];
+                };
+            };
+        };
+    };
+    LprEventsController_updateStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                eventId: string;
+                /** @description Parking lot tenant ID */
+                tenantId: unknown;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateLprDetectionEventDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LprDetectionEventDto"];
+                };
+            };
+        };
+    };
+    LprEventsController_archive: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                eventId: string;
+                /** @description Parking lot tenant ID */
+                tenantId: unknown;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LprDetectionEventDto"];
+                };
+            };
+        };
+    };
+    LprEventsController_uploadImage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                eventId: string;
+                /** @description Parking lot tenant ID */
+                tenantId: unknown;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "image/jpeg": string;
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LprDetectionEventDto"];
+                };
+            };
+        };
+    };
+    LprEventsController_imageSignedUrl: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                eventId: string;
+                /** @description Parking lot tenant ID */
+                tenantId: unknown;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LprDetectionEventImageSignedUrlDto"];
+                };
+            };
+        };
+    };
+    LprEventsController_unarchive: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                eventId: string;
+                /** @description Parking lot tenant ID */
+                tenantId: unknown;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LprDetectionEventDto"];
+                };
+            };
+        };
+    };
+    LprEventsController_pullChanges: {
+        parameters: {
+            query?: {
+                /** @description Return rows with syncSeq greater than this value. */
+                afterSeq?: components["schemas"]["Object"];
+                /** @description Max items per page. */
+                limit?: components["schemas"]["Object"];
+            };
+            header?: never;
+            path: {
+                /** @description Parking lot tenant ID */
+                tenantId: unknown;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LprDetectionEventChangesResponseDto"];
                 };
             };
         };
