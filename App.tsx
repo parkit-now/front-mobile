@@ -2,6 +2,8 @@ import type { Session } from '@supabase/supabase-js';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
 import { Linking, SafeAreaView, Text, View } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { enableScreens } from 'react-native-screens';
 import { BrandHeader } from './src/features/auth/BrandHeader';
 import { ForgotPasswordScreen } from './src/features/auth/ForgotPasswordScreen';
 import { LoginScreen } from './src/features/auth/LoginScreen';
@@ -18,11 +20,15 @@ import {
 
 type AuthView = 'login' | 'register' | 'forgot';
 
+enableScreens();
+
 export default function App() {
   return (
-    <ToastProvider>
-      <AppInner />
-    </ToastProvider>
+    <SafeAreaProvider>
+      <ToastProvider>
+        <AppInner />
+      </ToastProvider>
+    </SafeAreaProvider>
   );
 }
 

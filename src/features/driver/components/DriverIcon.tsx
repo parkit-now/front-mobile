@@ -1,6 +1,7 @@
 import Svg, { Circle, Path } from 'react-native-svg';
+import { driverColors } from '../theme';
 
-type IconName =
+export type DriverIconName =
   | 'search'
   | 'calendar'
   | 'user'
@@ -9,17 +10,19 @@ type IconName =
   | 'ticket'
   | 'filter'
   | 'bell'
-  | 'plus'
-  | 'minus'
   | 'arrow';
 
 type Props = {
-  name: IconName;
+  name: DriverIconName;
   color?: string;
   size?: number;
 };
 
-export function DriverIcon({ name, color = '#475467', size = 22 }: Props) {
+export function DriverIcon({
+  name,
+  color = driverColors.textSecondary,
+  size = 22,
+}: Props) {
   const common = {
     stroke: color,
     strokeWidth: 2,
@@ -33,7 +36,8 @@ export function DriverIcon({ name, color = '#475467', size = 22 }: Props) {
       width={size}
       height={size}
       viewBox="0 0 24 24"
-      accessibilityRole="image"
+      accessible={false}
+      focusable={false}
     >
       {name === 'search' ? (
         <>
@@ -42,12 +46,10 @@ export function DriverIcon({ name, color = '#475467', size = 22 }: Props) {
         </>
       ) : null}
       {name === 'calendar' ? (
-        <>
-          <Path
-            d="M7 3v3M17 3v3M4 9h16M6 5h12a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z"
-            {...common}
-          />
-        </>
+        <Path
+          d="M7 3v3M17 3v3M4 9h16M6 5h12a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z"
+          {...common}
+        />
       ) : null}
       {name === 'user' ? (
         <>
@@ -99,8 +101,6 @@ export function DriverIcon({ name, color = '#475467', size = 22 }: Props) {
           <Path d="M10 20h4" {...common} />
         </>
       ) : null}
-      {name === 'plus' ? <Path d="M12 5v14M5 12h14" {...common} /> : null}
-      {name === 'minus' ? <Path d="M5 12h14" {...common} /> : null}
       {name === 'arrow' ? <Path d="M5 12h14M13 6l6 6-6 6" {...common} /> : null}
     </Svg>
   );

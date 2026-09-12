@@ -7,10 +7,13 @@ export type ParkingLot = {
   distance: string;
   eta: string;
   priceLabel: string;
+  hourlyPriceArs: number;
   rating: string;
   availableSpots: number;
   services: string[];
   openUntil: string;
+  supportedVehicles: VehicleKind[];
+  acceptsReservations: boolean;
   mapPosition: {
     left: `${number}%`;
     top: `${number}%`;
@@ -40,10 +43,13 @@ export const PARKING_LOTS: ParkingLot[] = [
     distance: '650 m',
     eta: '4 min',
     priceLabel: '$1.800/h',
+    hourlyPriceArs: 1800,
     rating: '4.8',
     availableSpots: 12,
     services: ['Reserva anticipada', 'Techado', '24 h'],
     openUntil: 'Abierto hasta 23:30',
+    supportedVehicles: ['Auto', 'Moto', 'Pickup'],
+    acceptsReservations: true,
     mapPosition: { left: '43%', top: '45%' },
   },
   {
@@ -53,10 +59,13 @@ export const PARKING_LOTS: ParkingLot[] = [
     distance: '1,4 km',
     eta: '8 min',
     priceLabel: '$2.100/h',
+    hourlyPriceArs: 2100,
     rating: '4.7',
     availableSpots: 7,
     services: ['Cámara LPR', 'Acepta motos'],
     openUntil: 'Abierto hasta 22:00',
+    supportedVehicles: ['Auto', 'Moto'],
+    acceptsReservations: false,
     mapPosition: { left: '72%', top: '33%' },
   },
   {
@@ -66,10 +75,13 @@ export const PARKING_LOTS: ParkingLot[] = [
     distance: '2,1 km',
     eta: '12 min',
     priceLabel: '$2.400/h',
+    hourlyPriceArs: 2400,
     rating: '4.6',
     availableSpots: 4,
     services: ['Reserva anticipada', 'Lavado'],
     openUntil: 'Abierto 24 h',
+    supportedVehicles: ['Auto', 'Pickup'],
+    acceptsReservations: true,
     mapPosition: { left: '24%', top: '61%' },
   },
 ];
