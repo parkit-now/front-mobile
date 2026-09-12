@@ -9,8 +9,6 @@ export type SessionDto = components['schemas']['SessionDto'];
 export type AuthSessionResponseDto =
   components['schemas']['AuthSessionResponseDto'];
 
-export type RegisterRole = RegisterDto['role'];
-
 export function loginWithPassword(input: LoginDto): Promise<SessionDto> {
   return apiRequest<SessionDto>({
     method: 'POST',

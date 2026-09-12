@@ -177,7 +177,6 @@ export async function registerWithEmail(
   const result = await registerWithPassword({
     email,
     password,
-    role: 'driver',
   });
   return applyBackendSession(result.session);
 }
