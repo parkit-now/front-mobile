@@ -56,7 +56,7 @@ env-use-prod: ## Activar entorno produccion (copia .env.production → .env)
 	@cp $(ENV_PROD) .env
 	@echo "✓ .env apunta a entorno PRODUCCION ($(ENV_PROD))"
 
-dev: env-use-local ## Levantar app apuntando al backend LOCAL (autodetecta ANDROID_HOME)
+dev: install env-use-local ## Levantar app apuntando al backend LOCAL (autodetecta ANDROID_HOME)
 	@$(DETECT_ANDROID_SDK); \
 	if [ -z "$$android_home" ]; then \
 		echo "⚠ No se encontró el Android SDK; instalá adb (sudo apt install adb) o seteá ANDROID_HOME"; \

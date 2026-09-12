@@ -743,6 +743,156 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/tenants/{tenantId}/entries/lpr": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Register a vehicle entry from an LPR detection event */
+        post: operations["EntriesController_createFromLpr"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tenants/{tenantId}/lpr-events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List LPR detection events for owner/operator review */
+        get: operations["LprEventsController_list"];
+        put?: never;
+        /** Create or update an auditable LPR detection event */
+        post: operations["LprEventsController_upsert"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tenants/{tenantId}/lpr-events/{eventId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Mark an LPR detection event as registered, dismissed, or suppressed */
+        patch: operations["LprEventsController_updateStatus"];
+        trace?: never;
+    };
+    "/tenants/{tenantId}/lpr-events/{eventId}/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Archive a dismissed LPR detection event after owner review
+         * @description Hides a dismissed event from the owner review inbox without deleting the auditable event or its stored evidence image.
+         */
+        patch: operations["LprEventsController_archive"];
+        trace?: never;
+    };
+    "/tenants/{tenantId}/lpr-events/{eventId}/image": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Upload an LPR detection event's photo
+         * @description Accepts the raw JPEG bytes (`Content-Type: image/jpeg`, max 2MB) captured by the desktop camera service, uploads them to the private `lpr-detection-images` bucket, and persists `imageStoragePath` on the event.
+         *
+         *     Object path is deterministic (`<tenantId>/<eventId>.jpg`), so retrying after a dropped connection just overwrites the same object — safe to call again from the offline sync queue.
+         */
+        post: operations["LprEventsController_uploadImage"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tenants/{tenantId}/lpr-events/{eventId}/image-signed-url": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Mint a signed URL to preview an LPR detection event's photo
+         * @description Returns a short-lived signed URL (5 minutes) pointing at the photo binary in Supabase Storage.
+         *
+         *     The photo is never exposed via a permanent public URL — it can contain plate and vehicle identity, so URLs are minted on demand with the service role, which bypasses the bucket's deny-by-default storage RLS.
+         */
+        get: operations["LprEventsController_imageSignedUrl"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tenants/{tenantId}/lpr-events/{eventId}/unarchive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Move an archived LPR detection event back to owner review */
+        patch: operations["LprEventsController_unarchive"];
+        trace?: never;
+    };
+    "/tenants/{tenantId}/lpr-events/changes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Pull incremental LPR detection event changes for sync */
+        get: operations["LprEventsController_pullChanges"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/tenants/{tenantId}/payment-methods": {
         parameters: {
             query?: never;
@@ -860,7 +1010,10 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        /** Hard delete a rate using optimistic locking (expectedVersion) */
+        /**
+         * Soft-delete a rate using optimistic locking (expectedVersion)
+         * @description Soft-deletes the rate (sets deleted_at). The row keeps flowing through GET /rates/changes as a tombstone so offline clients can remove it from their local copy. Requires owner role.
+         */
         delete: operations["RatesController_remove"];
         options?: never;
         head?: never;
@@ -968,7 +1121,7 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        /** Update a service for the active tenant (enabled and/or spots) */
+        /** Update a service for the active tenant */
         patch: operations["ServicesController_update"];
         trace?: never;
     };
@@ -989,7 +1142,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/tenants/{tenantId}/vehicles": {
+    "/tenants/{tenantId}/vehicle-types": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the entity vehicle types
+         * @description Tipos vivos del estacionamiento, ordenados por nombre, con el conteo de vehículos que usa cada uno. Disponible para cualquier miembro.
+         */
+        get: operations["vehicleTypesList"];
+        put?: never;
+        /**
+         * Create a vehicle type for the entity
+         * @description Requires owner role. El `id` lo genera el cliente (UUIDv7).
+         */
+        post: operations["vehicleTypesCreate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tenants/{tenantId}/vehicle-types/{typeId}": {
         parameters: {
             query?: never;
             header?: never;
@@ -998,9 +1175,57 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        post?: never;
         /**
-         * Add a vehicle to the tenant catalog
-         * @description Creates a tenant-specific vehicle entry in the catalog. Requires owner role.
+         * Soft-delete a vehicle type, reassigning its vehicles
+         * @description Borrado lógico: la fila sigue viajando por /vehicle-types/changes como tombstone. Si quedan vehículos usándolo hay que mandar `reassignToTypeId`; si no, responde 409 VEHICLE_TYPE_IN_USE. Requiere rol owner.
+         */
+        delete: operations["vehicleTypesDelete"];
+        options?: never;
+        head?: never;
+        /**
+         * Update a vehicle type using optimistic locking (expectedVersion)
+         * @description Updates name and/or accepted. Requires owner role.
+         */
+        patch: operations["vehicleTypesUpdate"];
+        trace?: never;
+    };
+    "/tenants/{tenantId}/vehicle-types/changes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Pull incremental vehicle type changes for offline sync
+         * @description Returns the entity vehicle types with syncSeq > afterSeq, INCLUDING soft-deleted rows (non-null deletedAt) so offline clients can drop them.
+         */
+        get: operations["vehicleTypesPullChanges"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tenants/{tenantId}/vehicles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the entity vehicle catalog
+         * @description Catálogo del estacionamiento, sin bajas lógicas, ordenado por marca y modelo. Disponible para cualquier miembro.
+         */
+        get: operations["vehiclesList"];
+        put?: never;
+        /**
+         * Add a vehicle to the entity catalog
+         * @description Creates a vehicle in this entity catalog. Requires owner role.
          */
         post: operations["entitiesCreateTenantVehicle"];
         delete?: never;
@@ -1020,20 +1245,20 @@ export interface paths {
         put?: never;
         post?: never;
         /**
-         * Soft-delete a tenant vehicle
-         * @description Soft-deletes a tenant-specific vehicle (sets deleted_at). Global vehicles cannot be deleted. Requires owner role.
+         * Soft-delete an entity vehicle using optimistic locking (expectedVersion)
+         * @description Soft-deletes the vehicle (sets deleted_at). The row keeps flowing through GET /vehicles/changes as a tombstone so offline clients can remove it locally. Requires owner role.
          */
         delete: operations["entitiesDeleteTenantVehicle"];
         options?: never;
         head?: never;
         /**
-         * Update a tenant vehicle
-         * @description Updates brand, model, and/or type of a tenant-specific vehicle. Global vehicles cannot be edited. Requires owner role.
+         * Update an entity vehicle using optimistic locking (expectedVersion)
+         * @description Updates brand, model and/or type. Requires owner role.
          */
         patch: operations["entitiesUpdateTenantVehicle"];
         trace?: never;
     };
-    "/tenants/{tenantId}/vehicles/catalog": {
+    "/tenants/{tenantId}/vehicles/changes": {
         parameters: {
             query?: never;
             header?: never;
@@ -1041,28 +1266,12 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Pull vehicle catalog changes
-         * @description Returns global vehicles (admin-managed) and tenant-specific vehicles with syncSeq > afterSeq. Used by the desktop for offline-first autocomplete.
+         * Pull incremental vehicle changes for offline sync
+         * @description Returns the entity vehicles with syncSeq > afterSeq, INCLUDING soft-deleted rows (non-null deletedAt) so offline clients can drop them. Used by the desktop for offline-first autocomplete.
          */
-        get: operations["entitiesPullVehicleCatalog"];
+        get: operations["vehiclesPullChanges"];
         put?: never;
         post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/vehicles": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["VehiclesController_findAll"];
-        put?: never;
-        post: operations["VehiclesController_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1399,16 +1608,6 @@ export interface components {
              */
             address: string;
             /**
-             * @description Declared bicycle spots (stored in the tenant settings capacity).
-             * @example 10
-             */
-            bicycleSpots?: number;
-            /**
-             * @description Declared car spots (stored in the tenant settings capacity).
-             * @example 80
-             */
-            carSpots?: number;
-            /**
              * @description CUIT, 11 digits
              * @example 30123456789
              */
@@ -1425,11 +1624,6 @@ export interface components {
              */
             legalName: string;
             /**
-             * @description Declared motorcycle spots (stored in the tenant settings capacity).
-             * @example 20
-             */
-            motorcycleSpots?: number;
-            /**
              * @description Display name of the parking lot.
              * @example Estacionamiento del Centro
              */
@@ -1439,6 +1633,11 @@ export interface components {
              * @example +541145678900
              */
             phone: string;
+            /**
+             * @description Plazas totales declaradas (van a `tenant.settings.capacity.total`).
+             * @example 110
+             */
+            totalSpots?: number;
         };
         CreateCashSessionDto: {
             /**
@@ -1594,10 +1793,30 @@ export interface components {
             /** @example Corolla */
             model: string;
             /**
-             * @example auto
-             * @enum {string}
+             * Format: uuid
+             * @description Tipo de vehículo, de `GET /tenants/:tenantId/vehicle-types`. Obligatorio: un vehículo nunca queda sin tipo.
              */
-            type?: "auto" | "pickup" | "suv" | "van" | "moto" | "camioneta" | "otro";
+            typeId: string;
+        };
+        CreateVehicleTypeDto: {
+            /** @default true */
+            accepted: boolean;
+            /**
+             * Format: uuid
+             * @description Client-generated UUIDv7 for offline-first sync.
+             */
+            id: string;
+            /** @example Utilitario */
+            name: string;
+        };
+        DeleteVehicleTypeResultDto: {
+            /**
+             * Format: uuid
+             * @description El tipo destino, o null si no hizo falta reasignar nada.
+             */
+            reassignedToTypeId: string | null;
+            /** @description Cuántos vehículos se movieron al tipo destino. Cada uno recibe su propio `syncSeq` y `version`, así que viajan por /vehicles/changes. */
+            reassignedVehicles: number;
         };
         DocumentSignedUrlDto: {
             /**
@@ -1613,20 +1832,10 @@ export interface components {
         };
         EntityCapacityDto: {
             /**
-             * @description Number of bicycle spots.
-             * @example 10
+             * @description Plazas totales del estacionamiento.
+             * @example 110
              */
-            bicycleSpots: number;
-            /**
-             * @description Number of car spots.
-             * @example 80
-             */
-            carSpots: number;
-            /**
-             * @description Number of motorcycle spots.
-             * @example 20
-             */
-            motorcycleSpots: number;
+            total: number;
         };
         EntityProfileDto: {
             /**
@@ -1718,6 +1927,11 @@ export interface components {
             color?: string;
             /** Format: date-time */
             enteredAt: string;
+            entryCameraId?: string;
+            /** @description URL of the entry photo captured by the LPR camera */
+            entryImageUrl?: string;
+            exitCameraId?: string;
+            exitImageUrl?: string;
             /** Format: uuid */
             id: string;
             /** Format: date-time */
@@ -1732,6 +1946,11 @@ export interface components {
             rateSnapshotHourPriceArs?: number;
             rateSnapshotName?: string;
             rateSnapshotStayPriceArs?: number;
+            /**
+             * @description auto = created by LPR; manual = operator-typed
+             * @example manual
+             */
+            source: string;
             syncSeq: number;
             /** Format: uuid */
             tenantId: string;
@@ -1748,7 +1967,14 @@ export interface components {
              * @example Bora
              */
             vehicleModel?: string;
+            /** @description Snapshot del nombre del tipo al momento del ingreso. Texto y no FK: un ingreso histórico no debe cambiar si el dueño renombra o borra el tipo. */
+            vehicleType?: string | null;
             version: number;
+            /**
+             * Format: uuid
+             * @description Set when entry was authorized via whitelist
+             */
+            whitelistId?: string;
         };
         ForgotPasswordDto: {
             /**
@@ -1819,6 +2045,84 @@ export interface components {
              * @example CorrectHorseBatteryStaple1!
              */
             password: string;
+        };
+        LprDetectionEventChangesResponseDto: {
+            items: components["schemas"]["LprDetectionEventDto"][];
+            /** @description Highest sync sequence included in this page. */
+            maxSeq: number;
+        };
+        LprDetectionEventDto: {
+            /** Format: date-time */
+            archivedAt?: string | null;
+            /** Format: uuid */
+            archivedByUserId?: string | null;
+            bestCaptureId?: string | null;
+            cameraId: string;
+            candidates: Record<string, never>[];
+            confidence: number;
+            /** Format: date-time */
+            createdAt: string;
+            displayPlate?: string | null;
+            /** Format: uuid */
+            entryId?: string | null;
+            /** Format: date-time */
+            firstSeenAt: string;
+            /** @enum {string} */
+            formatType: "argentina_old" | "argentina_mercosur" | "unknown";
+            formatValid: boolean;
+            /** Format: uuid */
+            id: string;
+            /** Format: date-time */
+            imageDeletedAt?: string | null;
+            imageStoragePath?: string | null;
+            imageUrl?: string | null;
+            /** Format: date-time */
+            lastSeenAt: string;
+            location: string;
+            normalizedText?: string | null;
+            /** @enum {string} */
+            qualityStatus: "valid_high" | "valid_low" | "invalid_format" | "low_confidence";
+            rawText?: string | null;
+            /** Format: date-time */
+            reviewedAt?: string | null;
+            /** @description The reviewing operator's display name (falls back to email). Only resolved by the list endpoint — null elsewhere. */
+            reviewedByName?: string | null;
+            /** Format: uuid */
+            reviewedByUserId?: string | null;
+            /** @enum {string} */
+            status: "pending" | "registered" | "dismissed" | "suppressed_active_entry" | "suppressed_pending_event" | "suppressed_recent_exit";
+            syncSeq: number;
+            /** Format: uuid */
+            tenantId: string;
+            /** Format: date-time */
+            updatedAt: string;
+            version: number;
+        };
+        LprDetectionEventImageSignedUrlDto: {
+            /**
+             * @description Seconds the signed URL remains valid.
+             * @example 300
+             */
+            expiresIn: number;
+            /**
+             * @description Time-limited signed URL pointing at the photo binary in Supabase Storage.
+             * @example https://project.supabase.co/storage/v1/object/sign/lpr-detection-images/3f2504e0/9c858901.jpg?token=...
+             */
+            url: string;
+        };
+        LprEntryDto: {
+            cameraId?: string;
+            /** @description URL of the entry photo captured by the LPR camera */
+            imageUrl?: string;
+            /** @example ABC123 */
+            plate: string;
+            /**
+             * Format: date-time
+             * @description Detection timestamp (ISO 8601). Defaults to server time if omitted.
+             */
+            timestamp?: string;
+            /** @description Snapshot del nombre del tipo al momento del ingreso. */
+            vehicleType?: string;
         };
         MeMembershipDto: {
             /**
@@ -1896,6 +2200,24 @@ export interface components {
              * @example 7c9e6679-7425-40de-944b-e07fc1f90ae7
              */
             tenantId: string | null;
+        };
+        PaginatedLprDetectionEventsDto: {
+            items: components["schemas"]["LprDetectionEventDto"][];
+            /**
+             * @description Current 1-based page.
+             * @example 1
+             */
+            page: number;
+            /**
+             * @description Items per page.
+             * @example 20
+             */
+            pageSize: number;
+            /**
+             * @description Total number of events matching the query.
+             * @example 128
+             */
+            total: number;
         };
         PaginatedParkingsDto: {
             items: components["schemas"]["ParkingDto"][];
@@ -2083,6 +2405,11 @@ export interface components {
         RateDto: {
             /** Format: date-time */
             createdAt: string;
+            /**
+             * Format: date-time
+             * @description Non-null when the rate has been soft-deleted. Rows with a non-null value only ever appear in GET /rates/changes, as a tombstone telling offline clients to drop the rate from their local copy.
+             */
+            deletedAt?: string;
             fractionPriceArs: number;
             hourPriceArs: number;
             /** Format: uuid */
@@ -2168,10 +2495,8 @@ export interface components {
         };
         ServiceCatalogItemDto: {
             /** @enum {string} */
-            code: "ADVANCE_RESERVATION" | "VEHICLE_CAR" | "VEHICLE_BICYCLE" | "VEHICLE_MOTORCYCLE" | "VEHICLE_PICKUP" | "VEHICLE_TRUCK";
+            code: "ADVANCE_RESERVATION";
             enabled: boolean;
-            /** @description Spots assigned to this vehicle type (0 for non-vehicle codes). */
-            spots: number;
         };
         ServiceChangesResponseDto: {
             items: components["schemas"]["ServiceDto"][];
@@ -2180,14 +2505,12 @@ export interface components {
         };
         ServiceDto: {
             /** @enum {string} */
-            code: "ADVANCE_RESERVATION" | "VEHICLE_CAR" | "VEHICLE_BICYCLE" | "VEHICLE_MOTORCYCLE" | "VEHICLE_PICKUP" | "VEHICLE_TRUCK";
+            code: "ADVANCE_RESERVATION";
             /** Format: date-time */
             createdAt: string;
             enabled: boolean;
             /** Format: uuid */
             id: string;
-            /** @description Spots assigned to this vehicle type (0 for non-vehicle codes). */
-            spots: number;
             syncSeq: number;
             /** Format: uuid */
             tenantId: string;
@@ -2244,16 +2567,6 @@ export interface components {
              */
             address?: string;
             /**
-             * @description Declared bicycle spots (stored in the tenant settings capacity).
-             * @example 10
-             */
-            bicycleSpots?: number;
-            /**
-             * @description Declared car spots (stored in the tenant settings capacity).
-             * @example 80
-             */
-            carSpots?: number;
-            /**
              * @description CUIT, 11 digits
              * @example 30123456789
              */
@@ -2270,11 +2583,6 @@ export interface components {
              */
             legalName?: string;
             /**
-             * @description Declared motorcycle spots (stored in the tenant settings capacity).
-             * @example 20
-             */
-            motorcycleSpots?: number;
-            /**
              * @description Display name of the parking lot.
              * @example Estacionamiento del Centro
              */
@@ -2284,23 +2592,18 @@ export interface components {
              * @example +541145678900
              */
             phone?: string;
+            /**
+             * @description Plazas totales declaradas (van a `tenant.settings.capacity.total`).
+             * @example 110
+             */
+            totalSpots?: number;
         };
         UpdateEntityCapacityDto: {
             /**
-             * @description Number of bicycle spots.
-             * @example 10
+             * @description Plazas totales del estacionamiento.
+             * @example 110
              */
-            bicycleSpots?: number;
-            /**
-             * @description Number of car spots.
-             * @example 80
-             */
-            carSpots?: number;
-            /**
-             * @description Number of motorcycle spots.
-             * @example 20
-             */
-            motorcycleSpots?: number;
+            total?: number;
         };
         UpdateEntityProfileDto: {
             /**
@@ -2342,6 +2645,23 @@ export interface components {
              * @enum {string}
              */
             status?: "active" | "maintenance";
+        };
+        UpdateLprDetectionEventDto: {
+            /**
+             * Format: uuid
+             * @description Entry created from this event, required by registered events.
+             */
+            entryId?: string;
+            /**
+             * Format: date-time
+             * @description Client-side action timestamp. Defaults to server time.
+             */
+            reviewedAt?: string;
+            /**
+             * @description New review/suppression status for the detection event.
+             * @enum {string}
+             */
+            status: "pending" | "registered" | "dismissed" | "suppressed_active_entry" | "suppressed_pending_event" | "suppressed_recent_exit";
         };
         UpdateMembershipDto: {
             /**
@@ -2418,13 +2738,8 @@ export interface components {
             openMinute?: number;
         };
         UpdateServiceDto: {
-            /** @description Whether the service/vehicle type is offered by the tenant. */
+            /** @description Whether the amenity is offered by the tenant. */
             enabled?: boolean;
-            /**
-             * @description Spots assigned to this vehicle type (ignored for non-vehicle codes).
-             * @example 40
-             */
-            spots?: number;
         };
         UpdateVehicleDto: {
             /** @example Toyota */
@@ -2432,10 +2747,45 @@ export interface components {
             /** @example Corolla */
             model?: string;
             /**
-             * @example auto
+             * Format: uuid
+             * @description Tipo de vehículo, de la tabla de tipos de este estacionamiento.
+             */
+            typeId?: string;
+        };
+        UpdateVehicleTypeDto: {
+            accepted?: boolean;
+            /** @example Utilitario */
+            name?: string;
+        };
+        UpsertLprDetectionEventDto: {
+            bestCaptureId?: string;
+            cameraId: string;
+            candidates?: Record<string, never>[];
+            confidence: number;
+            displayPlate?: string;
+            /** Format: uuid */
+            entryId?: string;
+            /** Format: date-time */
+            firstSeenAt: string;
+            /** @enum {string} */
+            formatType: "argentina_old" | "argentina_mercosur" | "unknown";
+            formatValid: boolean;
+            /** Format: uuid */
+            id: string;
+            /** Format: date-time */
+            lastSeenAt: string;
+            location: string;
+            normalizedText?: string;
+            /** @enum {string} */
+            qualityStatus: "valid_high" | "valid_low" | "invalid_format" | "low_confidence";
+            rawText?: string;
+            /** Format: date-time */
+            reviewedAt?: string;
+            /**
+             * @default pending
              * @enum {string}
              */
-            type?: "auto" | "pickup" | "suv" | "van" | "moto" | "camioneta" | "otro";
+            status: "pending" | "registered" | "dismissed" | "suppressed_active_entry" | "suppressed_pending_event" | "suppressed_recent_exit";
         };
         UserDto: {
             /** Format: date-time */
@@ -2489,34 +2839,86 @@ export interface components {
             /** @description Field-level breakdown of the validation failures. */
             validationsErrors: components["schemas"]["ValidationFieldErrorDto"][];
         };
-        VehicleCatalogChangesResponseDto: {
-            items: components["schemas"]["VehicleCatalogItemDto"][];
+        VehicleChangesResponseDto: {
+            items: components["schemas"]["VehicleDto"][];
             maxSeq: number;
         };
-        VehicleCatalogItemDto: {
+        VehicleDto: {
             /** @example Toyota */
             brand: string;
             /** Format: date-time */
             createdAt: string;
             /**
              * Format: date-time
-             * @description Non-null when the vehicle has been soft-deleted.
+             * @description No-nulo cuando el vehículo fue borrado lógicamente. Las filas con valor no-nulo solo aparecen en GET /vehicles/changes, como tombstone del sync.
              */
-            deletedAt?: string;
+            deletedAt?: string | null;
             /** Format: uuid */
             id: string;
             /** @example Corolla */
             model: string;
             syncSeq: number;
+            /** Format: uuid */
+            tenantId: string;
             /**
              * Format: uuid
-             * @description null = global (admin-managed), UUID = tenant-specific.
+             * @description Tipo de vehículo, de la tabla `vehicle_types` de este estacionamiento. Obligatorio: borrar un tipo obliga a reasignar, así que un vehículo nunca queda sin tipo.
              */
-            tenantId?: string;
-            /** @example auto */
-            type?: string;
+            typeId: string;
             /** Format: date-time */
             updatedAt: string;
+            /** @description Versión de la fila, para optimistic locking. Reenviala como `?expectedVersion=N` en PATCH y DELETE. La bumpea el trigger `set_vehicles_sync_fields` en cada UPDATE. */
+            version: number;
+        };
+        VehicleTypeChangesResponseDto: {
+            items: components["schemas"]["VehicleTypeDto"][];
+            maxSeq: number;
+        };
+        VehicleTypeDto: {
+            /** @description Si el estacionamiento acepta este tipo de vehículo. Reemplaza a los códigos `ServiceCode.VEHICLE_*`, que eran cinco valores fijos sin relación con el catálogo. */
+            accepted: boolean;
+            /** Format: date-time */
+            createdAt: string;
+            /**
+             * Format: date-time
+             * @description No-nulo cuando el tipo fue borrado lógicamente. Las filas con valor no-nulo solo aparecen en GET /vehicle-types/changes, como tombstone del sync.
+             */
+            deletedAt?: string | null;
+            /** Format: uuid */
+            id: string;
+            /** @example Utilitario */
+            name: string;
+            syncSeq: number;
+            /** Format: uuid */
+            tenantId: string;
+            /** Format: date-time */
+            updatedAt: string;
+            /** @description Versión de la fila, para optimistic locking. Reenviala como `?expectedVersion=N` en PATCH y DELETE. */
+            version: number;
+        };
+        VehicleTypeListItemDto: {
+            /** @description Si el estacionamiento acepta este tipo de vehículo. Reemplaza a los códigos `ServiceCode.VEHICLE_*`, que eran cinco valores fijos sin relación con el catálogo. */
+            accepted: boolean;
+            /** Format: date-time */
+            createdAt: string;
+            /**
+             * Format: date-time
+             * @description No-nulo cuando el tipo fue borrado lógicamente. Las filas con valor no-nulo solo aparecen en GET /vehicle-types/changes, como tombstone del sync.
+             */
+            deletedAt?: string | null;
+            /** Format: uuid */
+            id: string;
+            /** @example Utilitario */
+            name: string;
+            syncSeq: number;
+            /** Format: uuid */
+            tenantId: string;
+            /** Format: date-time */
+            updatedAt: string;
+            /** @description Vehículos vivos que usan este tipo. */
+            vehicleCount: number;
+            /** @description Versión de la fila, para optimistic locking. Reenviala como `?expectedVersion=N` en PATCH y DELETE. */
+            version: number;
         };
     };
     responses: never;
@@ -4467,6 +4869,242 @@ export interface operations {
             };
         };
     };
+    EntriesController_createFromLpr: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Parking lot tenant ID */
+                tenantId: unknown;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LprEntryDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntryDto"];
+                };
+            };
+        };
+    };
+    LprEventsController_list: {
+        parameters: {
+            query?: {
+                /** @description When false (default), archived LPR events are hidden from review lists. Set true to list archived events instead. */
+                archived?: boolean;
+                /** @description Only include events first detected at or after this timestamp (ISO 8601, inclusive). */
+                firstSeenFrom?: string;
+                /** @description Only include events first detected at or before this timestamp (ISO 8601, inclusive). */
+                firstSeenTo?: string;
+                /** @description 1-based page number. */
+                page?: number;
+                /** @description Number of items per page (capped at 100). */
+                pageSize?: number;
+                status?: "pending" | "registered" | "dismissed" | "suppressed_active_entry" | "suppressed_pending_event" | "suppressed_recent_exit";
+            };
+            header?: never;
+            path: {
+                /** @description Parking lot tenant ID */
+                tenantId: unknown;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedLprDetectionEventsDto"];
+                };
+            };
+        };
+    };
+    LprEventsController_upsert: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Parking lot tenant ID */
+                tenantId: unknown;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpsertLprDetectionEventDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LprDetectionEventDto"];
+                };
+            };
+        };
+    };
+    LprEventsController_updateStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                eventId: string;
+                /** @description Parking lot tenant ID */
+                tenantId: unknown;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateLprDetectionEventDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LprDetectionEventDto"];
+                };
+            };
+        };
+    };
+    LprEventsController_archive: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                eventId: string;
+                /** @description Parking lot tenant ID */
+                tenantId: unknown;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LprDetectionEventDto"];
+                };
+            };
+        };
+    };
+    LprEventsController_uploadImage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                eventId: string;
+                /** @description Parking lot tenant ID */
+                tenantId: unknown;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "image/jpeg": string;
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LprDetectionEventDto"];
+                };
+            };
+        };
+    };
+    LprEventsController_imageSignedUrl: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                eventId: string;
+                /** @description Parking lot tenant ID */
+                tenantId: unknown;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LprDetectionEventImageSignedUrlDto"];
+                };
+            };
+        };
+    };
+    LprEventsController_unarchive: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                eventId: string;
+                /** @description Parking lot tenant ID */
+                tenantId: unknown;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LprDetectionEventDto"];
+                };
+            };
+        };
+    };
+    LprEventsController_pullChanges: {
+        parameters: {
+            query?: {
+                /** @description Return rows with syncSeq greater than this value. */
+                afterSeq?: components["schemas"]["Object"];
+                /** @description Max items per page. */
+                limit?: components["schemas"]["Object"];
+            };
+            header?: never;
+            path: {
+                /** @description Parking lot tenant ID */
+                tenantId: unknown;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LprDetectionEventChangesResponseDto"];
+                };
+            };
+        };
+    };
     entitiesListPaymentMethods: {
         parameters: {
             query?: never;
@@ -5096,13 +5734,346 @@ export interface operations {
             };
         };
     };
+    vehicleTypesList: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description ID de la entidad (estacionamiento / tenant). */
+                tenantId: unknown;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VehicleTypeListItemDto"][];
+                };
+            };
+            /** @description Missing or invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description Caller is not a member of the entity, or lacks the role. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    vehicleTypesCreate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description ID de la entidad (estacionamiento / tenant). */
+                tenantId: unknown;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateVehicleTypeDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VehicleTypeDto"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblemDetailsDto"];
+                };
+            };
+            /** @description Missing or invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description Caller is not a member of the entity, or lacks the role. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description VEHICLE_TYPE_DUPLICATE */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    vehicleTypesDelete: {
+        parameters: {
+            query: {
+                /** @description Versión que el cliente cree vigente. Si no coincide, 409: otra persona modificó el tipo. */
+                expectedVersion: number;
+                /** @description Tipo al que se mueven los vehículos que todavía usan el que se borra. Obligatorio si hay al menos uno: sin esto la respuesta es 409 `VEHICLE_TYPE_IN_USE`. Para mandarlos a un tipo nuevo, crealo primero con POST — el id lo genera el cliente, así que ya lo conocés. */
+                reassignToTypeId?: string;
+            };
+            header?: never;
+            path: {
+                /** @description ID de la entidad (estacionamiento / tenant). */
+                tenantId: unknown;
+                typeId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeleteVehicleTypeResultDto"];
+                };
+            };
+            /** @description VEHICLE_TYPE_REASSIGN_TARGET_INVALID */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description Missing or invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description Caller is not a member of the entity, or lacks the role. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description VEHICLE_TYPE_NOT_FOUND */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description VEHICLE_TYPE_IN_USE | CONFLICT (stale version or deleted) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    vehicleTypesUpdate: {
+        parameters: {
+            query: {
+                /** @description Expected current version of the row. Used for optimistic locking. */
+                expectedVersion: number;
+            };
+            header?: never;
+            path: {
+                /** @description ID de la entidad (estacionamiento / tenant). */
+                tenantId: unknown;
+                typeId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateVehicleTypeDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VehicleTypeDto"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblemDetailsDto"];
+                };
+            };
+            /** @description Missing or invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description Caller is not a member of the entity, or lacks the role. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description VEHICLE_TYPE_NOT_FOUND */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description CONFLICT | VEHICLE_TYPE_DUPLICATE */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    vehicleTypesPullChanges: {
+        parameters: {
+            query?: {
+                /** @description Devuelve las filas con syncSeq mayor a este valor. */
+                afterSeq?: components["schemas"]["Object"];
+                /** @description Máximo de items por página. */
+                limit?: components["schemas"]["Object"];
+            };
+            header?: never;
+            path: {
+                /** @description ID de la entidad (estacionamiento / tenant). */
+                tenantId: unknown;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VehicleTypeChangesResponseDto"];
+                };
+            };
+            /** @description Missing or invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description Caller is not a member of the entity, or lacks the role. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    vehiclesList: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description ID de la entidad (estacionamiento / tenant). */
+                tenantId: unknown;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VehicleDto"][];
+                };
+            };
+            /** @description Missing or invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description Caller is not a member of the entity, or lacks the role. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
     entitiesCreateTenantVehicle: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                /** @description ID of the entity (parking lot / tenant). */
-                tenantId: string;
+                /** @description ID de la entidad (estacionamiento / tenant). */
+                tenantId: unknown;
             };
             cookie?: never;
         };
@@ -5117,7 +6088,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["VehicleCatalogItemDto"];
+                    "application/json": components["schemas"]["VehicleDto"];
                 };
             };
             400: {
@@ -5128,7 +6099,7 @@ export interface operations {
                     "application/json": components["schemas"]["ValidationProblemDetailsDto"];
                 };
             };
-            /** @description Missing, malformed, or expired bearer token. */
+            /** @description Missing or invalid bearer token. */
             401: {
                 headers: {
                     [name: string]: unknown;
@@ -5137,8 +6108,26 @@ export interface operations {
                     "application/json": components["schemas"]["ProblemDetailsDto"];
                 };
             };
-            /** @description The caller is authenticated but is not a member of the `:tenantId` entity. */
+            /** @description Caller is not a member of the entity, or lacks the role. */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description VEHICLE_TYPE_NOT_FOUND */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description VEHICLE_DUPLICATE */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -5150,12 +6139,15 @@ export interface operations {
     };
     entitiesDeleteTenantVehicle: {
         parameters: {
-            query?: never;
+            query: {
+                /** @description Expected current version of the row. Used for optimistic locking. */
+                expectedVersion: number;
+            };
             header?: never;
             path: {
-                /** @description ID of the entity (parking lot / tenant). */
-                tenantId: string;
-                /** @description ID of the tenant vehicle to delete. */
+                /** @description ID de la entidad (estacionamiento / tenant). */
+                tenantId: unknown;
+                /** @description ID of the entity vehicle to delete. */
                 vehicleId: string;
             };
             cookie?: never;
@@ -5169,7 +6161,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Missing, malformed, or expired bearer token. */
+            /** @description Missing or invalid bearer token. */
             401: {
                 headers: {
                     [name: string]: unknown;
@@ -5178,7 +6170,7 @@ export interface operations {
                     "application/json": components["schemas"]["ProblemDetailsDto"];
                 };
             };
-            /** @description The caller is authenticated but is not a member of the `:tenantId` entity. */
+            /** @description Caller is not a member of the entity, or lacks the role. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -5195,16 +6187,28 @@ export interface operations {
                     "application/json": components["schemas"]["ProblemDetailsDto"];
                 };
             };
+            /** @description CONFLICT (stale version or already deleted) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
         };
     };
     entitiesUpdateTenantVehicle: {
         parameters: {
-            query?: never;
+            query: {
+                /** @description Expected current version of the row. Used for optimistic locking. */
+                expectedVersion: number;
+            };
             header?: never;
             path: {
-                /** @description ID of the entity (parking lot / tenant). */
-                tenantId: string;
-                /** @description ID of the tenant vehicle to update. */
+                /** @description ID de la entidad (estacionamiento / tenant). */
+                tenantId: unknown;
+                /** @description ID of the entity vehicle to update. */
                 vehicleId: string;
             };
             cookie?: never;
@@ -5220,7 +6224,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["VehicleCatalogItemDto"];
+                    "application/json": components["schemas"]["VehicleDto"];
                 };
             };
             400: {
@@ -5231,7 +6235,7 @@ export interface operations {
                     "application/json": components["schemas"]["ValidationProblemDetailsDto"];
                 };
             };
-            /** @description Missing, malformed, or expired bearer token. */
+            /** @description Missing or invalid bearer token. */
             401: {
                 headers: {
                     [name: string]: unknown;
@@ -5240,7 +6244,7 @@ export interface operations {
                     "application/json": components["schemas"]["ProblemDetailsDto"];
                 };
             };
-            /** @description The caller is authenticated but is not a member of the `:tenantId` entity. */
+            /** @description Caller is not a member of the entity, or lacks the role. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -5249,6 +6253,7 @@ export interface operations {
                     "application/json": components["schemas"]["ProblemDetailsDto"];
                 };
             };
+            /** @description VEHICLE_NOT_FOUND | VEHICLE_TYPE_NOT_FOUND */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -5257,15 +6262,29 @@ export interface operations {
                     "application/json": components["schemas"]["ProblemDetailsDto"];
                 };
             };
+            /** @description CONFLICT | VEHICLE_DUPLICATE */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
         };
     };
-    entitiesPullVehicleCatalog: {
+    vehiclesPullChanges: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Devuelve las filas con syncSeq mayor a este valor. */
+                afterSeq?: components["schemas"]["Object"];
+                /** @description Máximo de items por página. */
+                limit?: components["schemas"]["Object"];
+            };
             header?: never;
             path: {
-                /** @description ID of the entity (parking lot / tenant). */
-                tenantId: string;
+                /** @description ID de la entidad (estacionamiento / tenant). */
+                tenantId: unknown;
             };
             cookie?: never;
         };
@@ -5276,10 +6295,10 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["VehicleCatalogChangesResponseDto"];
+                    "application/json": components["schemas"]["VehicleChangesResponseDto"];
                 };
             };
-            /** @description Missing, malformed, or expired bearer token. */
+            /** @description Missing or invalid bearer token. */
             401: {
                 headers: {
                     [name: string]: unknown;
@@ -5288,7 +6307,7 @@ export interface operations {
                     "application/json": components["schemas"]["ProblemDetailsDto"];
                 };
             };
-            /** @description The caller is authenticated but is not a member of the `:tenantId` entity. */
+            /** @description Caller is not a member of the entity, or lacks the role. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -5296,44 +6315,6 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["ProblemDetailsDto"];
                 };
-            };
-        };
-    };
-    VehiclesController_findAll: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    VehiclesController_create: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CreateVehicleDto"];
-            };
-        };
-        responses: {
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
             };
         };
     };
