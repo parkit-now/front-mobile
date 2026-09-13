@@ -14,13 +14,21 @@ Mantener una interfaz coherente en color, forma, espaciado y jerarquia visual en
 - Texto secundario: `#475467`.
 - Borde neutro: `#d0d9e6`.
 - Color marca: `#0e5fd8`.
+- Color marca intenso: `#0b3f91`.
+- Estado éxito: texto `#027a48`, fondo `#ecfdf3`.
+- Texto deshabilitado: `#98a2b3`.
 - Estado error: texto `#b42318`, fondo `#fff1ef`, borde `#f6c7bf`.
+
+Los colores auxiliares de mapas o visualizaciones viven en tokens semánticos de
+la feature y no deben reutilizarse como colores de interfaz.
 
 ## Forma y dimensiones
 
 - Card principal auth: ancho maximo `460px` (o equivalente en mobile), radius `20px`, padding `24px`.
 - Botones primarios/acciones: alto minimo `48px`, radius `14px`.
 - Pill de usuario/sesion: radius `10px`.
+- Controles: radius `14px`.
+- Cards: radius `20px`.
 
 ## Espaciado
 

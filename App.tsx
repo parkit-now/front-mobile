@@ -2,13 +2,15 @@ import type { Session } from '@supabase/supabase-js';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
 import { Linking, SafeAreaView, Text, View } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { enableScreens } from 'react-native-screens';
 import { BrandHeader } from './src/features/auth/BrandHeader';
 import { ForgotPasswordScreen } from './src/features/auth/ForgotPasswordScreen';
 import { LoginScreen } from './src/features/auth/LoginScreen';
 import { RegisterScreen } from './src/features/auth/RegisterScreen';
-import { SessionView } from './src/features/auth/SessionView';
 import { getErrorMessage } from './src/features/auth/errors';
 import { authStyles } from './src/features/auth/styles';
+import { DriverApp } from './src/features/driver/DriverApp';
 import { ToastProvider, useToast } from './src/lib/notifications/ToastProvider';
 import {
   getSession,
@@ -18,11 +20,15 @@ import {
 
 type AuthView = 'login' | 'register' | 'forgot';
 
+enableScreens();
+
 export default function App() {
   return (
-    <ToastProvider>
-      <AppInner />
-    </ToastProvider>
+    <SafeAreaProvider>
+      <ToastProvider>
+        <AppInner />
+      </ToastProvider>
+    </SafeAreaProvider>
   );
 }
 
@@ -81,6 +87,15 @@ function AppInner() {
     };
   }, [showToast]);
 
+  if (!loading && session) {
+    return (
+      <>
+        <DriverApp session={session} />
+        <StatusBar style="dark" />
+      </>
+    );
+  }
+
   return (
     <SafeAreaView style={authStyles.page}>
       <View style={authStyles.card}>
@@ -88,8 +103,6 @@ function AppInner() {
 
         {loading ? (
           <Text style={authStyles.muted}>Cargando sesión...</Text>
-        ) : session ? (
-          <SessionView session={session} />
         ) : view === 'register' ? (
           <RegisterScreen
             onSwitchToLogin={() => {

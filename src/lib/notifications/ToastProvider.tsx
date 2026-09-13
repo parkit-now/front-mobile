@@ -7,15 +7,8 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import {
-  Animated,
-  Easing,
-  Platform,
-  Pressable,
-  StatusBar,
-  StyleSheet,
-  Text,
-} from 'react-native';
+import { Animated, Easing, Pressable, StyleSheet, Text } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export type ToastKind = 'error' | 'success' | 'info';
 
@@ -33,10 +26,8 @@ type ToastContextValue = {
 const ToastContext = createContext<ToastContextValue | null>(null);
 
 const AUTO_DISMISS_MS = 4000;
-const TOP_INSET =
-  Platform.OS === 'android' ? (StatusBar.currentHeight ?? 24) : 44;
-
 export function ToastProvider({ children }: { children: ReactNode }) {
+  const insets = useSafeAreaInsets();
   const [toast, setToast] = useState<ToastState>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const translateY = useRef(new Animated.Value(-120)).current;
@@ -108,7 +99,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
           pointerEvents="box-none"
           style={[
             styles.wrapper,
-            { top: TOP_INSET + 8, opacity, transform: [{ translateY }] },
+            { top: insets.top + 8, opacity, transform: [{ translateY }] },
           ]}
           accessibilityLiveRegion="polite"
           accessibilityRole="alert"
