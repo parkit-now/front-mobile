@@ -1,14 +1,18 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native';
-import Svg, { Circle, Path, Rect } from 'react-native-svg';
-import type { ParkingLot } from '../mock';
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import MapView, {
+  Marker,
+  PROVIDER_GOOGLE,
+  type Region,
+} from 'react-native-maps';
 import { driverColors, driverRadius, driverSpacing } from '../theme';
 import { DriverIcon } from './DriverIcon';
+import type { MapPanelProps } from './MapPanel.types';
 
-type Props = {
-  parkingLots: ParkingLot[];
-  selectedParking: ParkingLot | undefined;
-  onSelect: (parking: ParkingLot) => void;
-  onReserve: (parking: ParkingLot) => void;
+const CABA_REGION: Region = {
+  latitude: -34.6037,
+  longitude: -58.4108,
+  latitudeDelta: 0.13,
+  longitudeDelta: 0.13,
 };
 
 export function MapPanel({
@@ -16,35 +20,54 @@ export function MapPanel({
   selectedParking,
   onSelect,
   onReserve,
-}: Props) {
+}: MapPanelProps) {
   return (
     <View style={styles.stage} accessibilityLabel="Mapa de estacionamientos">
-      <MapSurface />
-
-      {parkingLots.map((parking) => {
-        const selected = parking.id === selectedParking?.id;
-        return (
-          <Pressable
-            key={parking.id}
-            style={[
-              styles.pin,
-              selected && styles.pinSelected,
-              {
-                left: parking.mapPosition.left,
-                top: parking.mapPosition.top,
-              },
-            ]}
-            onPress={() => {
-              onSelect(parking);
-            }}
-            accessibilityRole="button"
-            accessibilityState={{ selected }}
-            accessibilityLabel={`${parking.name}, ${parking.availableSpots} lugares disponibles`}
-          >
-            <View style={styles.pinDot} />
-          </Pressable>
-        );
-      })}
+      <MapView
+        style={StyleSheet.absoluteFill}
+        initialRegion={CABA_REGION}
+        provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : undefined}
+        showsCompass={false}
+        showsPointsOfInterest={false}
+        toolbarEnabled={false}
+        pitchEnabled={false}
+      >
+        {parkingLots.map((parking) => {
+          const selected = parking.id === selectedParking?.id;
+          return (
+            <Marker
+              key={parking.id}
+              coordinate={parking.coordinate}
+              onPress={() => {
+                onSelect(parking);
+              }}
+              accessibilityRole="button"
+              accessibilityState={{ selected }}
+              accessibilityLabel={`${parking.name}, ${parking.priceLabel}, ${parking.availableSpots} lugares disponibles`}
+            >
+              <View style={[styles.marker, selected && styles.markerSelected]}>
+                <View
+                  style={[
+                    styles.availabilityDot,
+                    parking.availableSpots === 0 && styles.availabilityDotFull,
+                    parking.availableSpots > 0 &&
+                      parking.availableSpots < 4 &&
+                      styles.availabilityDotLow,
+                  ]}
+                />
+                <Text
+                  style={[
+                    styles.markerPrice,
+                    selected && styles.markerPriceSelected,
+                  ]}
+                >
+                  {parking.priceLabel.replace('/h', '')}
+                </Text>
+              </View>
+            </Marker>
+          );
+        })}
+      </MapView>
 
       {selectedParking ? (
         <View style={styles.selectedCard}>
@@ -105,92 +128,6 @@ export function MapPanel({
   );
 }
 
-function MapSurface() {
-  return (
-    <Svg
-      width="100%"
-      height="100%"
-      viewBox="0 0 360 500"
-      accessible={false}
-      focusable={false}
-    >
-      <Rect width="360" height="500" fill={driverColors.mapBackground} />
-      <Path
-        d="M-30 88 C82 54 156 68 390 10"
-        stroke={driverColors.mapRoad}
-        strokeWidth="28"
-      />
-      <Path
-        d="M-20 236 C90 205 171 217 388 148"
-        stroke={driverColors.mapRoad}
-        strokeWidth="24"
-      />
-      <Path
-        d="M16 425 C116 346 213 355 382 300"
-        stroke={driverColors.mapRoad}
-        strokeWidth="24"
-      />
-      <Path
-        d="M214 -30 C188 92 159 206 113 530"
-        stroke={driverColors.mapRoad}
-        strokeWidth="27"
-      />
-      <Path
-        d="M310 -12 C252 76 246 190 248 534"
-        stroke={driverColors.mapRoadSecondary}
-        strokeWidth="15"
-      />
-      <Rect
-        x="28"
-        y="120"
-        width="82"
-        height="58"
-        rx="14"
-        fill={driverColors.mapRoadSecondary}
-        stroke={driverColors.border}
-      />
-      <Rect
-        x="206"
-        y="83"
-        width="92"
-        height="70"
-        rx="14"
-        fill={driverColors.mapBlockWarm}
-      />
-      <Rect
-        x="188"
-        y="332"
-        width="78"
-        height="68"
-        rx="14"
-        fill={driverColors.mapBlockGreen}
-      />
-      <Rect
-        x="54"
-        y="303"
-        width="96"
-        height="68"
-        rx="14"
-        fill={driverColors.mapRoadSecondary}
-        stroke={driverColors.border}
-      />
-      <Circle
-        cx="80"
-        cy="220"
-        r="34"
-        fill={driverColors.mapWater}
-        opacity="0.7"
-      />
-      <Path
-        d="M-20 363 C42 390 91 394 157 369"
-        stroke={driverColors.mapWaterStrong}
-        strokeWidth="18"
-        opacity="0.7"
-      />
-    </Svg>
-  );
-}
-
 const styles = StyleSheet.create({
   stage: {
     height: 470,
@@ -200,31 +137,43 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: driverColors.border,
   },
-  pin: {
-    position: 'absolute',
-    width: 36,
-    height: 36,
-    marginLeft: -18,
-    marginTop: -18,
-    borderRadius: driverRadius.card,
-    backgroundColor: driverColors.brand,
+  marker: {
+    minHeight: 34,
+    paddingHorizontal: 10,
+    borderRadius: 17,
+    borderWidth: 1,
+    borderColor: driverColors.border,
+    backgroundColor: driverColors.surface,
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 3,
-    borderColor: driverColors.surface,
+    gap: 6,
   },
-  pinSelected: {
-    width: 44,
-    height: 44,
-    marginLeft: -22,
-    marginTop: -22,
+  markerSelected: {
+    minHeight: 40,
+    paddingHorizontal: 12,
+    borderColor: driverColors.brandStrong,
     backgroundColor: driverColors.brandStrong,
   },
-  pinDot: {
-    width: 8,
-    height: 8,
+  availabilityDot: {
+    width: 7,
+    height: 7,
     borderRadius: 4,
-    backgroundColor: driverColors.surface,
+    backgroundColor: driverColors.success,
+  },
+  availabilityDotLow: {
+    backgroundColor: '#b54708',
+  },
+  availabilityDotFull: {
+    backgroundColor: '#b42318',
+  },
+  markerPrice: {
+    color: driverColors.textSecondary,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  markerPriceSelected: {
+    color: driverColors.surface,
+    fontSize: 15,
   },
   selectedCard: {
     position: 'absolute',
