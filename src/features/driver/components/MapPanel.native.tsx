@@ -1,11 +1,5 @@
 import { useState } from 'react';
-import {
-  ActivityIndicator,
-  Platform,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import MapView, {
   Marker,
   PROVIDER_GOOGLE,
@@ -38,7 +32,7 @@ export function MapPanel({
         key={destination.id}
         style={StyleSheet.absoluteFill}
         initialRegion={initialRegion}
-        provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : undefined}
+        provider={PROVIDER_GOOGLE}
         showsCompass={false}
         showsPointsOfInterest={false}
         showsUserLocation={destination.kind === 'current-location'}

@@ -2,6 +2,22 @@
 
 Frontend mobile de Parkit (Expo + React Native).
 
+## Google Maps
+
+El mapa usa Google Maps en Android e iOS. Expo Go permite desarrollar en
+Android sin configurar una clave propia; los builds nativos deben definir una
+clave restringida por plataforma:
+
+```bash
+GOOGLE_MAPS_ANDROID_API_KEY="..."
+GOOGLE_MAPS_IOS_API_KEY="..."
+```
+
+- Android: restringir por package `com.parkit.mobile` y certificado SHA-1.
+- iOS: restringir por bundle identifier `com.parkit.mobile`.
+- Restringir cada clave exclusivamente al Maps SDK de su plataforma.
+- No versionar claves en `app.json` ni en el repositorio.
+
 ## Stack
 
 - Expo SDK 52

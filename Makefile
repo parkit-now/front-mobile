@@ -105,6 +105,12 @@ env-check: ## Validar variables mínimas del .env activo
 	fi; \
 	if [ -z "$${OPENAPI_URL:-}" ]; then \
 		echo "⚠ OPENAPI_URL no seteada. Se usará http://localhost:3000/api-json"; \
+	fi; \
+	if [ -z "$${GOOGLE_MAPS_ANDROID_API_KEY:-}" ]; then \
+		echo "⚠ GOOGLE_MAPS_ANDROID_API_KEY no seteada. Es obligatoria para builds Android fuera de Expo Go"; \
+	fi; \
+	if [ -z "$${GOOGLE_MAPS_IOS_API_KEY:-}" ]; then \
+		echo "⚠ GOOGLE_MAPS_IOS_API_KEY no seteada. Es obligatoria para builds iOS con Google Maps"; \
 	fi
 	@echo "✓ .env validado"
 

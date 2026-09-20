@@ -18,8 +18,11 @@
       "fallbackToCacheTimeout": 0
     },
     "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "bundleIdentifier": "com.parkit.mobile"
+    },
     "android": {
-      "package": "com.iankvdh.frontmobile"
+      "package": "com.parkit.mobile"
     }
   }
 }
