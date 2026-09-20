@@ -13,9 +13,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useToast } from '../../../lib/notifications/ToastProvider';
 import { DriverIcon } from '../components/DriverIcon';
 import { MapPanel } from '../components/MapPanel';
-import { ParkingDetailsModal } from '../components/ParkingDetailsModal';
-import { ReservationModal } from '../components/ReservationModal';
-import { useDriverData } from '../hooks/useDriverData';
 import {
   discoverParkingLots,
   type Coordinate,
@@ -43,7 +40,6 @@ const PRICE_FILTERS: Array<number | null> = [null, 2000, 2500];
 export function MapResultsScreen({ navigation, route }: Props) {
   const insets = useSafeAreaInsets();
   const { showToast } = useToast();
-  const { createReservation } = useDriverData();
   const [vehicleKind, setVehicleKind] = useState<VehicleKind>('Auto');
   const [availableOnly, setAvailableOnly] = useState(false);
   const [maxHourlyPriceArs, setMaxHourlyPriceArs] = useState<number | null>(
@@ -60,10 +56,6 @@ export function MapResultsScreen({ navigation, route }: Props) {
     route.params.destination.coordinate,
   );
   const [updatedAt, setUpdatedAt] = useState(() => new Date());
-  const [detailsParking, setDetailsParking] =
-    useState<DiscoveredParkingLot | null>(null);
-  const [reservationParking, setReservationParking] =
-    useState<ParkingLot | null>(null);
   const updatedTime = updatedAt.toLocaleTimeString('es-AR', {
     hour: '2-digit',
     minute: '2-digit',
@@ -256,18 +248,65 @@ export function MapResultsScreen({ navigation, route }: Props) {
           ]}
         >
           {selectedParking ? (
-            <ParkingPreview
-              parking={selectedParking}
-              parkingCount={parkingLots.length}
-              updatedTime={updatedTime}
-              showingNearest={showingNearest}
-              onDirections={() => {
-                void openDirections(selectedParking);
-              }}
-              onDetails={() => {
-                setDetailsParking(selectedParking);
-              }}
-            />
+            <>
+              <ParkingPreview
+                parking={selectedParking}
+                parkingCount={parkingLots.length}
+                updatedTime={updatedTime}
+                showingNearest={showingNearest}
+                onDirections={() => {
+                  void openDirections(selectedParking);
+                }}
+                onDetails={() => {
+                  navigation.navigate('ParkingDetails', {
+                    parking: selectedParking,
+                  });
+                }}
+              />
+              {parkingLots.length > 1 ? (
+                <View style={styles.otherResults}>
+                  <Text style={styles.otherResultsTitle}>
+                    Otras cocheras cercanas
+                  </Text>
+                  {parkingLots
+                    .filter((parking) => parking.id !== selectedParking.id)
+                    .map((parking) => (
+                      <Pressable
+                        key={parking.id}
+                        style={({ pressed }) => [
+                          styles.otherResultRow,
+                          pressed && styles.pressed,
+                        ]}
+                        onPress={() => {
+                          setSelectedParkingId(parking.id);
+                        }}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Seleccionar ${parking.name}, ${parking.distanceLabel}, ${parking.priceLabel}`}
+                      >
+                        <View style={styles.otherResultCopy}>
+                          <Text
+                            style={styles.otherResultName}
+                            numberOfLines={1}
+                          >
+                            {parking.name}
+                          </Text>
+                          <Text style={styles.otherResultMeta}>
+                            {parking.distanceLabel} · {parking.walkingTimeLabel}
+                          </Text>
+                        </View>
+                        <View style={styles.otherResultPrice}>
+                          <Text style={styles.otherResultPriceValue}>
+                            {parking.priceLabel.replace('/h', '')}
+                          </Text>
+                          <Text style={styles.otherResultAvailability}>
+                            {parking.availableSpots} libres
+                          </Text>
+                        </View>
+                      </Pressable>
+                    ))}
+                </View>
+              ) : null}
+            </>
           ) : (
             <View style={styles.emptyState}>
               <Text style={styles.emptyTitle}>
@@ -294,31 +333,6 @@ export function MapResultsScreen({ navigation, route }: Props) {
           )}
         </BottomSheetScrollView>
       </BottomSheet>
-
-      <ParkingDetailsModal
-        parking={detailsParking}
-        onClose={() => {
-          setDetailsParking(null);
-        }}
-        onReserve={(parking) => {
-          setDetailsParking(null);
-          setReservationParking(parking);
-        }}
-      />
-      <ReservationModal
-        parking={reservationParking}
-        onCancel={() => {
-          setReservationParking(null);
-        }}
-        onConfirm={(parking) => {
-          createReservation(parking);
-          setReservationParking(null);
-          showToast({
-            message: 'Reserva confirmada. Podés verla en Mis reservas.',
-            kind: 'success',
-          });
-        }}
-      />
     </View>
   );
 }
@@ -672,6 +686,43 @@ const styles = StyleSheet.create({
     color: driverColors.surface,
     fontSize: 15,
     fontWeight: '700',
+  },
+  otherResults: {
+    marginTop: driverSpacing.xs,
+    paddingTop: driverSpacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: driverColors.border,
+    gap: driverSpacing.xs,
+  },
+  otherResultsTitle: {
+    color: driverColors.textSecondary,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  otherResultRow: {
+    minHeight: 58,
+    paddingVertical: driverSpacing.xs,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: driverSpacing.sm,
+  },
+  otherResultCopy: { flex: 1, minWidth: 0, gap: 3 },
+  otherResultName: {
+    color: driverColors.text,
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  otherResultMeta: { color: driverColors.textSecondary, fontSize: 12 },
+  otherResultPrice: { alignItems: 'flex-end', gap: 3 },
+  otherResultPriceValue: {
+    color: driverColors.text,
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  otherResultAvailability: {
+    color: driverColors.success,
+    fontSize: 11,
+    fontWeight: '600',
   },
   emptyState: {
     paddingVertical: driverSpacing.sm,

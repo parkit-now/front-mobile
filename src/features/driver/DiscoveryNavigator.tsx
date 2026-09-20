@@ -3,6 +3,7 @@ import type { DiscoveryStackParamList } from './navigation';
 import { DestinationSearchScreen } from './screens/DestinationSearchScreen';
 import { DiscoveryHomeScreen } from './screens/DiscoveryHomeScreen';
 import { MapResultsScreen } from './screens/MapResultsScreen';
+import { ParkingDetailsScreen } from './screens/ParkingDetailsScreen';
 
 const Stack = createNativeStackNavigator<DiscoveryStackParamList>();
 
@@ -20,6 +21,7 @@ export function DiscoveryNavigator() {
         component={DestinationSearchScreen}
       />
       <Stack.Screen name="MapResults" component={MapResultsScreen} />
+      <Stack.Screen name="ParkingDetails" component={ParkingDetailsScreen} />
     </Stack.Navigator>
   );
 }
