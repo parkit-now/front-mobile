@@ -7,14 +7,14 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import type { ParkingLot } from '../mock';
+import type { DiscoveredParkingLot } from '../geo';
 import { driverColors, driverRadius, driverSpacing } from '../theme';
 import { DriverIcon } from './DriverIcon';
 
 type Props = {
-  parking: ParkingLot | null;
+  parking: DiscoveredParkingLot | null;
   onClose: () => void;
-  onReserve: (parking: ParkingLot) => void;
+  onReserve: (parking: DiscoveredParkingLot) => void;
 };
 
 export function ParkingDetailsModal({ parking, onClose, onReserve }: Props) {
@@ -60,7 +60,7 @@ export function ParkingDetailsModal({ parking, onClose, onReserve }: Props) {
 
             <View style={styles.summary}>
               <SummaryValue label="Precio" value={parking.priceLabel} />
-              <SummaryValue label="Distancia" value={parking.distance} />
+              <SummaryValue label="Distancia" value={parking.distanceLabel} />
               <SummaryValue
                 label="Disponibles"
                 value={String(parking.availableSpots)}

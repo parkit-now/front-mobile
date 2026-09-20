@@ -23,6 +23,7 @@ export function MapPanel({
   selectedParking,
   onSelect,
   onMapMoved,
+  onRegionChangeComplete,
 }: MapPanelProps) {
   const [ready, setReady] = useState(false);
   const initialRegion: Region = {
@@ -48,6 +49,12 @@ export function MapPanel({
           setReady(true);
         }}
         onPanDrag={onMapMoved}
+        onRegionChangeComplete={(region) => {
+          onRegionChangeComplete({
+            latitude: region.latitude,
+            longitude: region.longitude,
+          });
+        }}
       >
         <Marker
           coordinate={destination.coordinate}

@@ -7,4 +7,8 @@ export type MapPanelProps = {
   selectedParking: ParkingLot | undefined;
   onSelect: (parking: ParkingLot) => void;
   onMapMoved: () => void;
+  onRegionChangeComplete: (coordinate: {
+    latitude: number;
+    longitude: number;
+  }) => void;
 };

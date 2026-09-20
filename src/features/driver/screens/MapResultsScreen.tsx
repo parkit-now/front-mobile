@@ -16,6 +16,11 @@ import { ParkingDetailsModal } from '../components/ParkingDetailsModal';
 import { ReservationModal } from '../components/ReservationModal';
 import { useDriverData } from '../hooks/useDriverData';
 import {
+  discoverParkingLots,
+  type Coordinate,
+  type DiscoveredParkingLot,
+} from '../geo';
+import {
   PARKING_LOTS,
   VEHICLE_KINDS,
   type ParkingLot,
@@ -47,25 +52,37 @@ export function MapResultsScreen({ navigation, route }: Props) {
     PARKING_LOTS[0]?.id,
   );
   const [mapMoved, setMapMoved] = useState(false);
-  const [detailsParking, setDetailsParking] = useState<ParkingLot | null>(null);
+  const [searchCenter, setSearchCenter] = useState<Coordinate>(
+    route.params.destination.coordinate,
+  );
+  const [visibleRegionCenter, setVisibleRegionCenter] = useState<Coordinate>(
+    route.params.destination.coordinate,
+  );
+  const [updatedAt, setUpdatedAt] = useState(() => new Date());
+  const [detailsParking, setDetailsParking] =
+    useState<DiscoveredParkingLot | null>(null);
   const [reservationParking, setReservationParking] =
     useState<ParkingLot | null>(null);
-  const updatedTime = useMemo(
-    () =>
-      new Date().toLocaleTimeString('es-AR', {
-        hour: '2-digit',
-        minute: '2-digit',
-      }),
-    [],
+  const updatedTime = updatedAt.toLocaleTimeString('es-AR', {
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+  const discovery = useMemo(
+    () => discoverParkingLots(PARKING_LOTS, searchCenter),
+    [searchCenter],
   );
+  const showingNearest = discovery.nearby.length === 0;
+  const discoveredParkingLots = showingNearest
+    ? discovery.nearestFallback
+    : discovery.nearby;
   const parkingLots = useMemo(
     () =>
-      filterMapParkingLots(PARKING_LOTS, {
+      filterMapParkingLots(discoveredParkingLots, {
         vehicleKind,
         availableOnly,
         maxHourlyPriceArs,
       }),
-    [availableOnly, maxHourlyPriceArs, vehicleKind],
+    [availableOnly, discoveredParkingLots, maxHourlyPriceArs, vehicleKind],
   );
   const selectedParking =
     parkingLots.find((parking) => parking.id === selectedParkingId) ??
@@ -102,6 +119,7 @@ export function MapResultsScreen({ navigation, route }: Props) {
         onMapMoved={() => {
           setMapMoved(true);
         }}
+        onRegionChangeComplete={setVisibleRegionCenter}
       />
 
       <View
@@ -198,7 +216,9 @@ export function MapResultsScreen({ navigation, route }: Props) {
               pressed && styles.pressed,
             ]}
             onPress={() => {
+              setSearchCenter(visibleRegionCenter);
               setMapMoved(false);
+              setUpdatedAt(new Date());
               showToast({
                 message: 'Resultados actualizados en esta zona.',
                 kind: 'success',
@@ -224,6 +244,7 @@ export function MapResultsScreen({ navigation, route }: Props) {
             parking={selectedParking}
             parkingCount={parkingLots.length}
             updatedTime={updatedTime}
+            showingNearest={showingNearest}
             onDirections={() => {
               void openDirections(selectedParking);
             }}
@@ -286,9 +307,10 @@ export function MapResultsScreen({ navigation, route }: Props) {
 }
 
 type ParkingPreviewProps = {
-  parking: ParkingLot;
+  parking: DiscoveredParkingLot;
   parkingCount: number;
   updatedTime: string;
+  showingNearest: boolean;
   onDirections: () => void;
   onDetails: () => void;
 };
@@ -297,6 +319,7 @@ function ParkingPreview({
   parking,
   parkingCount,
   updatedTime,
+  showingNearest,
   onDirections,
   onDetails,
 }: ParkingPreviewProps) {
@@ -304,6 +327,16 @@ function ParkingPreview({
 
   return (
     <>
+      {showingNearest ? (
+        <View style={styles.coverageNotice}>
+          <Text style={styles.coverageTitle}>
+            Todavía no operamos en esta zona
+          </Text>
+          <Text style={styles.coverageCopy}>
+            Estas son las cocheras Parkit más cercanas.
+          </Text>
+        </View>
+      ) : null}
       <View style={styles.resultsMeta}>
         <Text style={styles.resultsCount}>
           {parkingCount}{' '}
@@ -324,7 +357,7 @@ function ParkingPreview({
             {parking.address}
           </Text>
           <Text style={styles.parkingDistance}>
-            {parking.distance} · {parking.eta} caminando
+            {parking.distanceLabel} · {parking.walkingTimeLabel}
           </Text>
         </View>
         <View style={styles.parkingPrice}>
@@ -517,6 +550,21 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     borderRadius: 2,
     backgroundColor: driverColors.border,
+  },
+  coverageNotice: {
+    padding: driverSpacing.sm,
+    borderRadius: driverRadius.control,
+    backgroundColor: driverColors.warningSurface,
+    gap: 3,
+  },
+  coverageTitle: {
+    color: driverColors.warning,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  coverageCopy: {
+    color: driverColors.textSecondary,
+    fontSize: 12,
   },
   resultsMeta: {
     flexDirection: 'row',

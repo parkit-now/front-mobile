@@ -31,10 +31,10 @@ export function filterParkingLots(
   });
 }
 
-export function filterMapParkingLots(
-  parkingLots: ParkingLot[],
+export function filterMapParkingLots<TParking extends ParkingLot>(
+  parkingLots: TParking[],
   { vehicleKind, availableOnly, maxHourlyPriceArs }: MapParkingFilters,
-): ParkingLot[] {
+): TParking[] {
   return parkingLots.filter((parking) => {
     const matchesVehicle = parking.supportedVehicles.includes(vehicleKind);
     const matchesAvailability = !availableOnly || parking.availableSpots > 0;
