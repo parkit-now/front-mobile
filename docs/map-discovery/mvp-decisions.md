@@ -2,10 +2,16 @@
 
 ## Estado
 
-- Estado: propuesta base para implementacion.
+- Estado: arquitectura y experiencia base implementadas en
+  `feat/mobile-map-discovery`.
 - Publico objetivo: conductores que estacionan en CABA.
 - Prioridad del producto: el descubrimiento mediante busqueda y mapa es el
   flujo principal del MVP.
+
+La rama valida el recorrido completo con destinos y estacionamientos mock. La
+integracion con Google Places, el endpoint geografico de estacionamientos y la
+telemetria quedan explicitamente fuera de este primer incremento hasta que
+existan sus contratos y credenciales de desarrollo.
 
 ## Objetivo
 
@@ -235,14 +241,17 @@ una politica explicita de privacidad y retencion.
 
 ## Orden de implementacion
 
-1. Validar los tres estados de UX y sus transiciones.
-2. Definir package Android, bundle ID iOS y proyectos GCP.
-3. Probar calidad de Places con destinos representativos de CABA.
-4. Incorporar coordenadas e indice PostGIS en backend.
-5. Publicar el contrato de descubrimiento y sincronizar tipos OpenAPI.
-6. Implementar mapa, ubicacion y busqueda en mobile.
-7. Integrar disponibilidad actual.
-8. Completar estados, telemetria y pruebas en dispositivos reales.
+1. Completado: validar los tres estados de UX y sus transiciones.
+2. Parcial: package Android y bundle ID iOS definidos; proyectos GCP
+   pendientes.
+3. Pendiente: probar calidad de Places con destinos representativos de CABA.
+4. Pendiente: incorporar coordenadas e indice PostGIS en backend.
+5. Pendiente: publicar el contrato de descubrimiento y sincronizar tipos
+   OpenAPI.
+6. Completado con adapters mock: implementar mapa, ubicacion y busqueda en
+   mobile.
+7. Pendiente: integrar disponibilidad actual del backend.
+8. Pendiente: completar telemetria y pruebas en dispositivos reales.
 
 ## Referencias tecnicas
 
