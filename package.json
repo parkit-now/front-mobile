@@ -5,6 +5,7 @@
   "description": "front-mobile frontend (mobile)",
   "main": "expo/AppEntry",
   "scripts": {
+    "prepare": "git config core.hooksPath .githooks 2>/dev/null || true",
     "dev": "expo start",
     "build": "expo export --platform web",
     "lint": "eslint \"**/*.{ts,tsx}\"",
