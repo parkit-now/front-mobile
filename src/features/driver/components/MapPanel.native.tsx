@@ -1,37 +1,65 @@
-import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useState } from 'react';
+import {
+  ActivityIndicator,
+  Platform,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import MapView, {
   Marker,
   PROVIDER_GOOGLE,
   type Region,
 } from 'react-native-maps';
-import { driverColors, driverRadius, driverSpacing } from '../theme';
+import { driverColors } from '../theme';
 import { DriverIcon } from './DriverIcon';
 import type { MapPanelProps } from './MapPanel.types';
 
-const CABA_REGION: Region = {
-  latitude: -34.6037,
-  longitude: -58.4108,
-  latitudeDelta: 0.13,
-  longitudeDelta: 0.13,
-};
+const MAP_DELTA = 0.085;
 
 export function MapPanel({
+  destination,
   parkingLots,
   selectedParking,
   onSelect,
-  onReserve,
+  onMapMoved,
 }: MapPanelProps) {
+  const [ready, setReady] = useState(false);
+  const initialRegion: Region = {
+    ...destination.coordinate,
+    latitudeDelta: MAP_DELTA,
+    longitudeDelta: MAP_DELTA,
+  };
+
   return (
     <View style={styles.stage} accessibilityLabel="Mapa de estacionamientos">
       <MapView
+        key={destination.id}
         style={StyleSheet.absoluteFill}
-        initialRegion={CABA_REGION}
+        initialRegion={initialRegion}
         provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : undefined}
         showsCompass={false}
         showsPointsOfInterest={false}
         toolbarEnabled={false}
         pitchEnabled={false}
+        onMapReady={() => {
+          setReady(true);
+        }}
+        onPanDrag={onMapMoved}
       >
+        <Marker
+          coordinate={destination.coordinate}
+          accessibilityLabel={
+            destination.kind === 'current-location'
+              ? 'Tu ubicación aproximada'
+              : `Destino: ${destination.name}`
+          }
+        >
+          <View style={styles.destinationMarker}>
+            <DriverIcon name="pin" size={17} color={driverColors.surface} />
+          </View>
+        </Marker>
+
         {parkingLots.map((parking) => {
           const selected = parking.id === selectedParking?.id;
           return (
@@ -69,73 +97,31 @@ export function MapPanel({
         })}
       </MapView>
 
-      {selectedParking ? (
-        <View style={styles.selectedCard}>
-          <View style={styles.selectedHeader}>
-            <View style={styles.selectedIcon}>
-              <DriverIcon name="car" size={24} color={driverColors.brand} />
-            </View>
-            <View style={styles.selectedCopy}>
-              <Text style={styles.selectedName}>{selectedParking.name}</Text>
-              <Text style={styles.selectedAddress}>
-                {selectedParking.address}
-              </Text>
-            </View>
-            <Text style={styles.rating}>{selectedParking.rating} / 5</Text>
-          </View>
-
-          <View style={styles.selectedMeta}>
-            <Text style={styles.price}>{selectedParking.priceLabel}</Text>
-            <Text style={styles.meta}>{selectedParking.eta}</Text>
-            <Text style={styles.meta}>
-              {selectedParking.availableSpots} lugares
-            </Text>
-          </View>
-
-          <Pressable
-            style={({ pressed }) => [
-              styles.reserveButton,
-              !selectedParking.acceptsReservations && styles.disabledButton,
-              pressed && styles.pressed,
-            ]}
-            onPress={() => {
-              onReserve(selectedParking);
-            }}
-            accessibilityRole="button"
-            accessibilityState={{
-              disabled: !selectedParking.acceptsReservations,
-            }}
-            accessibilityLabel={`Reservar en ${selectedParking.name}`}
-            disabled={!selectedParking.acceptsReservations}
-          >
-            <Text style={styles.reserveText}>
-              {selectedParking.acceptsReservations
-                ? 'Reservar ahora'
-                : 'Sin reserva anticipada'}
-            </Text>
-            {selectedParking.acceptsReservations ? (
-              <DriverIcon name="arrow" size={18} color={driverColors.surface} />
-            ) : null}
-          </Pressable>
+      {!ready ? (
+        <View style={styles.loading}>
+          <ActivityIndicator color={driverColors.brand} />
+          <Text style={styles.loadingText}>Cargando mapa…</Text>
         </View>
-      ) : (
-        <View style={styles.emptyCard}>
-          <Text style={styles.emptyTitle}>No hay resultados en el mapa</Text>
-          <Text style={styles.emptyCopy}>Probá ajustando la búsqueda.</Text>
-        </View>
-      )}
+      ) : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   stage: {
-    height: 470,
-    borderRadius: driverRadius.card,
+    flex: 1,
     overflow: 'hidden',
     backgroundColor: driverColors.mapBackground,
-    borderWidth: 1,
-    borderColor: driverColors.border,
+  },
+  destinationMarker: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 3,
+    borderColor: driverColors.surface,
+    backgroundColor: driverColors.text,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   marker: {
     minHeight: 34,
@@ -161,10 +147,10 @@ const styles = StyleSheet.create({
     backgroundColor: driverColors.success,
   },
   availabilityDotLow: {
-    backgroundColor: '#b54708',
+    backgroundColor: driverColors.warning,
   },
   availabilityDotFull: {
-    backgroundColor: '#b42318',
+    backgroundColor: driverColors.danger,
   },
   markerPrice: {
     color: driverColors.textSecondary,
@@ -175,102 +161,14 @@ const styles = StyleSheet.create({
     color: driverColors.surface,
     fontSize: 15,
   },
-  selectedCard: {
-    position: 'absolute',
-    left: driverSpacing.sm,
-    right: driverSpacing.sm,
-    bottom: driverSpacing.sm,
-    padding: driverSpacing.sm,
-    borderRadius: driverRadius.card,
-    backgroundColor: driverColors.surface,
-    borderWidth: 1,
-    borderColor: driverColors.border,
-    gap: driverSpacing.xs,
-  },
-  selectedHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: driverSpacing.xs,
-  },
-  selectedIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: driverRadius.control,
-    backgroundColor: driverColors.brandSoft,
+  loading: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: driverColors.mapBackground,
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 10,
   },
-  selectedCopy: {
-    flex: 1,
-    minWidth: 0,
-  },
-  selectedName: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: driverColors.text,
-  },
-  selectedAddress: {
-    marginTop: 2,
-    fontSize: 13,
-    color: driverColors.textMuted,
-  },
-  rating: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: driverColors.textSecondary,
-  },
-  selectedMeta: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: driverSpacing.xs,
-    alignItems: 'center',
-  },
-  price: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: driverColors.brand,
-  },
-  meta: {
-    fontSize: 13,
-    color: driverColors.textSecondary,
-  },
-  reserveButton: {
-    minHeight: 48,
-    borderRadius: driverRadius.control,
-    backgroundColor: driverColors.brand,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: driverSpacing.xs,
-  },
-  reserveText: {
-    color: driverColors.surface,
-    fontSize: 15,
-    fontWeight: '700',
-  },
-  disabledButton: {
-    backgroundColor: driverColors.disabled,
-  },
-  pressed: {
-    opacity: 0.8,
-  },
-  emptyCard: {
-    position: 'absolute',
-    left: driverSpacing.md,
-    right: driverSpacing.md,
-    top: 180,
-    padding: driverSpacing.md,
-    borderRadius: driverRadius.card,
-    backgroundColor: driverColors.surface,
-    alignItems: 'center',
-  },
-  emptyTitle: {
-    color: driverColors.text,
-    fontSize: 15,
-    fontWeight: '700',
-  },
-  emptyCopy: {
-    marginTop: 4,
+  loadingText: {
     color: driverColors.textSecondary,
     fontSize: 13,
   },

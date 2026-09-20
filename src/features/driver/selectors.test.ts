@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { PARKING_LOTS } from './mock';
-import { filterParkingLots } from './selectors';
+import { filterMapParkingLots, filterParkingLots } from './selectors';
 
 describe('filterParkingLots', () => {
   it('busca por nombre, dirección o servicio sin depender de mayúsculas o tildes', () => {
@@ -34,5 +34,30 @@ describe('filterParkingLots', () => {
     });
 
     expect(result).toEqual([]);
+  });
+});
+
+describe('filterMapParkingLots', () => {
+  it('combina vehículo, disponibilidad actual y precio máximo', () => {
+    const result = filterMapParkingLots(PARKING_LOTS, {
+      vehicleKind: 'Pickup',
+      availableOnly: true,
+      maxHourlyPriceArs: 2000,
+    });
+
+    expect(result.map((parking) => parking.id)).toEqual(['once-central']);
+  });
+
+  it('no limita por precio cuando el máximo es null', () => {
+    const result = filterMapParkingLots(PARKING_LOTS, {
+      vehicleKind: 'Moto',
+      availableOnly: false,
+      maxHourlyPriceArs: null,
+    });
+
+    expect(result.map((parking) => parking.id)).toEqual([
+      'once-central',
+      'belgrano-norte',
+    ]);
   });
 });

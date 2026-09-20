@@ -1,5 +1,5 @@
 import { StyleSheet, Text, View } from 'react-native';
-import { driverColors, driverRadius, driverSpacing } from '../theme';
+import { driverColors, driverSpacing } from '../theme';
 import type { MapPanelProps } from './MapPanel.types';
 
 export function MapPanel({ parkingLots }: MapPanelProps) {
@@ -17,11 +17,8 @@ export function MapPanel({ parkingLots }: MapPanelProps) {
 
 const styles = StyleSheet.create({
   stage: {
-    height: 470,
+    flex: 1,
     padding: driverSpacing.lg,
-    borderRadius: driverRadius.card,
-    borderWidth: 1,
-    borderColor: driverColors.border,
     backgroundColor: driverColors.mapBackground,
     alignItems: 'center',
     justifyContent: 'center',
