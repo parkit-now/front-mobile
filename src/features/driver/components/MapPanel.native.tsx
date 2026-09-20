@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import MapView, {
   Marker,
@@ -20,6 +20,7 @@ export function MapPanel({
   onRegionChangeComplete,
 }: MapPanelProps) {
   const [ready, setReady] = useState(false);
+  const initializedRegion = useRef(false);
   const initialRegion: Region = {
     ...destination.coordinate,
     latitudeDelta: MAP_DELTA,
@@ -42,12 +43,16 @@ export function MapPanel({
         onMapReady={() => {
           setReady(true);
         }}
-        onPanDrag={onMapMoved}
         onRegionChangeComplete={(region) => {
           onRegionChangeComplete({
             latitude: region.latitude,
             longitude: region.longitude,
           });
+          if (initializedRegion.current) {
+            onMapMoved();
+          } else {
+            initializedRegion.current = true;
+          }
         }}
       >
         <Marker

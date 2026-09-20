@@ -1,4 +1,5 @@
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import BottomSheet, { BottomSheetScrollView } from '@gorhom/bottom-sheet';
 import { useMemo, useState } from 'react';
 import {
   Linking,
@@ -67,6 +68,7 @@ export function MapResultsScreen({ navigation, route }: Props) {
     hour: '2-digit',
     minute: '2-digit',
   });
+  const sheetSnapPoints = useMemo(() => ['34%', '58%'], []);
   const discovery = useMemo(
     () => discoverParkingLots(PARKING_LOTS, searchCenter),
     [searchCenter],
@@ -102,9 +104,16 @@ export function MapResultsScreen({ navigation, route }: Props) {
 
   async function openDirections(parking: ParkingLot) {
     const destination = `${parking.coordinate.latitude},${parking.coordinate.longitude}`;
-    await Linking.openURL(
-      `https://www.google.com/maps/dir/?api=1&destination=${destination}`,
-    );
+    try {
+      await Linking.openURL(
+        `https://www.google.com/maps/dir/?api=1&destination=${destination}`,
+      );
+    } catch {
+      showToast({
+        message: 'No pudimos abrir la aplicación de mapas.',
+        kind: 'error',
+      });
+    }
   }
 
   return (
@@ -143,7 +152,7 @@ export function MapResultsScreen({ navigation, route }: Props) {
               pressed && styles.pressed,
             ]}
             onPress={() => {
-              navigation.navigate('DestinationSearch');
+              navigation.replace('DestinationSearch');
             }}
             accessibilityRole="button"
             accessibilityLabel={`Cambiar destino, actual ${route.params.destination.name}`}
@@ -232,51 +241,59 @@ export function MapResultsScreen({ navigation, route }: Props) {
         ) : null}
       </View>
 
-      <View
-        style={[
-          styles.resultsSheet,
-          { paddingBottom: Math.max(insets.bottom, driverSpacing.md) },
-        ]}
+      <BottomSheet
+        index={0}
+        snapPoints={sheetSnapPoints}
+        enablePanDownToClose={false}
+        backgroundStyle={styles.sheetBackground}
+        handleIndicatorStyle={styles.sheetHandle}
+        style={styles.sheetShadow}
       >
-        <View style={styles.sheetHandle} />
-        {selectedParking ? (
-          <ParkingPreview
-            parking={selectedParking}
-            parkingCount={parkingLots.length}
-            updatedTime={updatedTime}
-            showingNearest={showingNearest}
-            onDirections={() => {
-              void openDirections(selectedParking);
-            }}
-            onDetails={() => {
-              setDetailsParking(selectedParking);
-            }}
-          />
-        ) : (
-          <View style={styles.emptyState}>
-            <Text style={styles.emptyTitle}>
-              No hay cocheras con estos filtros
-            </Text>
-            <Text style={styles.emptyCopy}>
-              Probá cambiando el vehículo, el precio o la disponibilidad.
-            </Text>
-            <Pressable
-              style={({ pressed }) => [
-                styles.resetButton,
-                pressed && styles.pressed,
-              ]}
-              onPress={() => {
-                setVehicleKind('Auto');
-                setAvailableOnly(false);
-                setMaxHourlyPriceArs(null);
+        <BottomSheetScrollView
+          contentContainerStyle={[
+            styles.resultsSheetContent,
+            { paddingBottom: Math.max(insets.bottom, driverSpacing.md) },
+          ]}
+        >
+          {selectedParking ? (
+            <ParkingPreview
+              parking={selectedParking}
+              parkingCount={parkingLots.length}
+              updatedTime={updatedTime}
+              showingNearest={showingNearest}
+              onDirections={() => {
+                void openDirections(selectedParking);
               }}
-              accessibilityRole="button"
-            >
-              <Text style={styles.resetText}>Quitar filtros</Text>
-            </Pressable>
-          </View>
-        )}
-      </View>
+              onDetails={() => {
+                setDetailsParking(selectedParking);
+              }}
+            />
+          ) : (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyTitle}>
+                No hay cocheras con estos filtros
+              </Text>
+              <Text style={styles.emptyCopy}>
+                Probá cambiando el vehículo, el precio o la disponibilidad.
+              </Text>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.resetButton,
+                  pressed && styles.pressed,
+                ]}
+                onPress={() => {
+                  setVehicleKind('Auto');
+                  setAvailableOnly(false);
+                  setMaxHourlyPriceArs(null);
+                }}
+                accessibilityRole="button"
+              >
+                <Text style={styles.resetText}>Quitar filtros</Text>
+              </Pressable>
+            </View>
+          )}
+        </BottomSheetScrollView>
+      </BottomSheet>
 
       <ParkingDetailsModal
         parking={detailsParking}
@@ -525,19 +542,16 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
   },
-  resultsSheet: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    maxWidth: driverLayout.maxContentWidth,
-    alignSelf: 'center',
-    paddingTop: driverSpacing.xs,
+  resultsSheetContent: {
     paddingHorizontal: driverSpacing.md,
+    gap: driverSpacing.sm,
+  },
+  sheetBackground: {
     borderTopLeftRadius: driverRadius.card,
     borderTopRightRadius: driverRadius.card,
     backgroundColor: driverColors.surface,
-    gap: driverSpacing.sm,
+  },
+  sheetShadow: {
     shadowColor: driverColors.text,
     shadowOpacity: 0.18,
     shadowRadius: 24,
@@ -547,7 +561,6 @@ const styles = StyleSheet.create({
   sheetHandle: {
     width: 40,
     height: 4,
-    alignSelf: 'center',
     borderRadius: 2,
     backgroundColor: driverColors.border,
   },
