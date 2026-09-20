@@ -10,7 +10,11 @@ export type DriverIconName =
   | 'ticket'
   | 'filter'
   | 'bell'
-  | 'arrow';
+  | 'arrow'
+  | 'back'
+  | 'clock'
+  | 'current-location'
+  | 'close';
 
 type Props = {
   name: DriverIconName;
@@ -102,6 +106,23 @@ export function DriverIcon({
         </>
       ) : null}
       {name === 'arrow' ? <Path d="M5 12h14M13 6l6 6-6 6" {...common} /> : null}
+      {name === 'back' ? (
+        <Path d="M19 12H5M11 18l-6-6 6-6" {...common} />
+      ) : null}
+      {name === 'clock' ? (
+        <>
+          <Circle cx="12" cy="12" r="9" {...common} />
+          <Path d="M12 7v5l3 2" {...common} />
+        </>
+      ) : null}
+      {name === 'current-location' ? (
+        <>
+          <Circle cx="12" cy="12" r="3" {...common} />
+          <Circle cx="12" cy="12" r="8" {...common} />
+          <Path d="M12 2v2M12 20v2M2 12h2M20 12h2" {...common} />
+        </>
+      ) : null}
+      {name === 'close' ? <Path d="m6 6 12 12M18 6 6 18" {...common} /> : null}
     </Svg>
   );
 }

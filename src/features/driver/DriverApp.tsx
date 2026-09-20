@@ -1,11 +1,14 @@
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { NavigationContainer } from '@react-navigation/native';
+import {
+  getFocusedRouteNameFromRoute,
+  NavigationContainer,
+} from '@react-navigation/native';
 import type { Session } from '@supabase/supabase-js';
 import { StyleSheet, View } from 'react-native';
 import { DriverIcon, type DriverIconName } from './components/DriverIcon';
+import { DiscoveryNavigator } from './DiscoveryNavigator';
 import { DriverDataProvider } from './hooks/useDriverData';
 import type { DriverTabParamList } from './navigation';
-import { ExploreScreen } from './screens/ExploreScreen';
 import { ProfileScreen } from './screens/ProfileScreen';
 import { ReservationsScreen } from './screens/ReservationsScreen';
 import { driverColors } from './theme';
@@ -34,7 +37,12 @@ export function DriverApp({ session }: Props) {
               tabBarActiveTintColor: driverColors.brand,
               tabBarInactiveTintColor: driverColors.textSecondary,
               tabBarLabelStyle: styles.tabLabel,
-              tabBarStyle: styles.tabBar,
+              tabBarStyle:
+                route.name === 'Explore' &&
+                getFocusedRouteNameFromRoute(route) !== undefined &&
+                getFocusedRouteNameFromRoute(route) !== 'DiscoveryHome'
+                  ? styles.hiddenTabBar
+                  : styles.tabBar,
               tabBarIcon: ({ color, size }) => (
                 <DriverIcon
                   name={ICON_BY_ROUTE[route.name]}
@@ -46,7 +54,7 @@ export function DriverApp({ session }: Props) {
           >
             <Tab.Screen
               name="Explore"
-              component={ExploreScreen}
+              component={DiscoveryNavigator}
               options={{ title: 'Buscar', tabBarAccessibilityLabel: 'Buscar' }}
             />
             <Tab.Screen
@@ -82,5 +90,8 @@ const styles = StyleSheet.create({
   tabLabel: {
     fontSize: 12,
     fontWeight: '700',
+  },
+  hiddenTabBar: {
+    display: 'none',
   },
 });
