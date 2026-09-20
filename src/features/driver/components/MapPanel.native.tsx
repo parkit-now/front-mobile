@@ -40,6 +40,8 @@ export function MapPanel({
         provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : undefined}
         showsCompass={false}
         showsPointsOfInterest={false}
+        showsUserLocation={destination.kind === 'current-location'}
+        showsMyLocationButton={false}
         toolbarEnabled={false}
         pitchEnabled={false}
         onMapReady={() => {

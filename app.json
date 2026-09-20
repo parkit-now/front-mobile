@@ -6,6 +6,14 @@
     "orientation": "portrait",
     "platforms": ["ios", "android", "web"],
     "scheme": "parkit",
+    "plugins": [
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Parkit usa tu ubicación para mostrar estacionamientos cercanos."
+        }
+      ]
+    ],
     "updates": {
       "fallbackToCacheTimeout": 0
     },

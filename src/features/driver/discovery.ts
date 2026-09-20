@@ -9,17 +9,6 @@ export type SearchDestination = {
   };
 };
 
-export const CURRENT_LOCATION_DESTINATION: SearchDestination = {
-  id: 'current-location',
-  name: 'Mi ubicación',
-  address: 'Ubicación actual',
-  kind: 'current-location',
-  coordinate: {
-    latitude: -34.6037,
-    longitude: -58.3816,
-  },
-};
-
 export const RECENT_DESTINATIONS: SearchDestination[] = [
   {
     id: 'obelisco',
@@ -92,6 +81,22 @@ export function searchDestinations(query: string): SearchDestination[] {
       normalizedQuery,
     ),
   );
+}
+
+export function toCurrentLocationDestination(coordinate: {
+  latitude: number;
+  longitude: number;
+}): SearchDestination {
+  return {
+    id: 'current-location',
+    name: 'Mi ubicación',
+    address: 'Ubicación actual',
+    kind: 'current-location',
+    coordinate: {
+      latitude: coordinate.latitude,
+      longitude: coordinate.longitude,
+    },
+  };
 }
 
 function normalize(value: string): string {

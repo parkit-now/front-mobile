@@ -3,11 +3,9 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useToast } from '../../../lib/notifications/ToastProvider';
 import { DriverIcon } from '../components/DriverIcon';
-import {
-  CURRENT_LOCATION_DESTINATION,
-  RECENT_DESTINATIONS,
-  type SearchDestination,
-} from '../discovery';
+import { LocationIssueModal } from '../components/LocationIssueModal';
+import { RECENT_DESTINATIONS, type SearchDestination } from '../discovery';
+import { useCurrentLocation } from '../hooks/useCurrentLocation';
 import type { DiscoveryStackParamList } from '../navigation';
 import {
   driverColors,
@@ -21,112 +19,142 @@ type Props = NativeStackScreenProps<DiscoveryStackParamList, 'DiscoveryHome'>;
 export function DiscoveryHomeScreen({ navigation }: Props) {
   const insets = useSafeAreaInsets();
   const { showToast } = useToast();
+  const currentLocation = useCurrentLocation();
 
   function openMap(destination: SearchDestination) {
     navigation.navigate('MapResults', { destination });
   }
 
+  async function openCurrentLocation() {
+    const destination = await currentLocation.request();
+    if (destination) openMap(destination);
+  }
+
   return (
-    <ScrollView
-      contentContainerStyle={[
-        styles.content,
-        { paddingTop: insets.top + driverSpacing.sm },
-      ]}
-    >
-      <View style={styles.topBar}>
-        <View style={styles.brand} accessibilityLabel="Parkit">
-          <View style={styles.logo}>
-            <Text style={styles.logoText}>P</Text>
+    <>
+      <ScrollView
+        contentContainerStyle={[
+          styles.content,
+          { paddingTop: insets.top + driverSpacing.sm },
+        ]}
+      >
+        <View style={styles.topBar}>
+          <View style={styles.brand} accessibilityLabel="Parkit">
+            <View style={styles.logo}>
+              <Text style={styles.logoText}>P</Text>
+            </View>
+            <Text style={styles.brandText}>PARKIT</Text>
           </View>
-          <Text style={styles.brandText}>PARKIT</Text>
+          <Pressable
+            style={({ pressed }) => [
+              styles.iconButton,
+              pressed && styles.pressed,
+            ]}
+            onPress={() => {
+              showToast({
+                message: 'No tenés notificaciones nuevas.',
+                kind: 'info',
+              });
+            }}
+            accessibilityRole="button"
+            accessibilityLabel="Notificaciones"
+          >
+            <DriverIcon name="bell" size={19} />
+          </Pressable>
         </View>
-        <Pressable
-          style={({ pressed }) => [
-            styles.iconButton,
-            pressed && styles.pressed,
-          ]}
-          onPress={() => {
-            showToast({
-              message: 'No tenés notificaciones nuevas.',
-              kind: 'info',
-            });
-          }}
-          accessibilityRole="button"
-          accessibilityLabel="Notificaciones"
-        >
-          <DriverIcon name="bell" size={19} />
-        </Pressable>
-      </View>
 
-      <View style={styles.searchSection}>
-        <Text style={styles.title}>¿A dónde vas?</Text>
-        <Pressable
-          style={({ pressed }) => [
-            styles.searchButton,
-            pressed && styles.pressed,
-          ]}
-          onPress={() => {
-            navigation.navigate('DestinationSearch');
-          }}
-          accessibilityRole="button"
-          accessibilityLabel="Buscar destino"
-        >
-          <DriverIcon name="search" color={driverColors.brand} size={20} />
-          <Text style={styles.searchPlaceholder}>
-            Dirección, lugar o esquina
-          </Text>
-        </Pressable>
-        <Pressable
-          style={({ pressed }) => [
-            styles.nearbyButton,
-            pressed && styles.pressed,
-          ]}
-          onPress={() => {
-            openMap(CURRENT_LOCATION_DESTINATION);
-          }}
-          accessibilityRole="button"
-          accessibilityLabel="Estacionar cerca mío"
-        >
-          <DriverIcon name="current-location" size={20} />
-          <Text style={styles.nearbyText}>Estacionar cerca mío</Text>
-        </Pressable>
-      </View>
-
-      <View style={styles.recentSection}>
-        <Text style={styles.sectionLabel}>DESTINOS RECIENTES</Text>
-        <View style={styles.recentList}>
-          {RECENT_DESTINATIONS.map((destination, index) => (
-            <Pressable
-              key={destination.id}
-              style={({ pressed }) => [
-                styles.recentRow,
-                index < RECENT_DESTINATIONS.length - 1 && styles.recentBorder,
-                pressed && styles.pressed,
-              ]}
-              onPress={() => {
-                openMap(destination);
-              }}
-              accessibilityRole="button"
-              accessibilityLabel={`${destination.name}, ${destination.address}`}
-            >
-              <View style={styles.recentIcon}>
-                <DriverIcon name="clock" size={18} color={driverColors.brand} />
-              </View>
-              <View style={styles.recentCopy}>
-                <Text style={styles.recentName}>{destination.name}</Text>
-                <Text style={styles.recentAddress} numberOfLines={1}>
-                  {destination.address}
-                </Text>
-              </View>
-            </Pressable>
-          ))}
+        <View style={styles.searchSection}>
+          <Text style={styles.title}>¿A dónde vas?</Text>
+          <Pressable
+            style={({ pressed }) => [
+              styles.searchButton,
+              pressed && styles.pressed,
+            ]}
+            onPress={() => {
+              navigation.navigate('DestinationSearch');
+            }}
+            accessibilityRole="button"
+            accessibilityLabel="Buscar destino"
+          >
+            <DriverIcon name="search" color={driverColors.brand} size={20} />
+            <Text style={styles.searchPlaceholder}>
+              Dirección, lugar o esquina
+            </Text>
+          </Pressable>
+          <Pressable
+            style={({ pressed }) => [
+              styles.nearbyButton,
+              currentLocation.pending && styles.disabled,
+              pressed && styles.pressed,
+            ]}
+            onPress={() => {
+              void openCurrentLocation();
+            }}
+            disabled={currentLocation.pending}
+            accessibilityRole="button"
+            accessibilityLabel="Estacionar cerca mío"
+            accessibilityState={{
+              disabled: currentLocation.pending,
+              busy: currentLocation.pending,
+            }}
+          >
+            <DriverIcon name="current-location" size={20} />
+            <Text style={styles.nearbyText}>
+              {currentLocation.pending
+                ? 'Buscando ubicación…'
+                : 'Estacionar cerca mío'}
+            </Text>
+          </Pressable>
         </View>
-      </View>
 
-      <Text style={styles.networkCopy}>
-        Mostramos sólo cocheras operadas por Parkit.
-      </Text>
-    </ScrollView>
+        <View style={styles.recentSection}>
+          <Text style={styles.sectionLabel}>DESTINOS RECIENTES</Text>
+          <View style={styles.recentList}>
+            {RECENT_DESTINATIONS.map((destination, index) => (
+              <Pressable
+                key={destination.id}
+                style={({ pressed }) => [
+                  styles.recentRow,
+                  index < RECENT_DESTINATIONS.length - 1 && styles.recentBorder,
+                  pressed && styles.pressed,
+                ]}
+                onPress={() => {
+                  openMap(destination);
+                }}
+                accessibilityRole="button"
+                accessibilityLabel={`${destination.name}, ${destination.address}`}
+              >
+                <View style={styles.recentIcon}>
+                  <DriverIcon
+                    name="clock"
+                    size={18}
+                    color={driverColors.brand}
+                  />
+                </View>
+                <View style={styles.recentCopy}>
+                  <Text style={styles.recentName}>{destination.name}</Text>
+                  <Text style={styles.recentAddress} numberOfLines={1}>
+                    {destination.address}
+                  </Text>
+                </View>
+              </Pressable>
+            ))}
+          </View>
+        </View>
+
+        <Text style={styles.networkCopy}>
+          Mostramos sólo cocheras operadas por Parkit.
+        </Text>
+      </ScrollView>
+      <LocationIssueModal
+        issue={currentLocation.issue}
+        pending={currentLocation.pending}
+        onClose={currentLocation.clearIssue}
+        onRetry={() => {
+          void openCurrentLocation();
+        }}
+      />
+    </>
   );
 }
 
@@ -277,5 +305,8 @@ const styles = StyleSheet.create({
   },
   pressed: {
     opacity: 0.72,
+  },
+  disabled: {
+    opacity: 0.62,
   },
 });

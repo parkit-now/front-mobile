@@ -11,12 +11,13 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { DriverIcon } from '../components/DriverIcon';
+import { LocationIssueModal } from '../components/LocationIssueModal';
 import {
-  CURRENT_LOCATION_DESTINATION,
   RECENT_DESTINATIONS,
   searchDestinations,
   type SearchDestination,
 } from '../discovery';
+import { useCurrentLocation } from '../hooks/useCurrentLocation';
 import type { DiscoveryStackParamList } from '../navigation';
 import { driverColors, driverRadius, driverSpacing } from '../theme';
 
@@ -29,6 +30,7 @@ export function DestinationSearchScreen({ navigation }: Props) {
   const insets = useSafeAreaInsets();
   const [query, setQuery] = useState('');
   const [settledQuery, setSettledQuery] = useState('');
+  const currentLocation = useCurrentLocation();
 
   useEffect(() => {
     const timeout = setTimeout(() => {
@@ -52,150 +54,174 @@ export function DestinationSearchScreen({ navigation }: Props) {
     navigation.replace('MapResults', { destination });
   }
 
-  return (
-    <View style={[styles.page, { paddingTop: insets.top }]}>
-      <View style={styles.header}>
-        <Pressable
-          style={({ pressed }) => [
-            styles.backButton,
-            pressed && styles.pressed,
-          ]}
-          onPress={navigation.goBack}
-          accessibilityRole="button"
-          accessibilityLabel="Volver"
-        >
-          <DriverIcon name="back" size={22} color={driverColors.text} />
-        </Pressable>
-        <View style={styles.inputWrap}>
-          <DriverIcon name="search" size={19} color={driverColors.brand} />
-          <TextInput
-            autoFocus
-            value={query}
-            onChangeText={setQuery}
-            style={styles.input}
-            placeholder="Dirección, lugar o esquina"
-            placeholderTextColor={driverColors.textMuted}
-            returnKeyType="search"
-            autoCapitalize="words"
-            accessibilityLabel="Destino"
-          />
-          {query.length > 0 ? (
-            <Pressable
-              style={styles.clearButton}
-              onPress={() => {
-                setQuery('');
-                setSettledQuery('');
-              }}
-              accessibilityRole="button"
-              accessibilityLabel="Limpiar búsqueda"
-            >
-              <DriverIcon name="close" size={18} />
-            </Pressable>
-          ) : null}
-        </View>
-      </View>
+  async function selectCurrentLocation() {
+    const destination = await currentLocation.request();
+    if (destination) selectDestination(destination);
+  }
 
-      {searching ? (
-        <View style={styles.statusRow}>
-          <View style={styles.loadingDot} />
-          <Text style={styles.statusText}>Buscando direcciones…</Text>
-        </View>
-      ) : (
-        <FlatList
-          data={visibleDestinations}
-          keyExtractor={(destination) => destination.id}
-          keyboardShouldPersistTaps="handled"
-          ListHeaderComponent={
-            <>
+  return (
+    <>
+      <View style={[styles.page, { paddingTop: insets.top }]}>
+        <View style={styles.header}>
+          <Pressable
+            style={({ pressed }) => [
+              styles.backButton,
+              pressed && styles.pressed,
+            ]}
+            onPress={navigation.goBack}
+            accessibilityRole="button"
+            accessibilityLabel="Volver"
+          >
+            <DriverIcon name="back" size={22} color={driverColors.text} />
+          </Pressable>
+          <View style={styles.inputWrap}>
+            <DriverIcon name="search" size={19} color={driverColors.brand} />
+            <TextInput
+              autoFocus
+              value={query}
+              onChangeText={setQuery}
+              style={styles.input}
+              placeholder="Dirección, lugar o esquina"
+              placeholderTextColor={driverColors.textMuted}
+              returnKeyType="search"
+              autoCapitalize="words"
+              accessibilityLabel="Destino"
+            />
+            {query.length > 0 ? (
               <Pressable
-                style={({ pressed }) => [
-                  styles.locationRow,
-                  pressed && styles.pressed,
-                ]}
+                style={styles.clearButton}
                 onPress={() => {
-                  selectDestination(CURRENT_LOCATION_DESTINATION);
+                  setQuery('');
+                  setSettledQuery('');
                 }}
                 accessibilityRole="button"
+                accessibilityLabel="Limpiar búsqueda"
               >
-                <View style={styles.rowIcon}>
-                  <DriverIcon
-                    name="current-location"
-                    size={19}
-                    color={driverColors.brand}
-                  />
-                </View>
-                <Text style={styles.locationText}>
-                  Usar mi ubicación actual
-                </Text>
+                <DriverIcon name="close" size={18} />
               </Pressable>
-              {!hasQuery ? (
-                <Text style={styles.listLabel}>DESTINOS RECIENTES</Text>
-              ) : null}
-            </>
-          }
-          renderItem={({ item }) => (
-            <Pressable
-              style={({ pressed }) => [
-                styles.resultRow,
-                pressed && styles.pressed,
-              ]}
-              onPress={() => {
-                selectDestination(item);
-              }}
-              accessibilityRole="button"
-              accessibilityLabel={`${item.name}, ${item.address}`}
-            >
-              <View style={styles.rowIcon}>
-                <DriverIcon
-                  name={hasQuery ? 'pin' : 'clock'}
-                  size={18}
-                  color={driverColors.brand}
-                />
-              </View>
-              <View style={styles.resultCopy}>
-                <Text style={styles.resultName}>{item.name}</Text>
-                <Text style={styles.resultAddress} numberOfLines={1}>
-                  {item.address}
-                </Text>
-              </View>
-            </Pressable>
-          )}
-          ListEmptyComponent={
-            hasQuery ? (
-              <View style={styles.emptyState}>
-                <DriverIcon
-                  name="search"
-                  size={30}
-                  color={driverColors.disabled}
-                />
-                <Text style={styles.emptyTitle}>
-                  Sin resultados para “{settledQuery.trim()}”
-                </Text>
-                <Text style={styles.emptyCopy}>
-                  Probá con el nombre de la calle y la altura, o con un lugar
-                  conocido de CABA.
-                </Text>
+            ) : null}
+          </View>
+        </View>
+
+        {searching ? (
+          <View style={styles.statusRow}>
+            <View style={styles.loadingDot} />
+            <Text style={styles.statusText}>Buscando direcciones…</Text>
+          </View>
+        ) : (
+          <FlatList
+            data={visibleDestinations}
+            keyExtractor={(destination) => destination.id}
+            keyboardShouldPersistTaps="handled"
+            ListHeaderComponent={
+              <>
                 <Pressable
                   style={({ pressed }) => [
-                    styles.emptyAction,
+                    styles.locationRow,
+                    currentLocation.pending && styles.disabled,
                     pressed && styles.pressed,
                   ]}
                   onPress={() => {
-                    selectDestination(CURRENT_LOCATION_DESTINATION);
+                    void selectCurrentLocation();
                   }}
+                  disabled={currentLocation.pending}
                   accessibilityRole="button"
+                  accessibilityState={{
+                    disabled: currentLocation.pending,
+                    busy: currentLocation.pending,
+                  }}
                 >
-                  <DriverIcon name="current-location" size={19} />
-                  <Text style={styles.emptyActionText}>
-                    Estacionar cerca mío
+                  <View style={styles.rowIcon}>
+                    <DriverIcon
+                      name="current-location"
+                      size={19}
+                      color={driverColors.brand}
+                    />
+                  </View>
+                  <Text style={styles.locationText}>
+                    {currentLocation.pending
+                      ? 'Buscando ubicación…'
+                      : 'Usar mi ubicación actual'}
                   </Text>
                 </Pressable>
-              </View>
-            ) : null
-          }
-        />
-      )}
-    </View>
+                {!hasQuery ? (
+                  <Text style={styles.listLabel}>DESTINOS RECIENTES</Text>
+                ) : null}
+              </>
+            }
+            renderItem={({ item }) => (
+              <Pressable
+                style={({ pressed }) => [
+                  styles.resultRow,
+                  pressed && styles.pressed,
+                ]}
+                onPress={() => {
+                  selectDestination(item);
+                }}
+                accessibilityRole="button"
+                accessibilityLabel={`${item.name}, ${item.address}`}
+              >
+                <View style={styles.rowIcon}>
+                  <DriverIcon
+                    name={hasQuery ? 'pin' : 'clock'}
+                    size={18}
+                    color={driverColors.brand}
+                  />
+                </View>
+                <View style={styles.resultCopy}>
+                  <Text style={styles.resultName}>{item.name}</Text>
+                  <Text style={styles.resultAddress} numberOfLines={1}>
+                    {item.address}
+                  </Text>
+                </View>
+              </Pressable>
+            )}
+            ListEmptyComponent={
+              hasQuery ? (
+                <View style={styles.emptyState}>
+                  <DriverIcon
+                    name="search"
+                    size={30}
+                    color={driverColors.disabled}
+                  />
+                  <Text style={styles.emptyTitle}>
+                    Sin resultados para “{settledQuery.trim()}”
+                  </Text>
+                  <Text style={styles.emptyCopy}>
+                    Probá con el nombre de la calle y la altura, o con un lugar
+                    conocido de CABA.
+                  </Text>
+                  <Pressable
+                    style={({ pressed }) => [
+                      styles.emptyAction,
+                      pressed && styles.pressed,
+                    ]}
+                    onPress={() => {
+                      void selectCurrentLocation();
+                    }}
+                    disabled={currentLocation.pending}
+                    accessibilityRole="button"
+                  >
+                    <DriverIcon name="current-location" size={19} />
+                    <Text style={styles.emptyActionText}>
+                      Estacionar cerca mío
+                    </Text>
+                  </Pressable>
+                </View>
+              ) : null
+            }
+          />
+        )}
+      </View>
+      <LocationIssueModal
+        issue={currentLocation.issue}
+        pending={currentLocation.pending}
+        onClose={currentLocation.clearIssue}
+        onRetry={() => {
+          void selectCurrentLocation();
+        }}
+      />
+    </>
   );
 }
 
@@ -352,5 +378,8 @@ const styles = StyleSheet.create({
   },
   pressed: {
     opacity: 0.72,
+  },
+  disabled: {
+    opacity: 0.62,
   },
 });
