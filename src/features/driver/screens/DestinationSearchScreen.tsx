@@ -1,5 +1,5 @@
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { useEffect, useMemo, useState } from 'react';
+import { useState } from 'react';
 import {
   FlatList,
   Keyboard,
@@ -12,12 +12,9 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { DriverIcon } from '../components/DriverIcon';
 import { LocationIssueModal } from '../components/LocationIssueModal';
-import {
-  RECENT_DESTINATIONS,
-  searchDestinations,
-  type SearchDestination,
-} from '../discovery';
+import { RECENT_DESTINATIONS, type SearchDestination } from '../discovery';
 import { useCurrentLocation } from '../hooks/useCurrentLocation';
+import { useDestinationSearch } from '../hooks/useDestinationSearch';
 import type { DiscoveryStackParamList } from '../navigation';
 import { driverColors, driverRadius, driverSpacing } from '../theme';
 
@@ -29,25 +26,15 @@ type Props = NativeStackScreenProps<
 export function DestinationSearchScreen({ navigation }: Props) {
   const insets = useSafeAreaInsets();
   const [query, setQuery] = useState('');
-  const [settledQuery, setSettledQuery] = useState('');
   const currentLocation = useCurrentLocation();
-
-  useEffect(() => {
-    const timeout = setTimeout(() => {
-      setSettledQuery(query);
-    }, 300);
-    return () => {
-      clearTimeout(timeout);
-    };
-  }, [query]);
-
-  const searching = query.trim().length >= 3 && query !== settledQuery;
-  const results = useMemo(
-    () => searchDestinations(settledQuery),
-    [settledQuery],
-  );
-  const hasQuery = settledQuery.trim().length >= 3;
-  const visibleDestinations = hasQuery ? results : RECENT_DESTINATIONS;
+  const search = useDestinationSearch(query);
+  const hasQuery = query.trim().length >= 3;
+  const hasError = search.status === 'error';
+  const visibleDestinations = hasError
+    ? RECENT_DESTINATIONS
+    : hasQuery
+      ? search.results
+      : RECENT_DESTINATIONS;
 
   function selectDestination(destination: SearchDestination) {
     Keyboard.dismiss();
@@ -92,7 +79,6 @@ export function DestinationSearchScreen({ navigation }: Props) {
                 style={styles.clearButton}
                 onPress={() => {
                   setQuery('');
-                  setSettledQuery('');
                 }}
                 accessibilityRole="button"
                 accessibilityLabel="Limpiar búsqueda"
@@ -103,7 +89,7 @@ export function DestinationSearchScreen({ navigation }: Props) {
           </View>
         </View>
 
-        {searching ? (
+        {search.status === 'loading' ? (
           <View style={styles.statusRow}>
             <View style={styles.loadingDot} />
             <Text style={styles.statusText}>Buscando direcciones…</Text>
@@ -115,36 +101,57 @@ export function DestinationSearchScreen({ navigation }: Props) {
             keyboardShouldPersistTaps="handled"
             ListHeaderComponent={
               <>
-                <Pressable
-                  style={({ pressed }) => [
-                    styles.locationRow,
-                    currentLocation.pending && styles.disabled,
-                    pressed && styles.pressed,
-                  ]}
-                  onPress={() => {
-                    void selectCurrentLocation();
-                  }}
-                  disabled={currentLocation.pending}
-                  accessibilityRole="button"
-                  accessibilityState={{
-                    disabled: currentLocation.pending,
-                    busy: currentLocation.pending,
-                  }}
-                >
-                  <View style={styles.rowIcon}>
-                    <DriverIcon
-                      name="current-location"
-                      size={19}
-                      color={driverColors.brand}
-                    />
+                {hasError ? (
+                  <View style={styles.errorState}>
+                    <Text style={styles.errorTitle}>
+                      No pudimos buscar direcciones
+                    </Text>
+                    <Text style={styles.errorCopy}>
+                      Revisá tu conexión. Tu búsqueda quedó guardada.
+                    </Text>
+                    <Pressable
+                      style={({ pressed }) => [
+                        styles.retryButton,
+                        pressed && styles.pressed,
+                      ]}
+                      onPress={search.retry}
+                      accessibilityRole="button"
+                    >
+                      <Text style={styles.retryText}>Reintentar</Text>
+                    </Pressable>
                   </View>
-                  <Text style={styles.locationText}>
-                    {currentLocation.pending
-                      ? 'Buscando ubicación…'
-                      : 'Usar mi ubicación actual'}
-                  </Text>
-                </Pressable>
-                {!hasQuery ? (
+                ) : (
+                  <Pressable
+                    style={({ pressed }) => [
+                      styles.locationRow,
+                      currentLocation.pending && styles.disabled,
+                      pressed && styles.pressed,
+                    ]}
+                    onPress={() => {
+                      void selectCurrentLocation();
+                    }}
+                    disabled={currentLocation.pending}
+                    accessibilityRole="button"
+                    accessibilityState={{
+                      disabled: currentLocation.pending,
+                      busy: currentLocation.pending,
+                    }}
+                  >
+                    <View style={styles.rowIcon}>
+                      <DriverIcon
+                        name="current-location"
+                        size={19}
+                        color={driverColors.brand}
+                      />
+                    </View>
+                    <Text style={styles.locationText}>
+                      {currentLocation.pending
+                        ? 'Buscando ubicación…'
+                        : 'Usar mi ubicación actual'}
+                    </Text>
+                  </Pressable>
+                )}
+                {!hasQuery || hasError ? (
                   <Text style={styles.listLabel}>DESTINOS RECIENTES</Text>
                 ) : null}
               </>
@@ -163,7 +170,7 @@ export function DestinationSearchScreen({ navigation }: Props) {
               >
                 <View style={styles.rowIcon}>
                   <DriverIcon
-                    name={hasQuery ? 'pin' : 'clock'}
+                    name={hasQuery && !hasError ? 'pin' : 'clock'}
                     size={18}
                     color={driverColors.brand}
                   />
@@ -185,7 +192,7 @@ export function DestinationSearchScreen({ navigation }: Props) {
                     color={driverColors.disabled}
                   />
                   <Text style={styles.emptyTitle}>
-                    Sin resultados para “{settledQuery.trim()}”
+                    Sin resultados para “{query.trim()}”
                   </Text>
                   <Text style={styles.emptyCopy}>
                     Probá con el nombre de la calle y la altura, o con un lugar
@@ -316,6 +323,40 @@ const styles = StyleSheet.create({
     paddingBottom: driverSpacing.xs,
     color: driverColors.textSecondary,
     fontSize: 11,
+    fontWeight: '700',
+  },
+  errorState: {
+    margin: driverSpacing.md,
+    padding: driverSpacing.md,
+    borderRadius: driverRadius.control,
+    backgroundColor: driverColors.dangerSurface,
+    gap: driverSpacing.xs,
+  },
+  errorTitle: {
+    color: driverColors.danger,
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  errorCopy: {
+    color: driverColors.textSecondary,
+    fontSize: 13,
+    lineHeight: 19,
+  },
+  retryButton: {
+    minHeight: 44,
+    marginTop: 4,
+    alignSelf: 'flex-start',
+    paddingHorizontal: driverSpacing.md,
+    borderRadius: driverRadius.control,
+    backgroundColor: driverColors.surface,
+    borderWidth: 1,
+    borderColor: driverColors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  retryText: {
+    color: driverColors.text,
+    fontSize: 14,
     fontWeight: '700',
   },
   resultRow: {
