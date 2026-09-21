@@ -72,7 +72,7 @@ export function MapPanel({
           const selected = parking.id === selectedParking?.id;
           return (
             <Marker
-              key={parking.id}
+              key={`${parking.id}:${parking.availableSpots}:${selected}`}
               coordinate={parking.coordinate}
               onPress={() => {
                 onSelect(parking);
@@ -81,24 +81,21 @@ export function MapPanel({
               accessibilityState={{ selected }}
               accessibilityLabel={`${parking.name}, ${parking.priceLabel}, ${parking.availableSpots} lugares disponibles`}
             >
-              <View style={[styles.marker, selected && styles.markerSelected]}>
-                <View
-                  style={[
-                    styles.availabilityDot,
-                    parking.availableSpots === 0 && styles.availabilityDotFull,
-                    parking.availableSpots > 0 &&
-                      parking.availableSpots < 4 &&
-                      styles.availabilityDotLow,
-                  ]}
+              <View
+                style={[
+                  styles.parkingMarker,
+                  selected && styles.parkingMarkerSelected,
+                  parking.availableSpots === 0 && styles.parkingMarkerFull,
+                  parking.availableSpots > 0 &&
+                    parking.availableSpots < 4 &&
+                    styles.parkingMarkerLow,
+                ]}
+              >
+                <DriverIcon
+                  name="car"
+                  size={selected ? 19 : 17}
+                  color={driverColors.surface}
                 />
-                <Text
-                  style={[
-                    styles.markerPrice,
-                    selected && styles.markerPriceSelected,
-                  ]}
-                >
-                  {parking.priceLabel.replace('/h', '')}
-                </Text>
               </View>
             </Marker>
           );
@@ -131,43 +128,27 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  marker: {
-    minHeight: 34,
-    paddingHorizontal: 10,
-    borderRadius: 17,
-    borderWidth: 1,
-    borderColor: driverColors.border,
-    backgroundColor: driverColors.surface,
-    flexDirection: 'row',
+  parkingMarker: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 3,
+    borderColor: driverColors.surface,
+    backgroundColor: driverColors.success,
     alignItems: 'center',
-    gap: 6,
+    justifyContent: 'center',
   },
-  markerSelected: {
-    minHeight: 40,
-    paddingHorizontal: 12,
-    borderColor: driverColors.brandStrong,
+  parkingMarkerSelected: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
     backgroundColor: driverColors.brandStrong,
   },
-  availabilityDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 4,
-    backgroundColor: driverColors.success,
-  },
-  availabilityDotLow: {
+  parkingMarkerLow: {
     backgroundColor: driverColors.warning,
   },
-  availabilityDotFull: {
+  parkingMarkerFull: {
     backgroundColor: driverColors.danger,
-  },
-  markerPrice: {
-    color: driverColors.textSecondary,
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  markerPriceSelected: {
-    color: driverColors.surface,
-    fontSize: 15,
   },
   loading: {
     ...StyleSheet.absoluteFillObject,
