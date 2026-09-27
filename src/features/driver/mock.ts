@@ -14,9 +14,9 @@ export type ParkingLot = {
   openUntil: string;
   supportedVehicles: VehicleKind[];
   acceptsReservations: boolean;
-  mapPosition: {
-    left: `${number}%`;
-    top: `${number}%`;
+  coordinate: {
+    latitude: number;
+    longitude: number;
   };
 };
 
@@ -50,7 +50,7 @@ export const PARKING_LOTS: ParkingLot[] = [
     openUntil: 'Abierto hasta 23:30',
     supportedVehicles: ['Auto', 'Moto', 'Pickup'],
     acceptsReservations: true,
-    mapPosition: { left: '43%', top: '45%' },
+    coordinate: { latitude: -34.6098, longitude: -58.4079 },
   },
   {
     id: 'belgrano-norte',
@@ -66,7 +66,7 @@ export const PARKING_LOTS: ParkingLot[] = [
     openUntil: 'Abierto hasta 22:00',
     supportedVehicles: ['Auto', 'Moto'],
     acceptsReservations: false,
-    mapPosition: { left: '72%', top: '33%' },
+    coordinate: { latitude: -34.5609, longitude: -58.4491 },
   },
   {
     id: 'microcentro-sur',
@@ -82,7 +82,7 @@ export const PARKING_LOTS: ParkingLot[] = [
     openUntil: 'Abierto 24 h',
     supportedVehicles: ['Auto', 'Pickup'],
     acceptsReservations: true,
-    mapPosition: { left: '24%', top: '61%' },
+    coordinate: { latitude: -34.6056, longitude: -58.3782 },
   },
 ];
 

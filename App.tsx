@@ -1,7 +1,9 @@
+import 'react-native-gesture-handler';
 import type { Session } from '@supabase/supabase-js';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
-import { Linking, SafeAreaView, Text, View } from 'react-native';
+import { Linking, SafeAreaView, StyleSheet, Text, View } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { enableScreens } from 'react-native-screens';
 import { BrandHeader } from './src/features/auth/BrandHeader';
@@ -24,11 +26,13 @@ enableScreens();
 
 export default function App() {
   return (
-    <SafeAreaProvider>
-      <ToastProvider>
-        <AppInner />
-      </ToastProvider>
-    </SafeAreaProvider>
+    <GestureHandlerRootView style={styles.root}>
+      <SafeAreaProvider>
+        <ToastProvider>
+          <AppInner />
+        </ToastProvider>
+      </SafeAreaProvider>
+    </GestureHandlerRootView>
   );
 }
 
@@ -130,3 +134,9 @@ function AppInner() {
     </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  root: {
+    flex: 1,
+  },
+});

@@ -6,6 +6,12 @@ type ParkingFilters = {
   reservationsOnly: boolean;
 };
 
+export type MapParkingFilters = {
+  vehicleKind: VehicleKind;
+  availableOnly: boolean;
+  maxHourlyPriceArs: number | null;
+};
+
 export function filterParkingLots(
   parkingLots: ParkingLot[],
   { query, vehicleKind, reservationsOnly }: ParkingFilters,
@@ -22,6 +28,20 @@ export function filterParkingLots(
     const matchesReservation = !reservationsOnly || parking.acceptsReservations;
 
     return matchesQuery && matchesVehicle && matchesReservation;
+  });
+}
+
+export function filterMapParkingLots<TParking extends ParkingLot>(
+  parkingLots: TParking[],
+  { vehicleKind, availableOnly, maxHourlyPriceArs }: MapParkingFilters,
+): TParking[] {
+  return parkingLots.filter((parking) => {
+    const matchesVehicle = parking.supportedVehicles.includes(vehicleKind);
+    const matchesAvailability = !availableOnly || parking.availableSpots > 0;
+    const matchesPrice =
+      maxHourlyPriceArs === null || parking.hourlyPriceArs <= maxHourlyPriceArs;
+
+    return matchesVehicle && matchesAvailability && matchesPrice;
   });
 }
 

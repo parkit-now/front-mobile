@@ -3,15 +3,27 @@
     "name": "front-mobile",
     "slug": "front-mobile",
     "version": "0.1.0",
+    "newArchEnabled": true,
     "orientation": "portrait",
     "platforms": ["ios", "android", "web"],
     "scheme": "parkit",
+    "plugins": [
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Parkit usa tu ubicación para mostrar estacionamientos cercanos."
+        }
+      ]
+    ],
     "updates": {
       "fallbackToCacheTimeout": 0
     },
     "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "bundleIdentifier": "com.parkit.mobile"
+    },
     "android": {
-      "package": "com.iankvdh.frontmobile"
+      "package": "com.parkit.mobile"
     }
   }
 }
