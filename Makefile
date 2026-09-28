@@ -8,7 +8,7 @@ RESET := \033[0m
 ENV_LOCAL := .env.local
 ENV_PROD  := .env.production
 
-.PHONY: help install dev prod build lint typecheck test format \
+.PHONY: help install dev dev-local-usb prod build lint typecheck test format \
         env-check env-use-local env-use-prod \
         sync-types clean _detect-android-sdk
 
@@ -25,9 +25,14 @@ DETECT_ANDROID_SDK := android_home="$${ANDROID_HOME:-}"; \
 	fi
 
 help: ## Mostrar comandos disponibles
+	@printf "\n$(CYAN)Parkit mobile$(RESET)\n\n"
+	@printf "Uso:\n  make <comando>\n"
 	@awk 'BEGIN {FS = ":.*?## "} \
-	     /^[a-zA-Z_-]+:.*?## / {printf "  $(CYAN)%-16s$(RESET) %s\\n", $$1, $$2}' $(MAKEFILE_LIST)
+	     /^##@ / {printf "\n$(CYAN)%s$(RESET)\n", substr($$0, 5); next} \
+	     /^[a-zA-Z_-]+:.*?## / {printf "  $(CYAN)%-16s$(RESET) %s\n", $$1, $$2}' $(MAKEFILE_LIST)
+	@printf "\n"
 
+##@ Setup
 install: ## Instalar dependencias, activar pre-commit y chequear Android SDK
 	@command -v bun >/dev/null 2>&1 || { echo "✗ Falta bun"; exit 1; }
 	@bun install
@@ -40,6 +45,7 @@ install: ## Instalar dependencias, activar pre-commit y chequear Android SDK
 	fi
 	@echo "✓ Dependencias instaladas + hook activado"
 
+##@ Entorno
 env-use-local: ## Activar entorno local (copia .env.local → .env)
 	@if [ ! -f $(ENV_LOCAL) ]; then \
 		echo "✗ Falta $(ENV_LOCAL). Copialo desde .env.example y completá los valores locales."; \
@@ -56,6 +62,7 @@ env-use-prod: ## Activar entorno produccion (copia .env.production → .env)
 	@cp $(ENV_PROD) .env
 	@echo "✓ .env apunta a entorno PRODUCCION ($(ENV_PROD))"
 
+##@ Desarrollo
 dev: install env-use-local ## Levantar app apuntando al backend LOCAL (autodetecta ANDROID_HOME)
 	@$(DETECT_ANDROID_SDK); \
 	if [ -z "$$android_home" ]; then \
@@ -64,6 +71,25 @@ dev: install env-use-local ## Levantar app apuntando al backend LOCAL (autodetec
 	else \
 		if [ -z "$${ANDROID_HOME:-}" ]; then echo "→ ANDROID_HOME=$$android_home (autodetectado)"; fi; \
 		ANDROID_HOME="$$android_home" bun run dev; \
+	fi
+
+dev-local-usb: install env-use-local ## Dev USB local: adb reverse + Expo --localhost
+	@$(DETECT_ANDROID_SDK); \
+	if [ -z "$$android_home" ]; then \
+		echo "⚠ No se encontró el Android SDK; instalá adb (sudo apt install adb) o seteá ANDROID_HOME"; \
+		bun run dev -- --localhost; \
+	else \
+		if [ -z "$${ANDROID_HOME:-}" ]; then echo "→ ANDROID_HOME=$$android_home (autodetectado)"; fi; \
+		adb_bin="$$android_home/platform-tools/adb"; \
+		if "$$adb_bin" get-state >/dev/null 2>&1; then \
+			for port in 3000 54321 8081 19000 19001 19002; do \
+				"$$adb_bin" reverse tcp:$$port tcp:$$port >/dev/null 2>&1 || true; \
+			done; \
+			echo "✓ adb reverse activo: backend 3000, Supabase 54321 y Expo/Metro"; \
+		else \
+			echo "⚠ No hay un dispositivo Android USB autorizado. Activá depuración USB y aceptá el permiso."; \
+		fi; \
+		ANDROID_HOME="$$android_home" bun run dev -- --localhost; \
 	fi
 
 prod: env-use-prod ## Levantar Expo en modo prod (--no-dev --minify) con link/QR
@@ -75,6 +101,7 @@ prod: env-use-prod ## Levantar Expo en modo prod (--no-dev --minify) con link/QR
 		ANDROID_HOME="$$android_home" bunx expo start --no-dev --minify; \
 	fi
 
+##@ Calidad
 build: ## Build con el .env actual (sin tocar el entorno activo)
 	@bun run build
 
@@ -90,6 +117,7 @@ test: ## Ejecutar tests
 format: ## Formatear archivos
 	@bun run format
 
+##@ Validación
 env-check: ## Validar variables mínimas del .env activo
 	@if [ ! -f .env ]; then \
 		echo "✗ Falta .env activo. Corré: make env-use-local  ó  make env-use-prod"; exit 1; fi
@@ -114,6 +142,7 @@ env-check: ## Validar variables mínimas del .env activo
 	fi
 	@echo "✓ .env validado"
 
+##@ API y mantenimiento
 sync-types: ## Generar tipos TypeScript desde OpenAPI
 	@bun run sync-types
 
