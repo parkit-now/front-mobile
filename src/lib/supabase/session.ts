@@ -14,7 +14,8 @@ const DEFAULT_OAUTH_REDIRECT_URL = 'parkit://auth/callback';
 WebBrowser.maybeCompleteAuthSession();
 
 export function getOAuthRedirectUrl(): string {
-  const customRedirect = process.env.EXPO_PUBLIC_SUPABASE_OAUTH_REDIRECT_URL;
+  const customRedirect: unknown =
+    process.env.EXPO_PUBLIC_SUPABASE_OAUTH_REDIRECT_URL;
 
   if (typeof customRedirect === 'string' && customRedirect.length > 0) {
     return customRedirect;
@@ -177,7 +178,6 @@ export async function registerWithEmail(
   const result = await registerWithPassword({
     email,
     password,
-    role: 'driver',
   });
   return applyBackendSession(result.session);
 }

@@ -1,17 +1,39 @@
 {
   "expo": {
-    "name": "front-mobile",
+    "name": "Parkit",
     "slug": "front-mobile",
     "version": "0.1.0",
+    "newArchEnabled": true,
     "orientation": "portrait",
     "platforms": ["ios", "android", "web"],
     "scheme": "parkit",
+    "icon": "./images/logo.jpeg",
+    "splash": {
+      "image": "./images/logo.jpeg",
+      "resizeMode": "contain",
+      "backgroundColor": "#eef4ff"
+    },
+    "plugins": [
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Parkit usa tu ubicación para mostrar estacionamientos cercanos."
+        }
+      ]
+    ],
     "updates": {
       "fallbackToCacheTimeout": 0
     },
     "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "bundleIdentifier": "com.parkit.mobile"
+    },
     "android": {
-      "package": "com.iankvdh.frontmobile"
+      "package": "com.parkit.mobile",
+      "adaptiveIcon": {
+        "foregroundImage": "./images/logo.jpeg",
+        "backgroundColor": "#0e5fd8"
+      }
     }
   }
 }

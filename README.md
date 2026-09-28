@@ -2,6 +2,23 @@
 
 Frontend mobile de Parkit (Expo + React Native).
 
+## Google Maps
+
+El mapa usa Google Maps en Android e iOS. Para validar tiles y credenciales de
+forma representativa se debe usar un development build o build nativo con una
+clave restringida por plataforma; la credencial incluida en Expo Go puede no
+estar autorizada para todas sus versiones:
+
+```bash
+GOOGLE_MAPS_ANDROID_API_KEY="..."
+GOOGLE_MAPS_IOS_API_KEY="..."
+```
+
+- Android: restringir por package `com.parkit.mobile` y certificado SHA-1.
+- iOS: restringir por bundle identifier `com.parkit.mobile`.
+- Restringir cada clave exclusivamente al Maps SDK de su plataforma.
+- No versionar claves en `app.json` ni en el repositorio.
+
 ## Stack
 
 - Expo SDK 52

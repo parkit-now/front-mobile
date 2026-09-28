@@ -21,7 +21,7 @@ export class ApiError extends Error {
 }
 
 function readBaseUrl(): string {
-  const raw = process.env.EXPO_PUBLIC_API_URL;
+  const raw: unknown = process.env.EXPO_PUBLIC_API_URL;
   if (typeof raw !== 'string' || raw.length === 0) {
     throw new Error('Missing EXPO_PUBLIC_API_URL in environment');
   }
