@@ -91,6 +91,23 @@ export const authStyles = StyleSheet.create({
     borderColor: '#f6c7bf',
     backgroundColor: '#fff1ef',
   },
+  passwordInputWrap: {
+    position: 'relative',
+    justifyContent: 'center',
+  },
+  passwordInput: {
+    paddingRight: 52,
+  },
+  passwordToggle: {
+    position: 'absolute',
+    right: 8,
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#eef4ff',
+  },
   fieldGroup: {
     gap: 6,
   },
