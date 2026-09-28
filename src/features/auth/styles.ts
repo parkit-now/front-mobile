@@ -26,18 +26,11 @@ export const authStyles = StyleSheet.create({
     width: '100%',
   },
   brandBadge: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden',
-  },
-  brandLetter: {
-    color: '#ffffff',
-    fontSize: 20,
-    fontWeight: '700',
-    zIndex: 1,
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#d0d9e6',
   },
   brandCopy: {
     flex: 1,

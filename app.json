@@ -1,12 +1,18 @@
 {
   "expo": {
-    "name": "front-mobile",
+    "name": "Parkit",
     "slug": "front-mobile",
     "version": "0.1.0",
     "newArchEnabled": true,
     "orientation": "portrait",
     "platforms": ["ios", "android", "web"],
     "scheme": "parkit",
+    "icon": "./images/logo.jpeg",
+    "splash": {
+      "image": "./images/logo.jpeg",
+      "resizeMode": "contain",
+      "backgroundColor": "#eef4ff"
+    },
     "plugins": [
       [
         "expo-location",
@@ -23,7 +29,11 @@
       "bundleIdentifier": "com.parkit.mobile"
     },
     "android": {
-      "package": "com.parkit.mobile"
+      "package": "com.parkit.mobile",
+      "adaptiveIcon": {
+        "foregroundImage": "./images/logo.jpeg",
+        "backgroundColor": "#0e5fd8"
+      }
     }
   }
 }

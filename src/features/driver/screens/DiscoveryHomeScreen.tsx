@@ -1,6 +1,14 @@
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import {
+  Image,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import logo from '../../../../images/logo.jpeg';
 import { useToast } from '../../../lib/notifications/ToastProvider';
 import { DriverIcon } from '../components/DriverIcon';
 import { LocationIssueModal } from '../components/LocationIssueModal';
@@ -40,10 +48,13 @@ export function DiscoveryHomeScreen({ navigation }: Props) {
       >
         <View style={styles.topBar}>
           <View style={styles.brand} accessibilityLabel="Parkit">
-            <View style={styles.logo}>
-              <Text style={styles.logoText}>P</Text>
-            </View>
-            <Text style={styles.brandText}>PARKIT</Text>
+            <Image
+              source={logo}
+              style={styles.logo}
+              resizeMode="cover"
+              accessibilityIgnoresInvertColors
+            />
+            <Text style={styles.brandText}>Parkit</Text>
           </View>
           <Pressable
             style={({ pressed }) => [
@@ -181,17 +192,11 @@ const styles = StyleSheet.create({
     gap: driverSpacing.xs,
   },
   logo: {
-    width: 32,
-    height: 32,
-    borderRadius: driverRadius.chip,
-    backgroundColor: driverColors.brand,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  logoText: {
-    color: driverColors.surface,
-    fontSize: 16,
-    fontWeight: '700',
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: driverColors.border,
   },
   brandText: {
     color: driverColors.text,
