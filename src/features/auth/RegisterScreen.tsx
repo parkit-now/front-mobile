@@ -65,10 +65,6 @@ export function RegisterScreen({ onSwitchToLogin }: Props) {
       <Text style={authStyles.heading}>Crear cuenta</Text>
 
       <View style={authStyles.form}>
-        <Text style={authStyles.helperText}>
-          Los campos marcados con * son obligatorios
-        </Text>
-
         <View style={authStyles.fieldGroup}>
           <TextInput
             style={[authStyles.input, errors.name && authStyles.inputError]}
