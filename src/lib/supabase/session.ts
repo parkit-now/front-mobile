@@ -172,10 +172,12 @@ export async function signInWithEmail(
 }
 
 export async function registerWithEmail(
+  name: string,
   email: string,
   password: string,
 ): Promise<Session> {
   const result = await registerWithPassword({
+    name: name.trim(),
     email,
     password,
   });

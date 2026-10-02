@@ -149,6 +149,10 @@ export const authStyles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
   },
+  fieldHint: {
+    fontSize: 12,
+    color: '#475467',
+  },
   helperRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
