@@ -3,11 +3,13 @@ import { Pressable, Text, TextInput, View } from 'react-native';
 import { useToast } from '../../lib/notifications/ToastProvider';
 import { registerWithEmail } from '../../lib/supabase/session';
 import { mapAuthError } from './errors';
+import { PasswordInput } from './PasswordInput';
 import { authStyles } from './styles';
 import {
   validateEmail,
   validateFullName,
   validatePassword,
+  validatePasswordConfirmation,
   type FieldErrors,
 } from './validation';
 
@@ -20,6 +22,7 @@ export function RegisterScreen({ onSwitchToLogin }: Props) {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [passwordConfirmation, setPasswordConfirmation] = useState('');
   const [errors, setErrors] = useState<FieldErrors>({});
   const [pending, setPending] = useState(false);
 
@@ -31,6 +34,11 @@ export function RegisterScreen({ onSwitchToLogin }: Props) {
     if (emailError) next.email = emailError;
     const passwordError = validatePassword(password, { isNew: true });
     if (passwordError) next.password = passwordError;
+    const confirmationError = validatePasswordConfirmation(
+      password,
+      passwordConfirmation,
+    );
+    if (confirmationError) next.passwordConfirmation = confirmationError;
     if (Object.keys(next).length > 0) {
       setErrors(next);
       return;
@@ -108,24 +116,54 @@ export function RegisterScreen({ onSwitchToLogin }: Props) {
         </View>
 
         <View style={authStyles.fieldGroup}>
-          <TextInput
-            style={[authStyles.input, errors.password && authStyles.inputError]}
+          <PasswordInput
+            mode="new"
+            hasError={!!errors.password}
             accessibilityLabel="Contraseña"
-            secureTextEntry
-            autoCapitalize="none"
-            textContentType="newPassword"
             value={password}
             onChangeText={(value) => {
               setPassword(value);
               if (errors.password) {
                 setErrors((prev) => ({ ...prev, password: undefined }));
               }
+              if (
+                errors.passwordConfirmation &&
+                value === passwordConfirmation
+              ) {
+                setErrors((prev) => ({
+                  ...prev,
+                  passwordConfirmation: undefined,
+                }));
+              }
             }}
             placeholder="Contraseña (mín. 8 caracteres)"
-            placeholderTextColor="#98a2b3"
           />
           {errors.password ? (
             <Text style={authStyles.fieldError}>{errors.password}</Text>
+          ) : null}
+        </View>
+
+        <View style={authStyles.fieldGroup}>
+          <PasswordInput
+            mode="new"
+            hasError={!!errors.passwordConfirmation}
+            accessibilityLabel="Repetir contraseña"
+            value={passwordConfirmation}
+            onChangeText={(value) => {
+              setPasswordConfirmation(value);
+              if (errors.passwordConfirmation) {
+                setErrors((prev) => ({
+                  ...prev,
+                  passwordConfirmation: undefined,
+                }));
+              }
+            }}
+            placeholder="Repetir contraseña *"
+          />
+          {errors.passwordConfirmation ? (
+            <Text style={authStyles.fieldError}>
+              {errors.passwordConfirmation}
+            </Text>
           ) : null}
         </View>
 
