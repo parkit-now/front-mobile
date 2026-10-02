@@ -108,7 +108,11 @@ export function RegisterScreen({ onSwitchToLogin }: Props) {
           />
           {errors.email ? (
             <Text style={authStyles.fieldError}>{errors.email}</Text>
-          ) : null}
+          ) : (
+            <Text style={authStyles.fieldHint}>
+              Ejemplo: nombre@ejemplo.com
+            </Text>
+          )}
         </View>
 
         <View style={authStyles.fieldGroup}>
