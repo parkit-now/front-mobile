@@ -2,7 +2,8 @@ import type { components } from '../../generated/api-types';
 import { apiRequest } from './client';
 
 type LoginDto = components['schemas']['LoginDto'];
-type RegisterDto = components['schemas']['RegisterDto'];
+// TODO: quitar el `& { name }` al sincronizar los tipos del API (el contrato ya exige `name`).
+type RegisterDto = components['schemas']['RegisterDto'] & { name: string };
 type RefreshDto = components['schemas']['RefreshDto'];
 
 export type SessionDto = components['schemas']['SessionDto'];
