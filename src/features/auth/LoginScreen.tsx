@@ -1,12 +1,12 @@
 import { useState } from 'react';
 import { Pressable, Text, TextInput, View } from 'react-native';
-import Svg, { Circle, Line, Path } from 'react-native-svg';
 import { useToast } from '../../lib/notifications/ToastProvider';
 import {
   signInWithEmail,
   signInWithProvider,
 } from '../../lib/supabase/session';
 import { getErrorMessage, mapAuthError } from './errors';
+import { PasswordInput } from './PasswordInput';
 import { ProviderIcon, type SocialProvider } from './ProviderIcon';
 import { authStyles } from './styles';
 import {
@@ -14,40 +14,6 @@ import {
   validatePassword,
   type FieldErrors,
 } from './validation';
-
-function PasswordEyeIcon({ visible }: { visible: boolean }) {
-  return (
-    <Svg width={20} height={20} viewBox="0 0 24 24">
-      <Path
-        d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6z"
-        fill="none"
-        stroke="#0e5fd8"
-        strokeWidth={1.9}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <Circle
-        cx={12}
-        cy={12}
-        r={3}
-        fill="none"
-        stroke="#0e5fd8"
-        strokeWidth={1.9}
-      />
-      {!visible ? (
-        <Line
-          x1={4.5}
-          y1={19.5}
-          x2={19.5}
-          y2={4.5}
-          stroke="#0e5fd8"
-          strokeWidth={2.1}
-          strokeLinecap="round"
-        />
-      ) : null}
-    </Svg>
-  );
-}
 
 type OAuthOption = {
   provider: SocialProvider;
@@ -68,7 +34,6 @@ export function LoginScreen({ onSwitchToRegister, onForgotPassword }: Props) {
   const { showToast } = useToast();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
   const [errors, setErrors] = useState<FieldErrors>({});
   const [pendingEmail, setPendingEmail] = useState(false);
   const [pendingProvider, setPendingProvider] = useState<SocialProvider | null>(
@@ -144,40 +109,18 @@ export function LoginScreen({ onSwitchToRegister, onForgotPassword }: Props) {
         </View>
 
         <View style={authStyles.fieldGroup}>
-          <View style={authStyles.passwordInputWrap}>
-            <TextInput
-              style={[
-                authStyles.input,
-                authStyles.passwordInput,
-                errors.password && authStyles.inputError,
-              ]}
-              accessibilityLabel="Contraseña"
-              secureTextEntry={!showPassword}
-              autoCapitalize="none"
-              textContentType="password"
-              value={password}
-              onChangeText={(value) => {
-                setPassword(value);
-                if (errors.password) {
-                  setErrors((prev) => ({ ...prev, password: undefined }));
-                }
-              }}
-              placeholder="Contraseña"
-              placeholderTextColor="#98a2b3"
-            />
-            <Pressable
-              style={authStyles.passwordToggle}
-              onPress={() => setShowPassword((visible) => !visible)}
-              accessibilityRole="button"
-              accessibilityLabel={
-                showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'
+          <PasswordInput
+            hasError={!!errors.password}
+            accessibilityLabel="Contraseña"
+            value={password}
+            onChangeText={(value) => {
+              setPassword(value);
+              if (errors.password) {
+                setErrors((prev) => ({ ...prev, password: undefined }));
               }
-              accessibilityState={{ selected: showPassword }}
-              hitSlop={8}
-            >
-              <PasswordEyeIcon visible={showPassword} />
-            </Pressable>
-          </View>
+            }}
+            placeholder="Contraseña"
+          />
           {errors.password ? (
             <Text style={authStyles.fieldError}>{errors.password}</Text>
           ) : null}
