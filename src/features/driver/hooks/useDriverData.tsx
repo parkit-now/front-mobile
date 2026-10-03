@@ -9,7 +9,6 @@ import {
 } from 'react';
 import type { Booking, ParkingLot } from '../mock';
 import {
-  cancelReservation as cancelReservationRequest,
   createReservation as createReservationRequest,
   listReservations,
 } from '../services/reservations';
@@ -39,8 +38,6 @@ type DriverDataContextValue = {
     entryAt: string;
     exitAt: string;
   }) => Promise<Booking>;
-  /** Cancela en el backend; lanza ApiError si falla. */
-  cancelReservation: (bookingId: string) => Promise<Booking>;
   /** Alta o edición en el backend; lanza ApiError si falla. */
   saveVehicle: (input: {
     vehicle: DriverVehicle | null;
@@ -130,17 +127,6 @@ export function DriverDataProvider({
     [accessToken, upsertBooking],
   );
 
-  const cancelReservation = useCallback(
-    async (bookingId: string) => {
-      const booking = await cancelReservationRequest(bookingId, accessToken);
-      setBookings((current) =>
-        current.map((item) => (item.id === booking.id ? booking : item)),
-      );
-      return booking;
-    },
-    [accessToken],
-  );
-
   // Después de escribir se relee la lista: el backend decide el principal
   // (el primero lo es siempre; borrar el principal promueve a otro).
   const saveVehicle = useCallback(
@@ -183,7 +169,6 @@ export function DriverDataProvider({
       vehiclesStatus,
       refreshVehicles,
       createReservation,
-      cancelReservation,
       saveVehicle,
       removeVehicle,
     }),
@@ -196,7 +181,6 @@ export function DriverDataProvider({
       vehiclesStatus,
       refreshVehicles,
       createReservation,
-      cancelReservation,
       saveVehicle,
       removeVehicle,
     ],

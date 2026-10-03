@@ -1,4 +1,4 @@
-import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import type { Booking } from '../mock';
 import { driverColors, driverRadius, driverSpacing } from '../theme';
 import { formatPlate } from '../vehicles';
@@ -13,33 +13,9 @@ const STATUS_LABELS: Record<Booking['status'], string> = {
 type Props = {
   booking: Booking;
   onDirections: (booking: Booking) => void;
-  onCancel: (booking: Booking) => void;
-  cancelling?: boolean;
 };
 
-export function BookingCard({
-  booking,
-  onDirections,
-  onCancel,
-  cancelling = false,
-}: Props) {
-  function confirmCancel() {
-    Alert.alert(
-      'Cancelar reserva',
-      `¿Querés cancelar la reserva en ${booking.parkingName} del ${booking.dateLabel}, ${booking.timeLabel}?`,
-      [
-        { text: 'Volver', style: 'cancel' },
-        {
-          text: 'Cancelar reserva',
-          style: 'destructive',
-          onPress: () => {
-            onCancel(booking);
-          },
-        },
-      ],
-    );
-  }
-
+export function BookingCard({ booking, onDirections }: Props) {
   return (
     <View style={styles.card}>
       <View style={styles.header}>
@@ -94,22 +70,6 @@ export function BookingCard({
             color={driverColors.surface}
           />
           <Text style={styles.directionsButtonText}>Cómo llegar</Text>
-        </Pressable>
-      ) : null}
-      {booking.cancellable ? (
-        <Pressable
-          style={({ pressed }) => [
-            styles.cancelButton,
-            pressed && styles.pressed,
-          ]}
-          onPress={confirmCancel}
-          disabled={cancelling}
-          accessibilityRole="button"
-          accessibilityState={{ disabled: cancelling, busy: cancelling }}
-        >
-          <Text style={styles.cancelButtonText}>
-            {cancelling ? 'Cancelando…' : 'Cancelar reserva'}
-          </Text>
         </Pressable>
       ) : null}
     </View>
@@ -215,16 +175,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-  },
-  cancelButton: {
-    minHeight: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  cancelButtonText: {
-    color: driverColors.danger,
-    fontSize: 14,
-    fontWeight: '600',
   },
   directionsButtonText: {
     color: driverColors.surface,

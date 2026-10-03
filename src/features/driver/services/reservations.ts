@@ -51,18 +51,6 @@ export async function listReservations(bearer: string): Promise<Booking[]> {
   return rows.map(toBooking);
 }
 
-export async function cancelReservation(
-  reservationId: string,
-  bearer: string,
-): Promise<Booking> {
-  const row = await apiRequest<ReservationDto>({
-    method: 'POST',
-    path: `/driver/reservations/${reservationId}/cancel`,
-    bearer,
-  });
-  return toBooking(row);
-}
-
 export function toBooking(row: ReservationDto): Booking {
   const entry = new Date(row.entryAt);
   const exit = new Date(row.exitAt);
@@ -90,7 +78,6 @@ export function toBooking(row: ReservationDto): Booking {
     ticketCode: row.code,
     priceLabel: `$${row.totalArs.toLocaleString('es-AR')}`,
     vehiclePlate: row.vehiclePlate,
-    cancellable: row.cancellable,
     coordinate: {
       latitude: row.latitude ?? 0,
       longitude: row.longitude ?? 0,

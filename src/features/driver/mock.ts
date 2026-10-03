@@ -55,8 +55,6 @@ export type Booking = {
   ticketCode: string;
   priceLabel: string;
   vehiclePlate: string;
-  /** Activa y sin empezar: se puede cancelar. */
-  cancellable: boolean;
   coordinate: {
     latitude: number;
     longitude: number;

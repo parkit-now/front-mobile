@@ -26,7 +26,6 @@ export type EndpointKey =
   | 'driver.parkingDetail'
   | 'driver.quote'
   | 'driver.reservations'
-  | 'driver.cancelReservation'
   | 'driver.vehicles';
 
 export type TranslateContext = {

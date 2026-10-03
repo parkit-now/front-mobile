@@ -9,7 +9,6 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { translateApiError } from '../../../lib/api/translate';
 import { useToast } from '../../../lib/notifications/ToastProvider';
 import { BookingCard } from '../components/BookingCard';
 import { useDriverData } from '../hooks/useDriverData';
@@ -29,10 +28,8 @@ const FILTERS: Array<{ id: BookingStatus; label: string }> = [
 
 export function ReservationsScreen() {
   const insets = useSafeAreaInsets();
-  const { bookings, bookingsStatus, refreshBookings, cancelReservation } =
-    useDriverData();
+  const { bookings, bookingsStatus, refreshBookings } = useDriverData();
   const [refreshing, setRefreshing] = useState(false);
-  const [cancellingId, setCancellingId] = useState<string | null>(null);
   const [status, setStatus] = useState<BookingStatus>('active');
   const { showToast } = useToast();
   const visibleBookings = useMemo(
@@ -52,23 +49,6 @@ export function ReservationsScreen() {
     setRefreshing(true);
     await refreshBookings();
     setRefreshing(false);
-  }
-
-  async function handleCancel(booking: Booking) {
-    setCancellingId(booking.id);
-    try {
-      await cancelReservation(booking.id);
-      showToast({ message: 'Reserva cancelada.', kind: 'success' });
-    } catch (error) {
-      showToast({
-        message: translateApiError(error, {
-          endpoint: 'driver.cancelReservation',
-        }),
-        kind: 'error',
-      });
-    } finally {
-      setCancellingId(null);
-    }
   }
 
   async function handleDirections(booking: Booking) {
@@ -91,10 +71,6 @@ export function ReservationsScreen() {
           onDirections={(booking) => {
             void handleDirections(booking);
           }}
-          onCancel={(booking) => {
-            void handleCancel(booking);
-          }}
-          cancelling={cancellingId === item.id}
         />
       )}
       ItemSeparatorComponent={ListSeparator}

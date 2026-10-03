@@ -113,7 +113,6 @@ describe('hasActiveReservation', () => {
     ticketCode: 'PKT-0001',
     vehiclePlate,
     priceLabel: '$9.000',
-    cancellable: status === 'active',
     coordinate: { latitude: -34.6086, longitude: -58.4019 },
   });
   const BOOKINGS = [
