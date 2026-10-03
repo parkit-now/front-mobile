@@ -419,6 +419,10 @@ function PhaseBody({
             totalLabel="Pagado"
           />
           <Text style={styles.small}>{policy}</Text>
+          <SecondaryButton
+            label="Ver mis reservas"
+            onPress={onMyReservations}
+          />
           {booking.cancellable ? (
             <GhostButton
               label="Cancelar (reembolso total)"
@@ -459,6 +463,10 @@ function PhaseBody({
           />
           <Text style={styles.small}>{policy}</Text>
           <SecondaryButton label="Cómo llegar" onPress={onDirections} />
+          <SecondaryButton
+            label="Ver mis reservas"
+            onPress={onMyReservations}
+          />
           {booking.cancellable ? (
             <GhostButton label="Cancelar reserva" onPress={onCancel} />
           ) : null}
