@@ -180,3 +180,70 @@ function datePartsInBuenosAires(date: Date) {
 function keyFromParts(parts: { year: number; month: number; day: number }) {
   return `${parts.year}-${String(parts.month).padStart(2, '0')}-${String(parts.day).padStart(2, '0')}`;
 }
+
+// ─── Calendario ─────────────────────────────────────────────────────────────
+
+export type CalendarCell = { key: string; day: number } | null;
+
+/** 'YYYY-MM' del día. */
+export function monthKeyOf(dateKey: string): string {
+  return dateKey.slice(0, 7);
+}
+
+export function shiftMonth(monthKey: string, months: number): string {
+  const [year, month] = monthKey.split('-').map(Number);
+  const date = new Date(Date.UTC(year, month - 1 + months, 1));
+  return date.toISOString().slice(0, 7);
+}
+
+/**
+ * Semanas del mes, de lunes a domingo (como el calendario argentino). Los
+ * huecos antes del día 1 y después del último día son `null`.
+ */
+export function monthGrid(monthKey: string): CalendarCell[][] {
+  const [year, month] = monthKey.split('-').map(Number);
+  const first = new Date(Date.UTC(year, month - 1, 1));
+  const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  // getUTCDay(): 0 = domingo. Lunes primero: domingo va al final.
+  const leading = (first.getUTCDay() + 6) % 7;
+  const cells: CalendarCell[] = Array.from({ length: leading }, () => null);
+  for (let day = 1; day <= daysInMonth; day += 1) {
+    cells.push({ key: `${monthKey}-${String(day).padStart(2, '0')}`, day });
+  }
+  while (cells.length % 7 !== 0) cells.push(null);
+  const weeks: CalendarCell[][] = [];
+  for (let index = 0; index < cells.length; index += 7) {
+    weeks.push(cells.slice(index, index + 7));
+  }
+  return weeks;
+}
+
+/** "Octubre de 2026". */
+export function monthTitle(monthKey: string): string {
+  const title = new Intl.DateTimeFormat('es-AR', {
+    timeZone: 'UTC',
+    month: 'long',
+    year: 'numeric',
+  }).format(new Date(`${monthKey}-15T12:00:00Z`));
+  return title.charAt(0).toLocaleUpperCase('es-AR') + title.slice(1);
+}
+
+/** "sáb, 4 oct". */
+export function dayLabel(dateKey: string): string {
+  return new Intl.DateTimeFormat('es-AR', {
+    timeZone: 'UTC',
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+  }).format(new Date(`${dateKey}T12:00:00Z`));
+}
+
+/** Hora "HH:MM" de un ISO con offset de Buenos Aires ("2026-10-04T10:30:00-03:00"). */
+export function timeOfIso(iso: string): string {
+  return iso.slice(11, 16);
+}
+
+/** Día "YYYY-MM-DD" de un ISO con offset de Buenos Aires. */
+export function dayOfIso(iso: string): string {
+  return iso.slice(0, 10);
+}

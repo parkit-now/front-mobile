@@ -11,9 +11,13 @@ import {
 import { translateApiError } from '../../../lib/api/translate';
 import type { ParkingLot } from '../mock';
 import {
+  dayLabel,
+  dayOfIso,
   entryTimeOptions,
   exitDateTimeOptions,
+  monthKeyOf,
   reservationDates,
+  timeOfIso,
 } from '../reservationTime';
 import type { DriverQuote } from '../services/driver';
 import { newReservationId } from '../services/reservations';
@@ -25,8 +29,15 @@ import {
   type DriverVehicle,
 } from '../vehicles';
 import { DriverIcon, vehicleIconName } from './DriverIcon';
+import { CalendarMonth, MomentField, TimeWheel } from './ReservationDateTime';
 
 const DEFAULT_STAY_SLOTS = 4;
+
+type Expanded = 'entry' | 'exit' | null;
+
+function unique<T>(values: T[]): T[] {
+  return [...new Set(values)];
+}
 
 type Props = {
   parking: ParkingLot;
@@ -98,6 +109,63 @@ export function ReservationModal({
     [parking.schedules, selectedDate, selectedEntry],
   );
   const [exitAt, setExitAt] = useState<string>();
+  const [expanded, setExpanded] = useState<Expanded>(null);
+
+  // Calendario de ingreso: los días de la ventana de reserva con algún horario.
+  const entryDateKeys = useMemo(
+    () =>
+      new Set(
+        dates
+          .filter(
+            (date) => entryTimeOptions(date, parking.schedules).length > 0,
+          )
+          .map((date) => date.key),
+      ),
+    [dates, parking.schedules],
+  );
+  const entryMonths = useMemo(
+    () => unique(dates.map((date) => monthKeyOf(date.key))),
+    [dates],
+  );
+  const [entryMonth, setEntryMonth] = useState(() =>
+    monthKeyOf(firstAvailableDate?.key ?? dates[0]?.key ?? ''),
+  );
+  const entryWheel = useMemo(
+    () => entries.map((option) => ({ key: option.iso, label: option.label })),
+    [entries],
+  );
+
+  // Calendario de egreso: los días a los que llega alguna salida posible (la
+  // estadía puede terminar al día siguiente).
+  const exitDayKey = exitAt ? dayOfIso(exitAt) : undefined;
+  const exitDateKeys = useMemo(
+    () => new Set(exits.map((option) => dayOfIso(option.iso))),
+    [exits],
+  );
+  const exitMonths = useMemo(
+    () => unique([...exitDateKeys].map(monthKeyOf)),
+    [exitDateKeys],
+  );
+  const [exitMonth, setExitMonth] = useState<string>();
+  const shownExitMonth =
+    exitMonth ?? (exitDayKey ? monthKeyOf(exitDayKey) : entryMonth);
+  const exitWheel = useMemo(
+    () =>
+      exits
+        .filter((option) => dayOfIso(option.iso) === exitDayKey)
+        .map((option) => ({ key: option.iso, label: timeOfIso(option.iso) })),
+    [exits, exitDayKey],
+  );
+
+  function selectExitDay(dayKey: string) {
+    const sameDay = exits.filter((option) => dayOfIso(option.iso) === dayKey);
+    const keepTime = exitAt ? timeOfIso(exitAt) : undefined;
+    const next =
+      sameDay.find((option) => timeOfIso(option.iso) === keepTime) ??
+      sameDay[0];
+    if (next) setExitAt(next.iso);
+  }
+
   const [quote, setQuote] = useState<DriverQuote | null>(null);
   const [quotePending, setQuotePending] = useState(false);
   const [quoteError, setQuoteError] = useState<string | null>(null);
@@ -105,6 +173,14 @@ export function ReservationModal({
   useEffect(() => {
     setEntryAt(entries[0]?.iso);
   }, [entries]);
+
+  // El mes del calendario sigue al día elegido.
+  useEffect(() => {
+    if (selectedDate) setEntryMonth(monthKeyOf(selectedDate.key));
+  }, [selectedDate]);
+  useEffect(() => {
+    setExitMonth(undefined);
+  }, [exitDayKey]);
 
   // Egreso sugerido: 2 h después del ingreso (4 franjas de 30 min), o el
   // último posible si la playa cierra antes.
@@ -161,57 +237,72 @@ export function ReservationModal({
             <Text style={styles.parking}>{parking.name}</Text>
             <Text style={styles.detail}>{parking.openUntil}</Text>
 
-            <View style={styles.selectionSection}>
-              <Text style={styles.vehiclesTitle}>Fecha</Text>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.chips}
-              >
-                {dates.map((date) => {
-                  const enabled =
-                    entryTimeOptions(date, parking.schedules).length > 0;
-                  const selected = date.key === selectedDate?.key;
-                  return (
-                    <Pressable
-                      key={date.key}
-                      style={[
-                        styles.chip,
-                        selected && styles.chipSelected,
-                        !enabled && styles.chipDisabled,
-                      ]}
-                      onPress={() => setSelectedDateKey(date.key)}
-                      disabled={!enabled}
-                      accessibilityRole="radio"
-                      accessibilityState={{ selected, disabled: !enabled }}
-                    >
-                      <Text
-                        style={[
-                          styles.chipText,
-                          selected && styles.chipTextSelected,
-                          !enabled && styles.textDisabled,
-                        ]}
-                      >
-                        {date.shortLabel}
-                      </Text>
-                    </Pressable>
+            <View style={styles.moments}>
+              <MomentField
+                label="Ingreso"
+                dateText={selectedDate ? dayLabel(selectedDate.key) : '—'}
+                timeText={entryAt ? timeOfIso(entryAt) : '—'}
+                expanded={expanded === 'entry'}
+                disabled={entryDateKeys.size === 0}
+                onToggle={() => {
+                  setExpanded((current) =>
+                    current === 'entry' ? null : 'entry',
                   );
-                })}
-              </ScrollView>
+                }}
+              >
+                <CalendarMonth
+                  monthKey={entryMonth}
+                  enabledKeys={entryDateKeys}
+                  selectedKey={selectedDate?.key}
+                  onSelect={setSelectedDateKey}
+                  onPrev={monthStep(entryMonths, entryMonth, -1, setEntryMonth)}
+                  onNext={monthStep(entryMonths, entryMonth, 1, setEntryMonth)}
+                />
+                <TimeWheel
+                  options={entryWheel}
+                  selectedKey={entryAt}
+                  onSelect={setEntryAt}
+                  accessibilityLabel="Hora de ingreso"
+                />
+              </MomentField>
+              <MomentField
+                label="Egreso"
+                dateText={exitDayKey ? dayLabel(exitDayKey) : '—'}
+                timeText={exitAt ? timeOfIso(exitAt) : '—'}
+                expanded={expanded === 'exit'}
+                disabled={exits.length === 0}
+                onToggle={() => {
+                  setExpanded((current) =>
+                    current === 'exit' ? null : 'exit',
+                  );
+                }}
+              >
+                <CalendarMonth
+                  monthKey={shownExitMonth}
+                  enabledKeys={exitDateKeys}
+                  selectedKey={exitDayKey}
+                  onSelect={selectExitDay}
+                  onPrev={monthStep(
+                    exitMonths,
+                    shownExitMonth,
+                    -1,
+                    setExitMonth,
+                  )}
+                  onNext={monthStep(
+                    exitMonths,
+                    shownExitMonth,
+                    1,
+                    setExitMonth,
+                  )}
+                />
+                <TimeWheel
+                  options={exitWheel}
+                  selectedKey={exitAt}
+                  onSelect={setExitAt}
+                  accessibilityLabel="Hora de egreso"
+                />
+              </MomentField>
             </View>
-
-            <TimeSelector
-              label="Ingreso"
-              options={entries}
-              selected={entryAt}
-              onSelect={setEntryAt}
-            />
-            <TimeSelector
-              label="Egreso"
-              options={exits}
-              selected={exitAt}
-              onSelect={setExitAt}
-            />
 
             <View style={styles.vehicles}>
               <Text style={styles.vehiclesTitle}>Vas a reservar con</Text>
@@ -351,46 +442,15 @@ export function ReservationModal({
   );
 }
 
-function TimeSelector({
-  label,
-  options,
-  selected,
-  onSelect,
-}: {
-  label: string;
-  options: Array<{ iso: string; label: string }>;
-  selected: string | undefined;
-  onSelect: (value: string) => void;
-}) {
-  return (
-    <View style={styles.selectionSection}>
-      <Text style={styles.vehiclesTitle}>{label}</Text>
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.chips}
-      >
-        {options.map((option) => {
-          const active = option.iso === selected;
-          return (
-            <Pressable
-              key={option.iso}
-              style={[styles.chip, active && styles.chipSelected]}
-              onPress={() => onSelect(option.iso)}
-              accessibilityRole="radio"
-              accessibilityState={{ selected: active }}
-            >
-              <Text
-                style={[styles.chipText, active && styles.chipTextSelected]}
-              >
-                {option.label}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </ScrollView>
-    </View>
-  );
+/** Flecha de mes del calendario: sólo si hay otro mes con días elegibles. */
+function monthStep(
+  months: string[],
+  current: string,
+  step: 1 | -1,
+  setMonth: (month: string) => void,
+): (() => void) | undefined {
+  const target = months[months.indexOf(current) + step];
+  return target ? () => setMonth(target) : undefined;
 }
 
 const styles = StyleSheet.create({
@@ -440,28 +500,11 @@ const styles = StyleSheet.create({
     color: driverColors.textSecondary,
     fontSize: 14,
   },
-  selectionSection: {
+  moments: {
     width: '100%',
     marginTop: driverSpacing.md,
     gap: driverSpacing.xs,
   },
-  chips: { gap: driverSpacing.xs, paddingRight: driverSpacing.sm },
-  chip: {
-    minHeight: 40,
-    paddingHorizontal: driverSpacing.sm,
-    borderWidth: 1,
-    borderColor: driverColors.border,
-    borderRadius: driverRadius.chip,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  chipSelected: {
-    borderColor: driverColors.brand,
-    backgroundColor: driverColors.brand,
-  },
-  chipDisabled: { backgroundColor: driverColors.background },
-  chipText: { color: driverColors.text, fontSize: 13, fontWeight: '700' },
-  chipTextSelected: { color: driverColors.surface },
   vehicles: {
     width: '100%',
     marginTop: driverSpacing.md,
@@ -539,9 +582,6 @@ const styles = StyleSheet.create({
     marginTop: 2,
     color: driverColors.textMuted,
     fontSize: 12,
-  },
-  textDisabled: {
-    color: driverColors.disabled,
   },
   radio: {
     width: 20,

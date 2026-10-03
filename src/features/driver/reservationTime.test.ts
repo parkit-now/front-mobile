@@ -1,8 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import {
+  dayLabel,
+  dayOfIso,
   entryTimeOptions,
   exitDateTimeOptions,
+  monthGrid,
+  monthTitle,
   reservationDates,
+  shiftMonth,
+  timeOfIso,
 } from './reservationTime';
 
 const schedules = [
@@ -46,5 +52,31 @@ describe('reservation time options', () => {
       iso: '2026-09-28T00:00:00-03:00',
     });
     expect(options).toHaveLength(48);
+  });
+});
+
+describe('calendario', () => {
+  it('arma las semanas de lunes a domingo con huecos al principio y al final', () => {
+    // Octubre 2026 empieza un jueves y termina un sábado.
+    const weeks = monthGrid('2026-10');
+    expect(weeks).toHaveLength(5);
+    expect(weeks[0].slice(0, 3)).toEqual([null, null, null]);
+    expect(weeks[0][3]).toEqual({ key: '2026-10-01', day: 1 });
+    expect(weeks[4][5]).toEqual({ key: '2026-10-31', day: 31 });
+    expect(weeks[4][6]).toBeNull();
+    expect(weeks.every((week) => week.length === 7)).toBe(true);
+  });
+
+  it('cambia de mes, también entre años', () => {
+    expect(shiftMonth('2026-10', 1)).toBe('2026-11');
+    expect(shiftMonth('2026-12', 1)).toBe('2027-01');
+    expect(shiftMonth('2027-01', -1)).toBe('2026-12');
+  });
+
+  it('formatea el mes, el día y separa día y hora de un ISO', () => {
+    expect(monthTitle('2026-10')).toMatch(/^Octubre de 2026$/);
+    expect(dayLabel('2026-10-03')).toMatch(/s[aá]b.*3.*oct/);
+    expect(dayOfIso('2026-10-04T00:30:00-03:00')).toBe('2026-10-04');
+    expect(timeOfIso('2026-10-04T00:30:00-03:00')).toBe('00:30');
   });
 });
