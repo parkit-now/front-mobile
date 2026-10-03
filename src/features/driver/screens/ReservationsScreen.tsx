@@ -1,10 +1,20 @@
 import { useMemo, useState } from 'react';
-import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import {
+  ActivityIndicator,
+  FlatList,
+  Pressable,
+  RefreshControl,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { translateApiError } from '../../../lib/api/translate';
+import { useToast } from '../../../lib/notifications/ToastProvider';
 import { BookingCard } from '../components/BookingCard';
-import { TicketModal } from '../components/TicketModal';
 import { useDriverData } from '../hooks/useDriverData';
 import type { Booking, BookingStatus } from '../mock';
+import { openDirections } from '../services/directions';
 import {
   driverColors,
   driverLayout,
@@ -15,93 +25,175 @@ import {
 const FILTERS: Array<{ id: BookingStatus; label: string }> = [
   { id: 'active', label: 'Activas' },
   { id: 'completed', label: 'Completadas' },
-  { id: 'cancelled', label: 'Canceladas' },
 ];
 
 export function ReservationsScreen() {
   const insets = useSafeAreaInsets();
-  const { bookings } = useDriverData();
+  const { bookings, bookingsStatus, refreshBookings, cancelReservation } =
+    useDriverData();
+  const [refreshing, setRefreshing] = useState(false);
+  const [cancellingId, setCancellingId] = useState<string | null>(null);
   const [status, setStatus] = useState<BookingStatus>('active');
-  const [selectedTicket, setSelectedTicket] = useState<Booking | null>(null);
+  const { showToast } = useToast();
   const visibleBookings = useMemo(
-    () => bookings.filter((booking) => booking.status === status),
+    () =>
+      bookings
+        .filter((booking) => booking.status === status)
+        // Activas: la más próxima primero. Completadas: la más reciente.
+        .sort((left, right) =>
+          status === 'active'
+            ? left.entryAt.localeCompare(right.entryAt)
+            : right.entryAt.localeCompare(left.entryAt),
+        ),
     [bookings, status],
   );
 
-  return (
-    <>
-      <FlatList
-        data={visibleBookings}
-        keyExtractor={(booking) => booking.id}
-        renderItem={({ item }) => (
-          <BookingCard booking={item} onViewTicket={setSelectedTicket} />
-        )}
-        ItemSeparatorComponent={ListSeparator}
-        ListHeaderComponent={
-          <View style={styles.header}>
-            <View>
-              <Text style={styles.title}>Mis reservas</Text>
-              <Text style={styles.copy}>
-                Consultá tus tickets, estados y reservas anteriores.
-              </Text>
-            </View>
+  async function handleRefresh() {
+    setRefreshing(true);
+    await refreshBookings();
+    setRefreshing(false);
+  }
 
-            <View style={styles.segmented} accessibilityRole="tablist">
-              {FILTERS.map((filter) => {
-                const selected = filter.id === status;
-                return (
-                  <Pressable
-                    key={filter.id}
-                    style={({ pressed }) => [
-                      styles.segment,
-                      selected && styles.segmentActive,
-                      pressed && styles.pressed,
-                    ]}
-                    onPress={() => {
-                      setStatus(filter.id);
-                    }}
-                    accessibilityRole="tab"
-                    accessibilityState={{ selected }}
-                  >
-                    <Text
-                      numberOfLines={1}
-                      adjustsFontSizeToFit
-                      style={[
-                        styles.segmentText,
-                        selected && styles.segmentTextActive,
-                      ]}
-                    >
-                      {filter.label}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
+  async function handleCancel(booking: Booking) {
+    setCancellingId(booking.id);
+    try {
+      await cancelReservation(booking.id);
+      showToast({ message: 'Reserva cancelada.', kind: 'success' });
+    } catch (error) {
+      showToast({
+        message: translateApiError(error, {
+          endpoint: 'driver.cancelReservation',
+        }),
+        kind: 'error',
+      });
+    } finally {
+      setCancellingId(null);
+    }
+  }
+
+  async function handleDirections(booking: Booking) {
+    const opened = await openDirections(booking.coordinate);
+    if (!opened) {
+      showToast({
+        message: 'No pudimos abrir la aplicación de mapas.',
+        kind: 'error',
+      });
+    }
+  }
+
+  return (
+    <FlatList
+      data={visibleBookings}
+      keyExtractor={(booking) => booking.id}
+      renderItem={({ item }) => (
+        <BookingCard
+          booking={item}
+          onDirections={(booking) => {
+            void handleDirections(booking);
+          }}
+          onCancel={(booking) => {
+            void handleCancel(booking);
+          }}
+          cancelling={cancellingId === item.id}
+        />
+      )}
+      ItemSeparatorComponent={ListSeparator}
+      ListHeaderComponent={
+        <View style={styles.header}>
+          <View>
+            <Text style={styles.title}>Mis reservas</Text>
+            <Text style={styles.copy}>
+              Consultá tus reservas activas y anteriores.
+            </Text>
           </View>
-        }
-        ListEmptyComponent={
+
+          <View style={styles.segmented} accessibilityRole="tablist">
+            {FILTERS.map((filter) => {
+              const selected = filter.id === status;
+              return (
+                <Pressable
+                  key={filter.id}
+                  style={({ pressed }) => [
+                    styles.segment,
+                    selected && styles.segmentActive,
+                    pressed && styles.pressed,
+                  ]}
+                  onPress={() => {
+                    setStatus(filter.id);
+                  }}
+                  accessibilityRole="tab"
+                  accessibilityState={{ selected }}
+                >
+                  <Text
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                    style={[
+                      styles.segmentText,
+                      selected && styles.segmentTextActive,
+                    ]}
+                  >
+                    {filter.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+      }
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={() => {
+            void handleRefresh();
+          }}
+          tintColor={driverColors.brand}
+          colors={[driverColors.brand]}
+        />
+      }
+      ListEmptyComponent={
+        bookingsStatus === 'loading' ? (
+          <View style={styles.emptyState}>
+            <ActivityIndicator color={driverColors.brand} />
+            <Text style={styles.emptyCopy}>Cargando tus reservas…</Text>
+          </View>
+        ) : bookingsStatus === 'error' ? (
           <View style={styles.emptyState}>
             <Text style={styles.emptyTitle}>
-              No hay reservas en este estado
+              No pudimos cargar tus reservas
+            </Text>
+            <Pressable
+              style={({ pressed }) => [
+                styles.retryButton,
+                pressed && styles.pressed,
+              ]}
+              onPress={() => {
+                void refreshBookings();
+              }}
+              accessibilityRole="button"
+            >
+              <Text style={styles.retryText}>Reintentar</Text>
+            </Pressable>
+          </View>
+        ) : (
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyTitle}>
+              {status === 'active'
+                ? 'No tenés reservas activas'
+                : 'Todavía no tenés reservas completadas'}
             </Text>
             <Text style={styles.emptyCopy}>
-              Cuando tengas novedades van a aparecer acá.
+              {status === 'active'
+                ? 'Buscá una cochera y reservá tu lugar.'
+                : 'Acá vas a ver las reservas que ya terminaron.'}
             </Text>
           </View>
-        }
-        contentContainerStyle={[
-          styles.listContent,
-          { paddingTop: insets.top + driverSpacing.lg },
-        ]}
-      />
-
-      <TicketModal
-        booking={selectedTicket}
-        onClose={() => {
-          setSelectedTicket(null);
-        }}
-      />
-    </>
+        )
+      }
+      contentContainerStyle={[
+        styles.listContent,
+        { paddingTop: insets.top + driverSpacing.lg },
+      ]}
+    />
   );
 }
 
@@ -175,6 +267,16 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: driverColors.text,
     textAlign: 'center',
+  },
+  retryButton: {
+    minHeight: 44,
+    marginTop: driverSpacing.xs,
+    justifyContent: 'center',
+  },
+  retryText: {
+    color: driverColors.brand,
+    fontSize: 15,
+    fontWeight: '700',
   },
   emptyCopy: {
     marginTop: driverSpacing.xs,

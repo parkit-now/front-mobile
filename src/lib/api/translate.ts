@@ -21,7 +21,12 @@ export type EndpointKey =
   | 'auth.refresh'
   | 'auth.logout'
   | 'auth.forgotPassword'
-  | 'users.me';
+  | 'users.me'
+  | 'driver.parkings'
+  | 'driver.parkingDetail'
+  | 'driver.quote'
+  | 'driver.reservations'
+  | 'driver.cancelReservation';
 
 export type TranslateContext = {
   endpoint?: EndpointKey;
@@ -60,6 +65,24 @@ const CODE_MESSAGES: Record<string, string> = {
     'El link para recuperar tu contraseña venció o ya fue usado. Pedí uno nuevo.',
   AUTH_RESET_PASSWORD_FAILED:
     'No pudimos cambiar tu contraseña. Intentalo en unos segundos.',
+
+  // Conductor
+  DRIVER_PARKING_NOT_FOUND: 'Este estacionamiento ya no está disponible.',
+  DRIVER_RESERVATIONS_DISABLED:
+    'Este estacionamiento no acepta reservas anticipadas.',
+  RESERVATION_EXIT_NOT_AFTER_ENTRY:
+    'La hora de salida debe ser posterior al ingreso.',
+  RESERVATION_ENTRY_IN_PAST: 'Elegí un horario de ingreso futuro.',
+  RESERVATION_ENTRY_TOO_FAR:
+    'Sólo podés reservar dentro de los próximos 7 días.',
+  RESERVATION_STAY_TOO_LONG: 'La reserva no puede superar las 24 horas.',
+  RESERVATION_OUTSIDE_OPENING_HOURS:
+    'El estacionamiento está cerrado en parte del horario elegido.',
+  RESERVATION_NO_CAPACITY:
+    'No quedan lugares para ese horario. Probá con otro horario o cochera.',
+  RESERVATION_NOT_FOUND: 'No encontramos esa reserva.',
+  RESERVATION_NOT_CANCELLABLE: 'La reserva ya empezó o ya estaba cancelada.',
+  RESERVATION_ID_CONFLICT: 'No pudimos crear la reserva. Intentá de nuevo.',
 
   // Validacion (envoltorio — el detalle por campo se traduce con
   // translateValidationCode).

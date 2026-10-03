@@ -2,7 +2,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import BottomSheet, { BottomSheetScrollView } from '@gorhom/bottom-sheet';
 import { useMemo, useState } from 'react';
 import {
-  Linking,
+  ActivityIndicator,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -11,22 +11,19 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useToast } from '../../../lib/notifications/ToastProvider';
+import { availabilityLabel, availabilityLevel } from '../availability';
 import { DriverIcon } from '../components/DriverIcon';
 import { MapPanel } from '../components/MapPanel';
-import {
-  discoverParkingLots,
-  type Coordinate,
-  type DiscoveredParkingLot,
-} from '../geo';
-import {
-  PARKING_LOTS,
-  VEHICLE_KINDS,
-  type ParkingLot,
-  type VehicleKind,
-} from '../mock';
+import { formatArs, PriceFilterSheet } from '../components/PriceFilterSheet';
+import type { Coordinate } from '../geo';
+import { useDriverData } from '../hooks/useDriverData';
+import { useNearbyParkings } from '../hooks/useNearbyParkings';
+import type { ParkingLot } from '../mock';
 import type { DiscoveryStackParamList } from '../navigation';
-import { filterMapParkingLots } from '../selectors';
+import { filterMapParkingLots, priceSliderBounds } from '../selectors';
+import { openDirections } from '../services/directions';
 import {
+  availabilityColors,
   driverColors,
   driverLayout,
   driverRadius,
@@ -35,19 +32,17 @@ import {
 
 type Props = NativeStackScreenProps<DiscoveryStackParamList, 'MapResults'>;
 
-const PRICE_FILTERS: Array<number | null> = [null, 2000, 2500];
-
 export function MapResultsScreen({ navigation, route }: Props) {
   const insets = useSafeAreaInsets();
   const { showToast } = useToast();
-  const [vehicleKind, setVehicleKind] = useState<VehicleKind>('Auto');
+  const { accessToken } = useDriverData();
   const [availableOnly, setAvailableOnly] = useState(false);
   const [maxHourlyPriceArs, setMaxHourlyPriceArs] = useState<number | null>(
     null,
   );
-  const [selectedParkingId, setSelectedParkingId] = useState(
-    PARKING_LOTS[0]?.id,
-  );
+  // Sin selección explícita se destaca la primera según el orden actual (la
+  // más cercana al destino por defecto).
+  const [selectedParkingId, setSelectedParkingId] = useState<string>();
   const [mapMoved, setMapMoved] = useState(false);
   const [searchCenter, setSearchCenter] = useState<Coordinate>(
     route.params.destination.coordinate,
@@ -61,46 +56,41 @@ export function MapResultsScreen({ navigation, route }: Props) {
     minute: '2-digit',
   });
   const sheetSnapPoints = useMemo(() => ['34%', '58%'], []);
-  const discovery = useMemo(
-    () => discoverParkingLots(PARKING_LOTS, searchCenter),
-    [searchCenter],
+  const nearby = useNearbyParkings(searchCenter, accessToken);
+  const showingNearest = false;
+  const discoveredParkingLots = nearby.parkings;
+  // El filtro de precio trabaja sobre las cocheras ya filtradas por
+  // disponibilidad, para que el conteo en vivo del slider sea real.
+  const priceCandidates = useMemo(
+    () =>
+      filterMapParkingLots(discoveredParkingLots, {
+        availableOnly,
+        maxHourlyPriceArs: null,
+      }),
+    [availableOnly, discoveredParkingLots],
   );
-  const showingNearest = discovery.nearby.length === 0;
-  const discoveredParkingLots = showingNearest
-    ? discovery.nearestFallback
-    : discovery.nearby;
+  const priceBounds = useMemo(
+    () => priceSliderBounds(priceCandidates),
+    [priceCandidates],
+  );
+  const [priceSheetOpen, setPriceSheetOpen] = useState(false);
+  // El descubrimiento ya viene ordenado por distancia al destino.
   const parkingLots = useMemo(
     () =>
       filterMapParkingLots(discoveredParkingLots, {
-        vehicleKind,
         availableOnly,
         maxHourlyPriceArs,
       }),
-    [availableOnly, discoveredParkingLots, maxHourlyPriceArs, vehicleKind],
+    [availableOnly, discoveredParkingLots, maxHourlyPriceArs],
   );
+
   const selectedParking =
     parkingLots.find((parking) => parking.id === selectedParkingId) ??
     parkingLots[0];
 
-  function cycleVehicle() {
-    const currentIndex = VEHICLE_KINDS.indexOf(vehicleKind);
-    setVehicleKind(VEHICLE_KINDS[(currentIndex + 1) % VEHICLE_KINDS.length]);
-  }
-
-  function cyclePriceFilter() {
-    const currentIndex = PRICE_FILTERS.indexOf(maxHourlyPriceArs);
-    setMaxHourlyPriceArs(
-      PRICE_FILTERS[(currentIndex + 1) % PRICE_FILTERS.length],
-    );
-  }
-
-  async function openDirections(parking: ParkingLot) {
-    const destination = `${parking.coordinate.latitude},${parking.coordinate.longitude}`;
-    try {
-      await Linking.openURL(
-        `https://www.google.com/maps/dir/?api=1&destination=${destination}`,
-      );
-    } catch {
+  async function handleDirections(parking: ParkingLot) {
+    const opened = await openDirections(parking.coordinate);
+    if (!opened) {
       showToast({
         message: 'No pudimos abrir la aplicación de mapas.',
         kind: 'error',
@@ -165,17 +155,6 @@ export function MapResultsScreen({ navigation, route }: Props) {
         >
           <Pressable
             style={({ pressed }) => [
-              styles.activeFilter,
-              pressed && styles.pressed,
-            ]}
-            onPress={cycleVehicle}
-            accessibilityRole="button"
-            accessibilityLabel={`Vehículo: ${vehicleKind}. Tocar para cambiar`}
-          >
-            <Text style={styles.activeFilterText}>{vehicleKind}</Text>
-          </Pressable>
-          <Pressable
-            style={({ pressed }) => [
               styles.filter,
               availableOnly && styles.filterActive,
               pressed && styles.pressed,
@@ -197,16 +176,47 @@ export function MapResultsScreen({ navigation, route }: Props) {
             </Text>
           </Pressable>
           <Pressable
-            style={({ pressed }) => [styles.filter, pressed && styles.pressed]}
-            onPress={cyclePriceFilter}
+            style={({ pressed }) => [
+              styles.filter,
+              maxHourlyPriceArs !== null && styles.filterActive,
+              pressed && styles.pressed,
+            ]}
+            onPress={() => {
+              setPriceSheetOpen(true);
+            }}
             accessibilityRole="button"
-            accessibilityLabel="Cambiar filtro de precio"
+            accessibilityLabel={
+              maxHourlyPriceArs === null
+                ? 'Filtrar por precio'
+                : `Precio hasta ${formatArs(maxHourlyPriceArs)}. Tocar para cambiar`
+            }
           >
-            <Text style={styles.filterText}>
+            <Text
+              style={[
+                styles.filterText,
+                maxHourlyPriceArs !== null && styles.filterTextActive,
+              ]}
+            >
               {maxHourlyPriceArs === null
                 ? 'Precio'
-                : `Hasta $${maxHourlyPriceArs.toLocaleString('es-AR')}`}
+                : `Hasta ${formatArs(maxHourlyPriceArs)}`}
             </Text>
+            {maxHourlyPriceArs !== null ? (
+              <Pressable
+                onPress={() => {
+                  setMaxHourlyPriceArs(null);
+                }}
+                hitSlop={10}
+                accessibilityRole="button"
+                accessibilityLabel="Quitar filtro de precio"
+              >
+                <DriverIcon
+                  name="close"
+                  size={16}
+                  color={driverColors.surface}
+                />
+              </Pressable>
+            ) : null}
           </Pressable>
         </ScrollView>
 
@@ -255,7 +265,7 @@ export function MapResultsScreen({ navigation, route }: Props) {
                 updatedTime={updatedTime}
                 showingNearest={showingNearest}
                 onDirections={() => {
-                  void openDirections(selectedParking);
+                  void handleDirections(selectedParking);
                 }}
                 onDetails={() => {
                   navigation.navigate('ParkingDetails', {
@@ -281,7 +291,7 @@ export function MapResultsScreen({ navigation, route }: Props) {
                           setSelectedParkingId(parking.id);
                         }}
                         accessibilityRole="button"
-                        accessibilityLabel={`Seleccionar ${parking.name}, ${parking.distanceLabel}, ${parking.priceLabel}`}
+                        accessibilityLabel={`Seleccionar ${parking.name}, ${parking.distance}, ${parking.priceLabel}`}
                       >
                         <View style={styles.otherResultCopy}>
                           <Text
@@ -291,15 +301,30 @@ export function MapResultsScreen({ navigation, route }: Props) {
                             {parking.name}
                           </Text>
                           <Text style={styles.otherResultMeta}>
-                            {parking.distanceLabel} · {parking.walkingTimeLabel}
+                            {parking.distance} · {parking.eta} caminando
                           </Text>
                         </View>
                         <View style={styles.otherResultPrice}>
                           <Text style={styles.otherResultPriceValue}>
                             {parking.priceLabel.replace('/h', '')}
                           </Text>
-                          <Text style={styles.otherResultAvailability}>
-                            {parking.availableSpots} libres
+                          <Text
+                            style={[
+                              styles.otherResultAvailability,
+                              {
+                                color:
+                                  availabilityColors[
+                                    availabilityLevel(
+                                      parking.availableSpots,
+                                      parking.totalSpots,
+                                    )
+                                  ].text,
+                              },
+                            ]}
+                          >
+                            {parking.availableSpots === null
+                              ? 'Sin datos'
+                              : `${parking.availableSpots} libres`}
                           </Text>
                         </View>
                       </Pressable>
@@ -309,36 +334,84 @@ export function MapResultsScreen({ navigation, route }: Props) {
             </>
           ) : (
             <View style={styles.emptyState}>
+              {nearby.status === 'loading' ? (
+                <ActivityIndicator color={driverColors.brand} />
+              ) : null}
               <Text style={styles.emptyTitle}>
-                No hay cocheras con estos filtros
+                {nearby.status === 'loading'
+                  ? 'Buscando cocheras cercanas…'
+                  : nearby.status === 'error'
+                    ? 'No pudimos cargar las cocheras'
+                    : nearby.parkings.length === 0
+                      ? 'Todavía no operamos en esta zona'
+                      : 'No hay cocheras con estos filtros'}
               </Text>
               <Text style={styles.emptyCopy}>
-                Probá cambiando el vehículo, el precio o la disponibilidad.
+                {nearby.status === 'error'
+                  ? 'Revisá tu conexión y volvé a intentar.'
+                  : nearby.parkings.length === 0
+                    ? 'Mové el mapa para buscar en otra zona.'
+                    : 'Probá cambiando el vehículo, el precio o la disponibilidad.'}
               </Text>
-              <Pressable
-                style={({ pressed }) => [
-                  styles.resetButton,
-                  pressed && styles.pressed,
-                ]}
-                onPress={() => {
-                  setVehicleKind('Auto');
-                  setAvailableOnly(false);
-                  setMaxHourlyPriceArs(null);
-                }}
-                accessibilityRole="button"
-              >
-                <Text style={styles.resetText}>Quitar filtros</Text>
-              </Pressable>
+              {nearby.status !== 'loading' && nearby.parkings.length > 0 ? (
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.resetButton,
+                    pressed && styles.pressed,
+                  ]}
+                  onPress={() => {
+                    if (nearby.status === 'error') {
+                      nearby.retry();
+                      return;
+                    }
+                    setAvailableOnly(false);
+                    setMaxHourlyPriceArs(null);
+                  }}
+                  accessibilityRole="button"
+                >
+                  <Text style={styles.resetText}>
+                    {nearby.status === 'error'
+                      ? 'Reintentar'
+                      : 'Quitar filtros'}
+                  </Text>
+                </Pressable>
+              ) : nearby.status === 'error' ? (
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.resetButton,
+                    pressed && styles.pressed,
+                  ]}
+                  onPress={nearby.retry}
+                  accessibilityRole="button"
+                >
+                  <Text style={styles.resetText}>Reintentar</Text>
+                </Pressable>
+              ) : null}
             </View>
           )}
         </BottomSheetScrollView>
       </BottomSheet>
+
+      {priceSheetOpen ? (
+        <PriceFilterSheet
+          bounds={priceBounds}
+          prices={priceCandidates.map((parking) => parking.hourlyPriceArs)}
+          selected={maxHourlyPriceArs}
+          onApply={(value) => {
+            setMaxHourlyPriceArs(value);
+            setPriceSheetOpen(false);
+          }}
+          onClose={() => {
+            setPriceSheetOpen(false);
+          }}
+        />
+      ) : null}
     </View>
   );
 }
 
 type ParkingPreviewProps = {
-  parking: DiscoveredParkingLot;
+  parking: ParkingLot;
   parkingCount: number;
   updatedTime: string;
   showingNearest: boolean;
@@ -354,7 +427,10 @@ function ParkingPreview({
   onDirections,
   onDetails,
 }: ParkingPreviewProps) {
-  const lowAvailability = parking.availableSpots < 4;
+  const availability =
+    availabilityColors[
+      availabilityLevel(parking.availableSpots, parking.totalSpots)
+    ];
 
   return (
     <>
@@ -388,7 +464,7 @@ function ParkingPreview({
             {parking.address}
           </Text>
           <Text style={styles.parkingDistance}>
-            {parking.distanceLabel} · {parking.walkingTimeLabel}
+            {parking.distance} · {parking.eta} caminando
           </Text>
         </View>
         <View style={styles.parkingPrice}>
@@ -403,25 +479,17 @@ function ParkingPreview({
         <View
           style={[
             styles.availabilityBadge,
-            lowAvailability && styles.availabilityBadgeLow,
+            { backgroundColor: availability.surface },
           ]}
         >
           <View
             style={[
               styles.availabilityBadgeDot,
-              lowAvailability && styles.availabilityBadgeDotLow,
+              { backgroundColor: availability.marker },
             ]}
           />
-          <Text
-            style={[
-              styles.availabilityText,
-              lowAvailability && styles.availabilityTextLow,
-            ]}
-          >
-            {parking.availableSpots}{' '}
-            {parking.availableSpots === 1
-              ? 'lugar libre ahora'
-              : 'lugares libres ahora'}
+          <Text style={[styles.availabilityText, { color: availability.text }]}>
+            {availabilityLabel(parking.availableSpots)}
           </Text>
         </View>
         <Text style={styles.disclaimer}>No garantiza lugar</Text>
@@ -435,9 +503,9 @@ function ParkingPreview({
           ]}
           onPress={onDirections}
           accessibilityRole="button"
-          accessibilityLabel="Abrir indicaciones"
+          accessibilityLabel="Cómo llegar con Google Maps"
         >
-          <DriverIcon name="arrow" size={20} />
+          <DriverIcon name="directions" size={24} color={driverColors.brand} />
         </Pressable>
         <Pressable
           style={({ pressed }) => [
@@ -500,19 +568,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
   },
   filters: { paddingRight: driverSpacing.lg, gap: driverSpacing.xs },
-  activeFilter: {
-    minHeight: 38,
-    paddingHorizontal: driverSpacing.sm,
-    borderRadius: 19,
-    backgroundColor: driverColors.brand,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  activeFilterText: {
-    color: driverColors.surface,
-    fontSize: 13,
-    fontWeight: '700',
-  },
   filter: {
     minHeight: 38,
     paddingHorizontal: driverSpacing.sm,
@@ -644,25 +699,19 @@ const styles = StyleSheet.create({
     minHeight: 26,
     paddingHorizontal: driverSpacing.xs,
     borderRadius: driverRadius.chip,
-    backgroundColor: driverColors.successSurface,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
   },
-  availabilityBadgeLow: { backgroundColor: driverColors.warningSurface },
   availabilityBadgeDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: driverColors.success,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
   },
-  availabilityBadgeDotLow: { backgroundColor: driverColors.warning },
   availabilityText: {
-    color: driverColors.success,
     fontSize: 12,
     fontWeight: '600',
   },
-  availabilityTextLow: { color: driverColors.warning },
   disclaimer: { color: driverColors.textMuted, fontSize: 11 },
   actions: { flexDirection: 'row', gap: driverSpacing.sm },
   directionsButton: {
@@ -720,7 +769,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   otherResultAvailability: {
-    color: driverColors.success,
     fontSize: 11,
     fontWeight: '600',
   },

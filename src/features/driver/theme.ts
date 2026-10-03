@@ -25,6 +25,42 @@ export const driverColors = {
   mapWaterStrong: '#94d3f7',
 } as const;
 
+// Escala de disponibilidad (ver availability.ts). Colores auxiliares de mapa:
+// viven en la feature según SHARED_STYLE_GUIDE y no se usan como UI general.
+// `marker`/`markerText` pintan el pin del mapa; `text`/`surface`, los badges.
+export const availabilityColors = {
+  high: {
+    text: '#027a48',
+    surface: '#ecfdf3',
+    marker: '#079455',
+    markerText: '#ffffff',
+  },
+  medium: {
+    text: '#854a0e',
+    surface: '#fefbe8',
+    marker: '#facc15',
+    markerText: '#101828',
+  },
+  low: {
+    text: '#b93815',
+    surface: '#fef6ee',
+    marker: '#ef6820',
+    markerText: '#ffffff',
+  },
+  critical: {
+    text: '#b42318',
+    surface: '#fff1ef',
+    marker: '#d92d20',
+    markerText: '#ffffff',
+  },
+  unknown: {
+    text: '#475467',
+    surface: '#f2f4f7',
+    marker: '#667085',
+    markerText: '#ffffff',
+  },
+} as const;
+
 export const driverSpacing = {
   xs: 8,
   sm: 12,

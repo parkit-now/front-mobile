@@ -422,6 +422,92 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/driver/parkings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Nearby active parking lots for drivers, ordered by distance */
+        get: operations["DriverController_findNearby"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/driver/parkings/{parkingId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Public parking lot detail with opening hours */
+        get: operations["DriverController_findOne"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/driver/parkings/{parkingId}/quote": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Quote a stay: validates the window (7 days ahead, opening hours) and prices it with the lot reservation rate and pricing engine */
+        post: operations["DriverController_quote"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/driver/reservations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The signed-in driver's reservations */
+        get: operations["DriverReservationsController_list"];
+        put?: never;
+        /** Create a reservation (idempotent by client id): re-quotes on the server and checks capacity */
+        post: operations["DriverReservationsController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/driver/reservations/{reservationId}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cancel a reservation that has not started yet */
+        post: operations["DriverReservationsController_cancel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/health": {
         parameters: {
             query?: never;
@@ -444,6 +530,78 @@ export interface paths {
         get: operations["healthCheck"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/integrations/mercadopago/webhook": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Receive Mercado Pago order notifications (public, HMAC signed)
+         * @description Public endpoint called by Mercado Pago when something happens to an `Order`. Authentication is the `x-signature` HMAC over `id:{data.id};request-id:{x-request-id};ts:{ts};`, plus a ±5 minute replay window.
+         *
+         *     The body is **not** covered by that signature, so it is treated as a trigger only: the order status is re-read from `GET /v1/orders/{id}` and the payment intent transitions on that value, never on the `action` field of the payload.
+         *
+         *     Answers `200` with an empty body for everything that is not a signature failure — unknown topics, unknown actions, orders that are not ours, and notifications that another process already handled — because any non-2xx makes Mercado Pago retry every 15 minutes.
+         */
+        post: operations["mercadoPagoWebhook"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/staff": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * People working at the lots the caller owns
+         * @description One row per person, listing every role they hold across the caller’s lots — so someone working at two branches appears once with both roles rather than twice.
+         *
+         *     Scope is the caller’s own `owner` memberships; admins see every lot. A caller who owns no lots gets an empty page, not an error.
+         *
+         *     Supports search by name or email, filtering by role, narrowing to one lot, and pagination over people.
+         */
+        get: operations["staffList"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mercado-pago/oauth/callback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Finish the Mercado Pago linking flow
+         * @description Exchanges the `state` atomically (single use), verifies the caller still owns the entity that started the flow, swaps the `authorization_code` for OAuth tokens, provisions the Mercado Pago `Store` and `POS`, stores the encrypted tokens and creates the `mercadopago_qr` payment method.
+         *
+         *     The route deliberately carries no `:tenantId`: the entity comes from the stored `state`, because Mercado Pago requires a static `redirect_uri`.
+         *
+         *     Every `state` failure — unknown, already consumed, expired, or belonging to somebody else — answers the same generic `MP_OAUTH_STATE_INVALID`, so the endpoint cannot be used as an oracle to probe other people flows.
+         */
+        post: operations["mercadoPagoOauthCallback"];
         delete?: never;
         options?: never;
         head?: never;
@@ -540,6 +698,8 @@ export interface paths {
          * @description Transitions the application from `draft` or `rejected` to `pending_review` and stamps `submittedAt`, handing it over to PARKIT Ops for review.
          *
          *     Resubmitting a previously rejected application clears its `rejectionReason`.
+         *
+         *     The declared entity must carry a complete address to be submitted: either normalized by Georef (`location.geocodingSource = "georef"` plus `location.formatted`) or manually filled with `streetName`, `streetNumber`, `cityName` and `stateName`. A draft may stay incomplete — the requirement applies to this transition only, so applications already in `pending_review` are unaffected.
          */
         post: operations["onboardingSubmit"];
         delete?: never;
@@ -593,11 +753,197 @@ export interface paths {
         head?: never;
         /**
          * Update the entity profile
-         * @description Edits the editable fields of the entity profile (`name`, `legalName`, `cuit`, `email`, `phone`, `address`, `status`) and its per-vehicle-type spot `capacity`.
+         * @description Edits the editable fields of the entity profile (`name`, `legalName`, `cuit`, `email`, `phone`, `address`, `status`), its per-vehicle-type spot `capacity` and its `lprImageRetentionDays` (LPR image retention window, one of 30/60/90 days).
          *
          *     Use `status: maintenance` to take the lot offline. `capacity` is merged: only the supplied vehicle types change. Every change is written to the audit trail. Requires the caller to be an `owner` of the entity (platform admins bypass the role check).
          */
         patch: operations["entitiesUpdateProfile"];
+        trace?: never;
+    };
+    "/tenants/{tenantId}/arca/account": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get the ARCA account of the entity
+         * @description The 404 ARCA_NOT_LINKED is the happy path of "not linked yet" (an unlinked account also answers 404). A `pending_*` status means the linking wizard is half way: resume it from that step.
+         */
+        get: operations["arcaGetAccount"];
+        put?: never;
+        /**
+         * Wizard step 1: CUIT and IIBB, generates the certificate request
+         * @description Validates the CUIT check digit, generates the RSA key (kept encrypted, never returned) and the CSR, and leaves the account in `pending_certificate`. Calling it again while the wizard is in progress starts over, discarding the previous key and certificate.
+         */
+        post: operations["arcaCreateAccount"];
+        /**
+         * Unlink ARCA (or cancel a half-done wizard)
+         * @description Deletes the key and the certificate, keeps every invoice already issued, and sets every payment method of the entity to `invoiceMode = none`.
+         */
+        delete: operations["arcaUnlinkAccount"];
+        options?: never;
+        head?: never;
+        /**
+         * Update the IVA rate and, in homologación, the fiscal data
+         * @description In production the fiscal data comes from ARCA’s registry: sending it answers 409 ARCA_LINK_STEP_INVALID (`fiscalDataEditable` tells the UI).
+         */
+        patch: operations["arcaUpdateAccount"];
+        trace?: never;
+    };
+    "/tenants/{tenantId}/arca/account/certificate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Wizard step 2: verify the certificate ARCA issued
+         * @description Checks the certificate (CUIT, expiry, that it was issued for Parkit’s CSR), logs in to ARCA for both services and reads the taxpayer registry. Leaves the account in `pending_sales_point`. In homologación the registry usually has no data (`padronFound: false`): load it with PATCH.
+         */
+        post: operations["arcaUploadCertificate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tenants/{tenantId}/arca/account/csr": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Download the certificate request (CSR) to upload to ARCA */
+        get: operations["arcaGetCsr"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tenants/{tenantId}/arca/account/renewal/certificate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Verify the renewed certificate and switch to it
+         * @description Checks it like the wizard does, but against the renewal key, and logs in to ARCA with it. Switches the certificate in every entity that shares it; an entity in `cert_expired` goes back to `linked`.
+         */
+        post: operations["arcaUploadRenewalCertificate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tenants/{tenantId}/arca/account/renewal/csr": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Download the request (CSR) to renew the certificate
+         * @description Same alias as the current certificate: in ARCA it goes to «Agregar certificado» on that alias, which keeps the associated services. Prepared by the daily job 30 days before expiry, or generated on the spot. The current certificate keeps working until the renewed one is uploaded.
+         */
+        get: operations["arcaGetRenewalCsr"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tenants/{tenantId}/arca/account/reusable-certificates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Other entities of the caller linked with the same CUIT */
+        get: operations["arcaListReusableCertificates"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tenants/{tenantId}/arca/account/reuse-certificate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Wizard step 2 shortcut: use the certificate of another entity
+         * @description Copies the certificate and fiscal data of another entity the caller owns, linked with the same CUIT. The sales point is not copied: each entity has its own.
+         */
+        post: operations["arcaReuseCertificate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tenants/{tenantId}/arca/account/sales-point": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Wizard step 3: verify the sales point and finish linking
+         * @description The sales point must be a web services one (listed by FEParamGetPtosVenta, not blocked) and `getLastVoucher` must answer for the entity’s letter. Leaves the account `linked`.
+         */
+        post: operations["arcaSetSalesPoint"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tenants/{tenantId}/arca/taxpayers/{cuit}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Qué factura sale con este CUIT (padrón de ARCA)
+         * @description Consulta la constancia de inscripción (caché de 30 días) y devuelve la letra y la razón social, para mostrarlas antes de emitir. `identified: false` = ARCA no tiene datos: la factura va a consumidor final. 422 ARCA_CUIT_INVALID, 409 ARCA_NOT_LINKED, 503 ARCA_UNAVAILABLE, 422 ARCA_CERT_NOT_AUTHORIZED (falta asociar la constancia al certificado).
+         */
+        get: operations["InvoicesController_taxpayer"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/tenants/{tenantId}/audit": {
@@ -609,9 +955,13 @@ export interface paths {
         };
         /**
          * Read the entity audit trail
-         * @description Returns the audit events recorded for the `:tenantId` entity (profile edits, payment-method changes, approval, etc.), most recent first.
+         * @description Returns a page of audit events recorded for the `:tenantId` entity, most recent first. Available to any member of the entity.
          *
-         *     Supports optional filtering by `severity` and capping the number of returned events with `limit` (defaults to 100). Available to any member of the entity.
+         *     Filters by `severity`, a single `action` from the catalog, and a `from`/`to` instant range (half-open, ISO-8601 with an explicit offset). They compose.
+         *
+         *     **What this covers:** configuration and lifecycle changes — profile edits, payment-method toggles, onboarding, LPR event review, admin actions.
+         *
+         *     **What it does not:** payments and vehicle entries/exits are not written to the audit trail, and there is no maximum-stay concept, so no overstay alerts. For operational figures use `/metrics/*`; for detections pending review use `/lpr-events?status=pending`.
          */
         get: operations["entitiesListAudit"];
         put?: never;
@@ -629,7 +979,12 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List all cash sessions (most recent first) */
+        /**
+         * List cash sessions (most recent first)
+         * @description Optionally only the shifts overlapping `[from, to)`: a shift that opened before `from` but was still running at `from` is included.
+         *
+         *     **Capped at `limit` (default 100).** It used to return every shift the lot ever had — about a thousand rows a year to fill a picker. Offline clients should keep syncing through `/changes`, which pages by `syncSeq`.
+         */
         get: operations["CashSessionsController_findAll"];
         put?: never;
         /** Open a new cash session (client-provided UUIDv7) */
@@ -638,6 +993,26 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/tenants/{tenantId}/cash-sessions/{sessionId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Update a cash session using optimistic locking (expectedVersion)
+         * @description Updates the shift notes of an open or closed session.
+         */
+        patch: operations["CashSessionsController_update"];
         trace?: never;
     };
     "/tenants/{tenantId}/cash-sessions/{sessionId}/close": {
@@ -653,7 +1028,7 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        /** Close the current session and auto-open the next one. Active entries carry over. */
+        /** Close the current session. Optionally open the next one and carry active entries over. */
         patch: operations["CashSessionsController_close"];
         trace?: never;
     };
@@ -726,6 +1101,43 @@ export interface paths {
         patch: operations["EntriesController_close"];
         trace?: never;
     };
+    "/tenants/{tenantId}/entries/{entryId}/correction": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Correct an entry from history using optimistic locking and audit trail */
+        patch: operations["EntriesController_correct"];
+        trace?: never;
+    };
+    "/tenants/{tenantId}/entries/{entryId}/invoice": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Emitir (o reintentar) la factura de una estadía cobrada
+         * @description Emite a consumidor final o, con `receiverCuit`, identificada con ese CUIT: la letra la decide el padrón (A si el emisor es RI y el receptor RI o monotributista). Los problemas de ARCA (caído, rechazo, certificado vencido, CUIT sin datos en el padrón) NO son errores HTTP: vuelven en `status` y `errorCode` de la factura; el CUIT mal formado sí es 422 ARCA_CUIT_INVALID. Conflictos: INVOICE_ALREADY_ISSUED, INVOICE_IN_PROGRESS, INVOICE_NOT_INVOICEABLE, ARCA_NOT_LINKED.
+         */
+        post: operations["InvoicesController_issue"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/tenants/{tenantId}/entries/changes": {
         parameters: {
             query?: never;
@@ -754,6 +1166,80 @@ export interface paths {
         put?: never;
         /** Register a vehicle entry from an LPR detection event */
         post: operations["EntriesController_createFromLpr"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tenants/{tenantId}/invoice-receivers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** CUIT ya facturados en la playa (sugerencias del cobro) */
+        get: operations["InvoicesController_receivers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tenants/{tenantId}/invoices/{invoiceId}/document": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Datos del comprobante de una factura emitida
+         * @description Todo lo que el desktop necesita para armar el PDF (el backend no lo dibuja), con los datos guardados al emitir: la razón social de ese día, no la actual. 409 INVOICE_NOT_ISSUED si todavía no tiene CAE.
+         */
+        get: operations["InvoicesController_document"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tenants/{tenantId}/invoices/batch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Emitir en lote a consumidor final
+         * @description De a una y en orden, con el resultado de cada estadía. Los conflictos de una (ya emitida, no facturable) no cortan el lote. Si ARCA no responde, las que faltan vuelven con ARCA_UNAVAILABLE sin intentarse. Sin ARCA vinculada: 409 ARCA_NOT_LINKED.
+         */
+        post: operations["InvoicesController_issueBatch"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tenants/{tenantId}/invoices/changes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Pull incremental invoice changes for sync */
+        get: operations["InvoicesController_pullChanges"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -893,6 +1379,270 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/tenants/{tenantId}/mercado-pago/account": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get the Mercado Pago account linked to the entity
+         * @description Returns the link status of the entity plus the identifiers of its Mercado Pago `Store` and `POS` and the URLs of the QR code (image and printable PDF).
+         *
+         *     NEVER returns the OAuth tokens, not even encrypted or truncated.
+         */
+        get: operations["mercadoPagoGetAccount"];
+        put?: never;
+        post?: never;
+        /**
+         * Unlink the Mercado Pago account of the entity
+         * @description Marks the account as revoked and DISABLES the `mercadopago_qr` payment method — it is never deleted, because closed shifts and past transactions still reference it.
+         *
+         *     Linking again later re-enables the same payment method, keeping whatever name the owner gave it. Until then the method stays disabled: turning it back on via `PATCH /tenants/{tenantId}/payment-methods/{id}` is rejected with 409 PAYMENT_METHOD_INTEGRATION_NOT_LINKED, so nobody can offer a QR that cannot charge.
+         */
+        delete: operations["mercadoPagoUnlinkAccount"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tenants/{tenantId}/mercado-pago/oauth/authorization-url": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start the Mercado Pago linking flow
+         * @description Creates a single-use `state` with its PKCE `code_verifier` (valid for 10 minutes) and returns the Mercado Pago authorization URL the owner must open.
+         *
+         *     The entity must already have a complete structured address (street, number, city, province): Mercado Pago requires it for the store location, and failing here saves the owner a pointless round trip to the consent screen.
+         *
+         *     An entity that already has an active link must be unlinked first. Re-running the flow on a `token_expired` or `revoked` account is the supported way back to `linked`.
+         */
+        post: operations["mercadoPagoCreateAuthorizationUrl"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tenants/{tenantId}/mercado-pago/pos/resync": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Re-read the POS from Mercado Pago and refresh the QR URLs
+         * @description Asks Mercado Pago for the current state of the entity POS and stores the fresh QR URLs. Mercado Pago owns those URLs and can regenerate them, so our copy is a cache, not the source of truth.
+         *
+         *     Requires an operational link: an expired or revoked account has to be authorized again first.
+         */
+        post: operations["mercadoPagoResyncPos"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tenants/{tenantId}/metrics/occupancy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Current occupancy of the lot
+         * @description Occupied spots over total capacity right now, plus a breakdown of open entries by vehicle type.
+         *
+         *     Capacity is the lot-wide total declared on the entity profile (`settings.capacity.total`). The breakdown is best effort — see `byVehicleType`.
+         */
+        get: operations["metricsGetOccupancy"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tenants/{tenantId}/metrics/revenue": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Revenue and vehicle counts over a window, bucketed
+         * @description Time series behind the revenue dashboard. `from`/`to` describe one continuous interval (not a repeating daily window), and the first and last buckets are clipped to the exact instants requested.
+         *
+         *     Both the money series and the vehicle-count series come back together, so the dashboard’s $/cars toggle needs no second request. Note they use different time anchors — see `totals`.
+         *
+         *     Optional filters narrow to a payment method, a vehicle type or a cash session; `paymentMethod` and `cashSessionId` switch the revenue source, reported in `revenueSource`.
+         *
+         *     With `cashSessionId` the window may be omitted: it is derived from the shift and widened to cover every payment the shift collected, so the totals are exactly what that drawer took. The window used comes back in `from`/`to`. See the parameter for details.
+         */
+        get: operations["metricsGetRevenue"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tenants/{tenantId}/metrics/revenue/by-payment-method": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Revenue split by payment method (pie chart)
+         * @description One slice per payment method over the window, largest first.
+         *
+         *     Also returns `unallocated`: revenue with no itemised transactions behind it, because the stay was closed through the offline `amountPaid` fallback. Slices plus `unallocated` add up to `total`, so the chart reconciles with the revenue KPI instead of quietly falling short of it.
+         *
+         *     With `cashSessionId`: what that shift collected, cash vs. transfer. Every stay of the shift has its payments itemised by construction, so `unallocated` is 0 and `total` matches the revenue series for the same shift.
+         */
+        get: operations["metricsGetPaymentMethodBreakdown"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tenants/{tenantId}/metrics/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Owner dashboard KPIs in a single call
+         * @description Returns live occupancy, today’s revenue and vehicle counts, the day-over-day and week-over-week comparison, and the pending-alert count.
+         *
+         *     Civil days are delimited in `tz` (defaults to Argentina). Both baselines are truncated to the same elapsed offset within the day as today has run so far, so the deltas stay meaningful at any hour.
+         */
+        get: operations["metricsGetSummary"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tenants/{tenantId}/metrics/top-plates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Highest-value plates over a window
+         * @description Ranks plates by revenue, visit count or time parked — every metric comes back regardless, so switching the ranking is a re-sort rather than another request.
+         *
+         *     Counts only stays that ended inside the window: a vehicle still parked has no final amount or duration yet. With `cashSessionId`, only the stays that shift collected.
+         */
+        get: operations["metricsGetTopPlates"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tenants/{tenantId}/payment-intents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List approved charges that were not applied yet
+         * @description The orphan payments: charges Mercado Pago already credited that have not become a payment transaction yet, newest first.
+         *
+         *     They exist because paying and closing the stay are two different moments — the customer pays from the car, the operator closes when done. Money sitting here is real money that will not show up in the till count until somebody applies it.
+         */
+        get: operations["paymentIntentsListUnconsumed"];
+        put?: never;
+        /**
+         * Start a QR charge for a stay
+         * @description Creates the payment intent and its Mercado Pago order. The row is persisted BEFORE calling Mercado Pago on purpose: if that call dies on a timeout we do not know whether the order exists, and the `created` state marks exactly that uncertainty.
+         *
+         *     The `id` is generated by the client (UUIDv7). Re-sending the same `id` returns the existing intent and does NOT create a second order, which is what makes this endpoint safe to retry.
+         *
+         *     The amount is frozen here and never recalculated.
+         */
+        post: operations["paymentIntentsCreate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tenants/{tenantId}/payment-intents/{paymentIntentId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read one payment intent
+         * @description What the till polls every few seconds while the charge modal is open.
+         *
+         *     It also expires the intent lazily: an open intent whose `expiresAt` is in the past is moved to `expired` here. That is defense in depth, not a replacement for the webhook — Mercado Pago does emit `order.expired` for QR, but webhook delivery is best-effort, and a lost one would leave the intent hanging in `pending` forever, which the partial unique index turns into a permanent dead end for that stay and that till.
+         */
+        get: operations["paymentIntentsGetById"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tenants/{tenantId}/payment-intents/{paymentIntentId}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancel a payment intent
+         * @description Cancels the order on the Mercado Pago side too, and that part is not optional: the QR is static, so an order left alive on the till would be paid by the NEXT customer who scans the printed sign — for the previous car amount.
+         *
+         *     If Mercado Pago refuses to cancel, the intent is still canceled locally and the failure is audited with `warn` severity. Keeping it alive locally would block the whole till through the partial unique index, and that blockage does not expire on its own; the order left on the Mercado Pago side does.
+         */
+        post: operations["paymentIntentsCancel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/tenants/{tenantId}/payment-methods": {
         parameters: {
             query?: never;
@@ -940,7 +1690,9 @@ export interface paths {
          * Enable/disable or set-default a payment method
          * @description Toggles a payment method via the `enabled` and/or `isDefault` flags.
          *
-         *     System methods (`transfer`, `cash`) can be disabled but never deleted. Setting `isDefault: true` clears the previous default. The change is recorded in the audit trail. Requires the caller to be an `owner` of the entity (platform admins bypass the role check).
+         *     System methods (`transfer`, `cash`, `mercadopago_qr`) can be renamed and disabled but never deleted. Setting `isDefault: true` clears the previous default. The change is recorded in the audit trail. Requires the caller to be an `owner` of the entity (platform admins bypass the role check).
+         *
+         *     Integration-backed methods (today only `mercadopago_qr`) can only be ENABLED or made DEFAULT while their integration is linked: unlinking the Mercado Pago account disables the method, and both turning it back on and pre-selecting it for checkout require linking the account again. Renaming, `enabled: false` and `isDefault: false` are always allowed.
          */
         patch: operations["entitiesTogglePaymentMethod"];
         trace?: never;
@@ -1038,6 +1790,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/tenants/{tenantId}/rates/open-entries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Cuántos autos hay adentro con cada tarifa
+         * @description Para decidir si preguntar al dueño si un cambio de precios alcanza a los autos que ya están en el estacionamiento.
+         */
+        get: operations["RatesController_openEntriesByRate"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/tenants/{tenantId}/schedules": {
         parameters: {
             query?: never;
@@ -1121,7 +1893,7 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        /** Update a service for the active tenant */
+        /** Update a service for the active tenant (ADVANCE_RESERVATION also takes the reservation rate and reservable spots) */
         patch: operations["ServicesController_update"];
         trace?: never;
     };
@@ -1140,6 +1912,58 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/tenants/{tenantId}/staff": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add a person to this lot’s staff
+         * @description Requires owner role. La persona se identifica por email y tiene que tener cuenta: **no hay invitación**, si el mail no está registrado la respuesta es `404 USER_NOT_FOUND`.
+         *
+         *     Es también la forma de darle a alguien un rol en un lote **adicional** sin sacarle el que ya tiene: mismo email, otro `:tenantId`.
+         */
+        post: operations["tenantStaffAdd"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tenants/{tenantId}/staff/{userId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Remove a person from this lot’s staff
+         * @description Requires owner role. Desvincula a la persona de **este** lote; su cuenta y sus otros lotes no se tocan.
+         *
+         *     No se puede eliminar la membresía propia, ni la del último owner del lote.
+         */
+        delete: operations["tenantStaffRemove"];
+        options?: never;
+        head?: never;
+        /**
+         * Change a person’s role, or move them to another lot
+         * @description Requires owner role. Acepta `role`, `tenantId` o los dos; un body vacío es `400`.
+         *
+         *     `tenantId` **muda** la membresía: el lote de la URL la pierde y el caller tiene que ser owner de ambos. Para que la persona trabaje en los dos a la vez, usar `POST /tenants/<el otro>/staff` en vez de este endpoint.
+         *
+         *     No se puede modificar la membresía propia, ni dejar al lote sin ningún owner.
+         */
+        patch: operations["tenantStaffUpdate"];
         trace?: never;
     };
     "/tenants/{tenantId}/vehicle-types": {
@@ -1346,7 +2170,7 @@ export interface components {
         };
         ApplicationDetailDto: {
             /**
-             * @description Declared postal address. `null` when not provided.
+             * @description Dirección declarada en una línea. Sale de `location.formatted`. `null` si no se declaró.
              * @example Av. Corrientes 1234, CABA
              */
             address: string | null;
@@ -1362,10 +2186,10 @@ export interface components {
              */
             createdAt: string;
             /**
-             * @description Declared Argentine tax id (CUIT).
+             * @description Declared Argentine tax id (CUIT). `null` when not declared (no longer asked at sign-up).
              * @example 30712345679
              */
-            cuit: string;
+            cuit: string | null;
             /** @description Declared entity snapshot captured at submission time (name, address, legal data and per-vehicle spot counts). Materialized as a real parking lot on approval. */
             declaredEntity: {
                 [key: string]: unknown;
@@ -1389,10 +2213,12 @@ export interface components {
              */
             id: string;
             /**
-             * @description Declared legal name of the entity.
+             * @description Declared legal name of the entity. `null` when not declared (no longer asked at sign-up).
              * @example Estacionamientos del Centro S.A.
              */
-            legalName: string;
+            legalName: string | null;
+            /** @description Dirección estructurada declarada, tal como se va a materializar en `tenants` al aprobar. Los borradores anteriores al wizard nuevo sólo traen `formatted`; el resto de los campos viene en `null`. */
+            location: components["schemas"]["EntityAddressDto"];
             /**
              * @description Declared display name of the parking lot.
              * @example Estacionamiento del Centro
@@ -1414,6 +2240,8 @@ export interface components {
              * @example 2026-05-21T10:00:00.000Z
              */
             reviewedAt: string | null;
+            /** @description Declared opening hours, one row per range (a day may have several). Empty when the applicant skipped the operational step. Created as the tenant schedules on approval. */
+            schedules: components["schemas"]["CreateScheduleDto"][];
             /**
              * @description External review status. The internal `pending_review` state surfaces as `pending`; drafts never appear in the queue.
              * @example pending
@@ -1432,6 +2260,11 @@ export interface components {
              * @example 7c9e6679-7425-40de-944b-e07fc1f90ae7
              */
             tenantId: string | null;
+            /**
+             * @description Declared total parking spots. `null` when the applicant skipped the operational step (approval then creates the tenant with capacity 0).
+             * @example 110
+             */
+            totalSpots: number | null;
         };
         ApplicationDocumentDto: {
             /**
@@ -1474,10 +2307,10 @@ export interface components {
              */
             createdAt: string;
             /**
-             * @description Declared Argentine tax id (CUIT).
+             * @description Declared Argentine tax id (CUIT). `null` when not declared (no longer asked at sign-up).
              * @example 30712345679
              */
-            cuit: string;
+            cuit: string | null;
             /**
              * @description Number of supporting documents uploaded by the applicant.
              * @example 3
@@ -1495,10 +2328,10 @@ export interface components {
              */
             id: string;
             /**
-             * @description Declared legal name of the entity.
+             * @description Declared legal name of the entity. `null` when not declared (no longer asked at sign-up).
              * @example Estacionamientos del Centro S.A.
              */
-            legalName: string;
+            legalName: string | null;
             /**
              * @description Declared display name of the parking lot.
              * @example Estacionamiento del Centro
@@ -1517,6 +2350,96 @@ export interface components {
              */
             submittedAt: string | null;
         };
+        ArcaAccountDto: {
+            /**
+             * @description Alias del certificado: el «Nombre simbólico del DN» a usar en WSASS o en Certificados Digitales.
+             * @example parkit1a2b3c4d
+             */
+            certAlias: string;
+            /** Format: date-time */
+            certExpiresAt?: string | null;
+            /** @description Decide la letra: monotributo y exento emiten C; responsable inscripto, A o B. */
+            condicionIva?: components["schemas"]["ArcaTaxCondition"] | null;
+            /**
+             * @description 11 dígitos, sin guiones.
+             * @example 20123456783
+             */
+            cuit: string;
+            domicilioFiscal?: string | null;
+            environment: components["schemas"]["ArcaEnvironment"];
+            /** @description Si los datos fiscales se pueden cargar a mano (sólo homologación, donde el padrón no tiene los CUIT reales). */
+            fiscalDataEditable: boolean;
+            /** Format: uuid */
+            id: string;
+            iibb?: string | null;
+            /**
+             * Format: date
+             * @description AAAA-MM-DD.
+             */
+            inicioActividad?: string | null;
+            /**
+             * @description Alícuota de IVA (%). Sólo aplica a responsables inscriptos.
+             * @example 21
+             */
+            ivaRate: number;
+            /** Format: date-time */
+            linkedAt?: string | null;
+            ptoVta?: number | null;
+            razonSocial?: string | null;
+            /**
+             * Format: date-time
+             * @description Cuándo se preparó la solicitud de renovación del certificado (null si no hay una en curso).
+             */
+            renewalPreparedAt?: string | null;
+            /**
+             * @description Paso de la vinculación en el que está la playa:
+             *     - `pending_certificate`: se generó la solicitud (CSR), falta subir el certificado.
+             *     - `pending_sales_point`: certificado verificado, falta el punto de venta (y, en homologación, puede faltar cargar los datos fiscales: `condicionIva` en null).
+             *     - `linked`: vinculada, emite.
+             *     - `cert_expired`: venció el certificado; no emite hasta renovarlo (`account/renewal/*`).
+             *     Una cuenta desvinculada responde 404 ARCA_NOT_LINKED.
+             */
+            status: components["schemas"]["ArcaAccountStatus"];
+        };
+        /**
+         * @description Paso de la vinculación en el que está la playa:
+         *     - `pending_certificate`: se generó la solicitud (CSR), falta subir el certificado.
+         *     - `pending_sales_point`: certificado verificado, falta el punto de venta (y, en homologación, puede faltar cargar los datos fiscales: `condicionIva` en null).
+         *     - `linked`: vinculada, emite.
+         *     - `cert_expired`: venció el certificado; no emite hasta renovarlo (`account/renewal/*`).
+         *     Una cuenta desvinculada responde 404 ARCA_NOT_LINKED.
+         * @enum {string}
+         */
+        ArcaAccountStatus: "pending_certificate" | "pending_sales_point" | "linked" | "cert_expired" | "unlinked";
+        ArcaCertificateResultDto: {
+            account: components["schemas"]["ArcaAccountDto"];
+            /** @description Si el padrón devolvió los datos fiscales. En homologación suele ser false: hay que cargarlos con PATCH. */
+            padronFound: boolean;
+        };
+        ArcaCsrDto: {
+            /** @example parkit1a2b3c4d */
+            alias: string;
+            /** @description PEM completo, con las líneas BEGIN/END CERTIFICATE REQUEST. */
+            csrPem: string;
+            /** @example parkit1a2b3c4d.csr */
+            fileName: string;
+        };
+        /** @enum {string} */
+        ArcaEnvironment: "homologacion" | "produccion";
+        ArcaReusableCertificateDto: {
+            /** Format: date-time */
+            certExpiresAt?: string | null;
+            cuit: string;
+            razonSocial?: string | null;
+            /** Format: uuid */
+            tenantId: string;
+            tenantName: string;
+        };
+        /**
+         * @description Decide la letra: monotributo y exento emiten C; responsable inscripto, A o B.
+         * @enum {string}
+         */
+        ArcaTaxCondition: "responsable_inscripto" | "monotributo" | "exento";
         AuditEventDto: {
             /** @description Recorded action, e.g. "entity.approved" */
             action: string;
@@ -1527,6 +2450,7 @@ export interface components {
             entityId: string | null;
             entityType: string;
             id: string;
+            metadata: Record<string, never>;
             /** @enum {string} */
             severity: "info" | "warn" | "crit";
         };
@@ -1566,20 +2490,22 @@ export interface components {
              * @description Close timestamp. Defaults to now() on the server.
              */
             closedAt?: string;
-            /** @description Cash left in the drawer for the next shift. Defaults to 0. */
+            /** @description Cash left in the drawer for the next shift. Used only when openNextSession is true. */
             leavingCash?: number;
             /**
              * Format: uuid
-             * @description Client-generated UUIDv7 for the new session.
+             * @description Client-generated UUIDv7 for the new session. Required when openNextSession is true.
              */
-            newSessionId: string;
+            newSessionId?: string;
             notes?: string;
+            /** @description Whether to open the next cash session immediately. Defaults to false. */
+            openNextSession?: boolean;
         };
         CloseCashSessionResponseDto: {
             /** @description Number of active entries reassigned to the new session. */
             carriedOverCount: number;
             closedSession: components["schemas"]["CashSessionDto"];
-            newSession: components["schemas"]["CashSessionDto"];
+            newSession: components["schemas"]["CashSessionDto"] | null;
         };
         CloseEntryDto: {
             /** @description Total amount paid in ARS. Computed from payments[] if provided; otherwise stored directly (legacy / offline fallback). */
@@ -1592,6 +2518,11 @@ export interface components {
             /** @example Cochera 3 */
             cochera?: string;
             /**
+             * @description CUIT del cliente para identificarlo en la factura, con o sin guiones. La letra la decide el padrón (A sólo si el emisor es RI y el receptor RI o monotributista). Un CUIT inválido no hace fallar el cierre: la factura queda pendiente con ARCA_CUIT_INVALID.
+             * @example 30-71234567-1
+             */
+            invoiceReceiverCuit?: string;
+            /**
              * Format: date-time
              * @description Exit timestamp (ISO 8601). Defaults to now on the server if omitted.
              */
@@ -1601,17 +2532,113 @@ export interface components {
             /** @description Payment breakdown per method. When provided, amountPaid is set to the sum. */
             payments?: components["schemas"]["PaymentLineDto"][];
         };
+        CloseEntryResponseDto: {
+            amountPaid?: number;
+            /** Format: uuid */
+            cashSessionId?: string;
+            /** @example Cochera 3 */
+            cochera?: string;
+            /** @example Rojo */
+            color?: string;
+            /** Format: date-time */
+            enteredAt: string;
+            entryCameraId?: string;
+            /** @description URL of the entry photo captured by the LPR camera */
+            entryImageUrl?: string;
+            exitCameraId?: string;
+            exitImageUrl?: string;
+            /** Format: uuid */
+            id: string;
+            /** @description Factura de la estadía. `null` si la playa no factura con ARCA. Un problema al emitir NO hace fallar el cierre: viene en `status`/`errorCode`. */
+            invoice?: components["schemas"]["InvoiceSummaryDto"] | null;
+            /** Format: date-time */
+            leftAt?: string;
+            /** @description Facturada por fuera de Parkit: el checkbox «Facturada» de las playas sin ARCA. */
+            manuallyInvoiced: boolean;
+            /** @example Cliente frecuente */
+            notes?: string;
+            /** @example ABC123 */
+            plate: string;
+            /** Format: uuid */
+            rateId?: string;
+            rateSnapshotFractionPriceArs?: number;
+            rateSnapshotHourPriceArs?: number;
+            rateSnapshotMediaEstadiaPriceArs?: number;
+            rateSnapshotName?: string;
+            rateSnapshotStayPriceArs?: number;
+            /**
+             * @description auto = created by LPR; manual = operator-typed
+             * @example manual
+             */
+            source: string;
+            syncSeq: number;
+            /** Format: uuid */
+            tenantId: string;
+            ticketNumber?: number;
+            /** Format: date-time */
+            updatedAt: string;
+            /**
+             * @description Vehicle brand snapshot.
+             * @example Volkswagen
+             */
+            vehicleBrand?: string;
+            /**
+             * @description Vehicle model snapshot.
+             * @example Bora
+             */
+            vehicleModel?: string;
+            /** @description Snapshot del nombre del tipo al momento del ingreso. Texto y no FK: un ingreso histórico no debe cambiar si el dueño renombra o borra el tipo. */
+            vehicleType?: string | null;
+            version: number;
+            /**
+             * Format: uuid
+             * @description Set when entry was authorized via whitelist
+             */
+            whitelistId?: string;
+        };
+        CorrectEntryDto: {
+            /** @example Cochera 3 */
+            cochera?: string;
+            /** @example Rojo */
+            color?: string;
+            /** Format: date-time */
+            enteredAt?: string;
+            /** Format: date-time */
+            leftAt?: string;
+            /** @description Marca la estadía como facturada por fuera de Parkit (playas sin ARCA). Sólo en estadías cerradas; se permite aunque la caja esté cerrada. */
+            manuallyInvoiced?: boolean;
+            /** @example Cliente frecuente */
+            notes?: string;
+            /** @description Payment breakdown replacing the current active lines. */
+            payments?: components["schemas"]["PaymentLineDto"][];
+            /** @example ABC123 */
+            plate?: string;
+            /** Format: uuid */
+            rateId?: string;
+            rateSnapshotFractionPriceArs?: number;
+            rateSnapshotHourPriceArs?: number;
+            rateSnapshotMediaEstadiaPriceArs?: number;
+            /** @example Tarifa Pick Up */
+            rateSnapshotName?: string;
+            rateSnapshotStayPriceArs?: number;
+            /** @description Required for operator changes to ingreso, egreso or amounts. */
+            reason?: string;
+            /** @example Volkswagen */
+            vehicleBrand?: string;
+            /** @example Bora */
+            vehicleModel?: string;
+        };
         CreateApplicationDto: {
             /**
-             * @description Address of the parking lot.
+             * @description Dirección en una línea (campo de display, legacy). Pasó a ser OPCIONAL: el wizard nuevo manda `location` con los campos separados y su `formatted`. Si se mandan los dos, gana `location.formatted`.
              * @example Av. Corrientes 1234, CABA
              */
-            address: string;
+            address?: string;
             /**
-             * @description CUIT, 11 digits
+             * @description CUIT, 11 digits. OPCIONAL: ya no se pide en el alta. Si viene, tiene que tener 11 dígitos.
              * @example 30123456789
              */
-            cuit: string;
+            cuit?: string;
             /**
              * Format: email
              * @description Contact email of the entity.
@@ -1619,25 +2646,41 @@ export interface components {
              */
             email: string;
             /**
-             * @description Registered legal name of the entity.
+             * @description Registered legal name of the entity. OPCIONAL: ya no se pide en el alta, se completa después desde la configuración del perfil. Ausente → el tenant queda con `legalName` en null.
              * @example Estacionamientos del Centro S.A.
              */
-            legalName: string;
+            legalName?: string;
+            /** @description Dirección estructurada declarada, normalizada en el front contra la API Georef. Opcional: hay borradores en vuelo que sólo traen `address`. Se materializa en columnas de `tenants` al aprobar la solicitud. */
+            location?: components["schemas"]["UpdateEntityAddressDto"];
             /**
              * @description Display name of the parking lot.
              * @example Estacionamiento del Centro
              */
             name: string;
             /**
-             * @description Contact phone of the entity.
-             * @example +541145678900
+             * @description Contact phone of the person in charge, in international E.164 format (with the leading `+` and country code, no spaces).
+             * @example +5491123456789
              */
             phone: string;
+            /** @description Horarios de atención declarados: una fila por franja (un día puede tener varias). Se crean como `schedules` del tenant al aprobar. Se validan con la misma regla que `/schedules` (open < close, sin solapes en el mismo día; franjas contiguas OK) y, si no cumplen, se responde 422 `ONBOARDING_NOT_SUBMITTABLE` con `validationsErrors` en `declaredEntity.schedules.<i>`. Un PATCH con `schedules` REEMPLAZA la lista entera. */
+            schedules?: components["schemas"]["CreateScheduleDto"][];
             /**
              * @description Plazas totales declaradas (van a `tenant.settings.capacity.total`).
              * @example 110
              */
             totalSpots?: number;
+        };
+        CreateArcaAccountDto: {
+            /**
+             * @description Con o sin guiones. Se valida el dígito verificador.
+             * @example 20-12345678-3
+             */
+            cuit: string;
+            /**
+             * @description Número de inscripción en Ingresos Brutos, o «No contribuyente» si la actividad no está alcanzada (RG 1415, Anexo II). Va impreso en la factura. «Exento» no reemplaza al número: un exento está inscripto.
+             * @example 901-123456-7
+             */
+            iibb: string;
         };
         CreateCashSessionDto: {
             /**
@@ -1688,6 +2731,7 @@ export interface components {
             rateId?: string;
             rateSnapshotFractionPriceArs?: number;
             rateSnapshotHourPriceArs?: number;
+            rateSnapshotMediaEstadiaPriceArs?: number;
             /** @example Tarifa Día Auto */
             rateSnapshotName?: string;
             rateSnapshotStayPriceArs?: number;
@@ -1710,8 +2754,15 @@ export interface components {
              */
             role: "owner" | "operator";
         };
+        CreateMpAuthorizationUrlDto: {
+            /**
+             * @description Internal panel route to return to after the callback. Must be a relative path starting with a single `/`: absolute URLs, protocol-relative paths (`//host`) and schemes (`javascript:`) are rejected to keep the callback from becoming an open redirect.
+             * @example /configuracion/cobros
+             */
+            returnPath?: string;
+        };
         CreateParkingDto: {
-            /** @description Street address. */
+            /** @description Dirección en una línea (campo de display, legacy). Si también se manda `location.formatted`, gana ese. */
             address?: string;
             /** @description Tax id (CUIT). */
             cuit?: string;
@@ -1719,6 +2770,8 @@ export interface components {
             email?: string;
             /** @description Registered legal/company name. */
             legalName?: string;
+            /** @description Dirección estructurada. Es el MISMO tenant que edita el dueño desde el portal (misma tabla `tenants`), así que el alta por panel tiene que poder cargarla: si no, un estacionamiento dado de alta acá nace sin los datos que Mercado Pago necesita. */
+            location?: components["schemas"]["UpdateEntityAddressDto"];
             /** @description Display name of the parking lot. */
             name: string;
             /** @description Contact phone. */
@@ -1730,11 +2783,47 @@ export interface components {
              */
             status: "active" | "maintenance";
         };
+        CreatePaymentIntentDto: {
+            /**
+             * @description Amount to charge, in ARS, frozen at creation time and never recalculated: the recovery path re-posts the exact same body to Mercado Pago under the same idempotency key.
+             * @example 1500
+             */
+            amount: number;
+            /**
+             * Format: uuid
+             * @description Stay being charged. It must belong to `:tenantId` and still be open (no exit registered).
+             * @example 018f44f7-1111-7f75-9e9c-44ed9432fc12
+             */
+            entryId: string;
+            /**
+             * Format: uuid
+             * @description Client-generated UUIDv7, same convention as entries and cash sessions. Re-sending the same id returns the existing payment intent instead of creating a second one, which is what makes this endpoint safe to retry after a timeout.
+             * @example 018f44f7-9a96-7f75-9e9c-44ed9432fc12
+             */
+            id: string;
+        };
         CreatePaymentMethodDto: {
             /** @example Naranja X */
             name: string;
         };
+        CreateQuoteDto: {
+            /**
+             * Format: date-time
+             * @example 2026-09-30T10:00:00-03:00
+             */
+            entryAt: string;
+            /**
+             * Format: date-time
+             * @example 2026-09-30T13:00:00-03:00
+             */
+            exitAt: string;
+        };
         CreateRateDto: {
+            /**
+             * @description Si la fracción se deriva de hora / 12 en el formulario. Preferencia de UI: el valor derivado se guarda igual en fractionPriceArs.
+             * @example false
+             */
+            autoFractionPrice?: boolean;
             /**
              * @description Precio de la fraccion en ARS.
              * @example 300
@@ -1751,6 +2840,11 @@ export interface components {
              * @example 018f44f7-9a96-7f75-9e9c-44ed9432fc12
              */
             id: string;
+            /**
+             * @description Tope de las primeras 12 horas en ARS. 0 = la tarifa no tiene este escalón.
+             * @example 12000
+             */
+            mediaEstadiaPriceArs: number;
             /** @example DIA AUTO */
             name: string;
             /**
@@ -1763,6 +2857,30 @@ export interface components {
              * @example 8000
              */
             stayPriceArs: number;
+        };
+        CreateReservationDto: {
+            /**
+             * Format: date-time
+             * @example 2026-09-30T10:00:00-03:00
+             */
+            entryAt: string;
+            /**
+             * Format: date-time
+             * @example 2026-09-30T13:00:00-03:00
+             */
+            exitAt: string;
+            /**
+             * Format: uuid
+             * @description Lo genera el cliente: es la clave de idempotencia. Reintentar con el mismo id devuelve la reserva ya creada.
+             */
+            id: string;
+            /** Format: uuid */
+            parkingId: string;
+            /**
+             * @description Se normaliza (mayúsculas, sin espacios ni guiones).
+             * @example AB123CD
+             */
+            vehiclePlate: string;
         };
         CreateScheduleDto: {
             /**
@@ -1781,6 +2899,22 @@ export interface components {
              * @example 480
              */
             openMinute: number;
+        };
+        CreateStaffMemberDto: {
+            /**
+             * Format: email
+             * @description Email de una cuenta **ya registrada** en Parkit. Se normaliza (trim + minúsculas) antes de buscarla.
+             *
+             *     No hay flujo de invitación: si nadie se registró con ese mail, la respuesta es `404 USER_NOT_FOUND` y la persona tiene que crearse la cuenta primero.
+             * @example ana@example.com
+             */
+            email: string;
+            /**
+             * @description Rol en **este** lote. `owner` está permitido: un dueño puede nombrar a otro dueño.
+             * @example operator
+             * @enum {string}
+             */
+            role: "owner" | "operator";
         };
         CreateVehicleDto: {
             /** @example Toyota */
@@ -1809,6 +2943,60 @@ export interface components {
             /** @example Utilitario */
             name: string;
         };
+        DayComparisonDto: {
+            /**
+             * @description Civil day these totals cover, `YYYY-MM-DD` in the requested timezone.
+             * @example 2026-08-27
+             */
+            day: string;
+            /**
+             * @description Sum of `amountPaid` over entries closed in the window, in ARS. Counts revenue at exit time, since payments carry no timestamp of their own.
+             * @example 184500
+             */
+            revenue: number;
+            /**
+             * @description Relative change of today vs this baseline (`(today - base) / base`). `null` when the baseline is 0, so the client renders "sin datos" instead of an infinite jump.
+             * @example 0.153
+             */
+            revenueDeltaPct: number | null;
+            /**
+             * @description Entries whose `enteredAt` falls in the window.
+             * @example 71
+             */
+            vehiclesIn: number;
+            /**
+             * @description Relative change of `vehiclesIn` vs this baseline. `null` when the baseline is 0.
+             * @example 0.092
+             */
+            vehiclesInDeltaPct: number | null;
+            /**
+             * @description Entries whose `leftAt` falls in the window (exits, i.e. charged stays).
+             * @example 63
+             */
+            vehiclesOut: number;
+        };
+        DayTotalsDto: {
+            /**
+             * @description Civil day these totals cover, `YYYY-MM-DD` in the requested timezone.
+             * @example 2026-08-27
+             */
+            day: string;
+            /**
+             * @description Sum of `amountPaid` over entries closed in the window, in ARS. Counts revenue at exit time, since payments carry no timestamp of their own.
+             * @example 184500
+             */
+            revenue: number;
+            /**
+             * @description Entries whose `enteredAt` falls in the window.
+             * @example 71
+             */
+            vehiclesIn: number;
+            /**
+             * @description Entries whose `leftAt` falls in the window (exits, i.e. charged stays).
+             * @example 63
+             */
+            vehiclesOut: number;
+        };
         DeleteVehicleTypeResultDto: {
             /**
              * Format: uuid
@@ -1817,6 +3005,52 @@ export interface components {
             reassignedToTypeId: string | null;
             /** @description Cuántos vehículos se movieron al tipo destino. Cada uno recibe su propio `syncSeq` y `version`, así que viajan por /vehicles/changes. */
             reassignedVehicles: number;
+        };
+        DesktopCameraConfigDto: {
+            /**
+             * @description Stable camera identifier sent with LPR detections.
+             * @example entrada-rivadavia
+             */
+            cameraId: string;
+            /**
+             * @description OpenCV webcam index.
+             * @example 0
+             */
+            deviceIndex: number;
+            /**
+             * @description IP camera host. Empty for webcam mode.
+             * @example 192.168.1.26
+             */
+            host: string;
+            /**
+             * @description Camera location.
+             * @example entrada
+             * @enum {string}
+             */
+            location: "entrada" | "salida";
+            /**
+             * @description Video source mode.
+             * @example ip
+             * @enum {string}
+             */
+            mode: "webcam" | "ip";
+            /**
+             * @description IP camera RTSP port.
+             * @example 554
+             */
+            port: number;
+            /**
+             * @description IP camera stream path.
+             * @example /h264_stream
+             */
+            streamPath: string;
+            /** @description Camera detection tuning, including ROI. Passwords are never stored here. */
+            tuning: Record<string, never> | null;
+            /**
+             * @description IP camera username. Password is intentionally not persisted.
+             * @example admin
+             */
+            username: string;
         };
         DocumentSignedUrlDto: {
             /**
@@ -1830,6 +3064,138 @@ export interface components {
              */
             url: string;
         };
+        DriverNearbyParkingDto: {
+            /** @description Toma reservas: servicio activado, con tarifa de reservas y cupo configurados. */
+            acceptsReservations: boolean;
+            address: string | null;
+            /** @description Lugares libres ahora: capacidad − vehículos adentro. null si la playa no declaró capacidad (no es lo mismo que 0). */
+            availableSpots: number | null;
+            /** @description Distancia al centro buscado. */
+            distanceMeters: number;
+            /** Format: uuid */
+            id: string;
+            latitude: number;
+            longitude: number;
+            name: string;
+            /** @description null si la playa no cargó horarios. */
+            openNow: boolean | null;
+            /** @description Precio de la hora de la tarifa de reservas en ARS, igual para cualquier vehículo. null si la playa no toma reservas. */
+            reservationHourPriceArs: number | null;
+            totalSpots: number | null;
+        };
+        DriverParkingDetailDto: {
+            /** @description Toma reservas: servicio activado, con tarifa de reservas y cupo configurados. */
+            acceptsReservations: boolean;
+            address: string | null;
+            /** @description Lugares libres ahora: capacidad − vehículos adentro. null si la playa no declaró capacidad (no es lo mismo que 0). */
+            availableSpots: number | null;
+            /** Format: uuid */
+            id: string;
+            latitude: number;
+            longitude: number;
+            name: string;
+            /** @description null si la playa no cargó horarios. */
+            openNow: boolean | null;
+            /** @description Precio de la hora de la tarifa de reservas en ARS, igual para cualquier vehículo. null si la playa no toma reservas. */
+            reservationHourPriceArs: number | null;
+            /** @description Días hacia adelante en los que se puede reservar. */
+            reservationMaxDaysAhead: number;
+            /** @description Rangos de apertura por día; vacío si no hay horarios. */
+            schedules: components["schemas"]["DriverScheduleDto"][];
+            totalSpots: number | null;
+        };
+        DriverReservationDto: {
+            /** @description Se puede cancelar (activa y sin empezar). */
+            cancellable: boolean;
+            /** @description Código corto para mostrar (R-XXXXXX). */
+            code: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            entryAt: string;
+            /** Format: date-time */
+            exitAt: string;
+            /** Format: uuid */
+            id: string;
+            latitude: number | null;
+            longitude: number | null;
+            parkingAddress: string | null;
+            /** Format: uuid */
+            parkingId: string;
+            parkingName: string;
+            rateName: string;
+            state: components["schemas"]["DriverReservationState"];
+            totalArs: number;
+            vehiclePlate: string;
+        };
+        /** @enum {string} */
+        DriverReservationState: "active" | "completed" | "cancelled";
+        DriverScheduleDto: {
+            /** @description Minutos desde 00:00. */
+            closeMinute: number;
+            day: components["schemas"]["ScheduleDay"];
+            /** @description Minutos desde 00:00. */
+            openMinute: number;
+        };
+        EntityAddressDto: {
+            /**
+             * @description Localidad.
+             * @example Balvanera
+             */
+            cityName: string | null;
+            /**
+             * @description Piso y/o departamento. Sólo para contacto/facturación; Mercado Pago no lo usa en la ubicación del Store.
+             * @example PB
+             */
+            floor: string | null;
+            /**
+             * @description Dirección completa en una línea, para mostrar. Es el espejo de la columna `address` (la `nomenclatura` que devuelve Georef). `null` si no se cargó.
+             * @example Av. Corrientes 1234, Balvanera, CABA
+             */
+            formatted: string | null;
+            /**
+             * Format: date-time
+             * @description Cuándo se normalizó/cargó la dirección estructurada (ISO-8601 UTC). `null` si nunca se cargó.
+             * @example 2026-09-13T16:46:17.000Z
+             */
+            geocodedAt: string | null;
+            /**
+             * @description Origen de la dirección estructurada: `georef` (normalizada por la API Georef del Estado) o `manual` (cargada a mano). `null` si nunca se cargó.
+             * @example georef
+             * @enum {string|null}
+             */
+            geocodingSource: "georef" | "manual" | null;
+            /**
+             * @description Latitud en grados decimales (hasta 6 decimales). Siempre viene junto con `longitude` o las dos en `null`: media coordenada está prohibida por el CHECK `tenants_coordinates_paired`.
+             * @example -34.603722
+             */
+            latitude: number | null;
+            /**
+             * @description Longitud en grados decimales (hasta 6 decimales). Ver `latitude`.
+             * @example -58.381592
+             */
+            longitude: number | null;
+            /**
+             * @description Código postal.
+             * @example C1043
+             */
+            postalCode: string | null;
+            /**
+             * @description Provincia (o Ciudad Autónoma de Buenos Aires).
+             * @example Ciudad Autónoma de Buenos Aires
+             */
+            stateName: string | null;
+            /**
+             * @description Nombre de la calle, sin altura.
+             * @example Avenida Corrientes
+             */
+            streetName: string | null;
+            /**
+             * @description Altura de la calle. Es texto y NO un número a propósito: la numeración real incluye `S/N`, `1234 bis` y `Km 5`.
+             * @example 1234
+             */
+            streetNumber: string | null;
+        };
         EntityCapacityDto: {
             /**
              * @description Plazas totales del estacionamiento.
@@ -1839,7 +3205,7 @@ export interface components {
         };
         EntityProfileDto: {
             /**
-             * @description Address, or `null` if not provided.
+             * @description Dirección en una línea, para mostrar. Se conserva por retrocompatibilidad y es el mismo valor que `location.formatted`. Los campos separados que necesita Mercado Pago están en `location`.
              * @example Av. Corrientes 1234, CABA
              */
             address: string | null;
@@ -1855,12 +3221,24 @@ export interface components {
              * @example 30123456789
              */
             cuit: string | null;
+            /** @description Desktop camera configuration owned by the entity, excluding the camera password. */
+            desktopCameraConfig: components["schemas"]["DesktopCameraConfigDto"] | null;
             /**
              * Format: email
              * @description Contact email, or `null` if not provided.
              * @example contacto@estacionamiento.com
              */
             email: string | null;
+            /**
+             * @description Stable identifier of this parking lot's entrance camera, or null when none is configured. It is what every LPR detection of this lot carries as `cameraId`.
+             * @example cam-entrada
+             */
+            entryCameraId: string | null;
+            /**
+             * @description Human-readable name of the entrance camera, or null.
+             * @example Portón Rivadavia
+             */
+            entryCameraLabel: string | null;
             /**
              * Format: uuid
              * @description Entity (tenant) id (UUID).
@@ -1872,6 +3250,14 @@ export interface components {
              * @example Estacionamientos del Centro S.A.
              */
             legalName: string | null;
+            /** @description Dirección estructurada (calle, altura, localidad, provincia, coordenadas). Campos separados porque Mercado Pago los necesita así para dar de alta el `Store` del cobro con QR. Todos pueden venir en `null`: las filas anteriores a la migración 20260913164617 no tienen los campos cargados y no se hizo backfill. */
+            location: components["schemas"]["EntityAddressDto"];
+            /**
+             * @description Days a `registered` LPR detection image is kept after the stay exit before the retention job purges it. Owner-configurable, one of 30/60/90; defaults to 30. Readable by any member, editable only by an owner.
+             * @example 30
+             * @enum {integer}
+             */
+            lprImageRetentionDays: 30 | 60 | 90;
             /**
              * @description Display name of the entity (parking lot).
              * @example Estacionamiento del Centro
@@ -1890,6 +3276,8 @@ export interface components {
              * @enum {string}
              */
             status: "active" | "maintenance";
+            /** @description Ticket template owned by the entity. Null means clients should use their built-in default or a local fallback. */
+            ticketTemplate: components["schemas"]["TicketTemplateDto"] | null;
         };
         EntitySummaryDto: {
             /** @description Street address of the entity, or `null` if not provided. */
@@ -1936,6 +3324,8 @@ export interface components {
             id: string;
             /** Format: date-time */
             leftAt?: string;
+            /** @description Facturada por fuera de Parkit: el checkbox «Facturada» de las playas sin ARCA. */
+            manuallyInvoiced: boolean;
             /** @example Cliente frecuente */
             notes?: string;
             /** @example ABC123 */
@@ -1944,6 +3334,7 @@ export interface components {
             rateId?: string;
             rateSnapshotFractionPriceArs?: number;
             rateSnapshotHourPriceArs?: number;
+            rateSnapshotMediaEstadiaPriceArs?: number;
             rateSnapshotName?: string;
             rateSnapshotStayPriceArs?: number;
             /**
@@ -2033,6 +3424,207 @@ export interface components {
              */
             uptime: number;
         };
+        InvoiceBatchItemDto: {
+            /** Format: uuid */
+            entryId: string;
+            /** @description Por qué no salió: el `errorCode` de la factura o el del conflicto (INVOICE_ALREADY_ISSUED, INVOICE_NOT_INVOICEABLE, …). null si se emitió. */
+            errorCode?: string | null;
+            /** @description La factura como quedó; null si ni se intentó. */
+            invoice?: components["schemas"]["InvoiceSummaryDto"] | null;
+        };
+        InvoiceBatchResponseDto: {
+            results: components["schemas"]["InvoiceBatchItemDto"][];
+        };
+        InvoiceChangesResponseDto: {
+            items: components["schemas"]["InvoiceDto"][];
+            /** @description Highest sync sequence included in this page. */
+            maxSeq: number;
+        };
+        InvoiceDocumentDto: {
+            /** @example 86390926440543 */
+            cae: string;
+            /** @example 2026-10-04 */
+            caeFechaVencimiento: string;
+            /** @example 2026-09-24 */
+            cbteFecha: string;
+            /** @enum {string} */
+            cbteLetra: "A" | "B" | "C";
+            /** @example 7 */
+            cbteNro: number;
+            /**
+             * @description 1 = A, 6 = B, 11 = C.
+             * @example 6
+             */
+            cbteTipo: number;
+            /** @example Contado */
+            condicionVenta: string;
+            emisor: components["schemas"]["InvoiceDocumentEmisorDto"];
+            /** @example 2026-09-24 */
+            fechaServicioDesde: string | null;
+            /** @example 2026-09-24 */
+            fechaServicioHasta: string | null;
+            /** @example 2026-09-24 */
+            fechaVtoPago: string;
+            /** @example 0 */
+            importeIva: number;
+            /**
+             * @description En la B y la C, el total (la plantilla lo muestra como «Subtotal»).
+             * @example 1210
+             */
+            importeNetoGravado: number;
+            /** @example 1210 */
+            importeTotal: number;
+            items: components["schemas"]["InvoiceDocumentItemDto"][];
+            /** @description Sólo en la Factura A; vacío en la B y la C. */
+            iva: components["schemas"]["InvoiceDocumentIvaDto"][];
+            /** @description En la B, la leyenda del Régimen de Transparencia Fiscal al Consumidor. */
+            observaciones: string | null;
+            /** @example 1 */
+            puntoVenta: number;
+            /**
+             * @description El link del QR de la RG 4892, ya armado.
+             * @example https://www.afip.gob.ar/fe/qr/?p=eyJ2ZXIiOjF9
+             */
+            qrUrl: string;
+            receptor: components["schemas"]["InvoiceDocumentReceptorDto"];
+        };
+        InvoiceDocumentEmisorDto: {
+            /** @example IVA Responsable Inscripto */
+            condicionIva: string;
+            /**
+             * @description Sólo dígitos.
+             * @example 20447275865
+             */
+            cuit: string;
+            /** @example AV SIEMPRE VIVA 742, CABA */
+            domicilioComercial: string;
+            /** @example 2020-01-01 */
+            fechaInicioActividades: string | null;
+            /** @example 901-000000-0 */
+            iibb: string;
+            /** @example DE LA CRUZ JUAN MARTIN */
+            razonSocial: string;
+        };
+        InvoiceDocumentItemDto: {
+            /** @description Sólo en la Factura A, que discrimina IVA. */
+            alicuotaIva: number | null;
+            /** @example 1 */
+            cantidad: number;
+            /** @example Estadía AB123CD – 24/09/2026 10:00 a 24/09/2026 12:30 */
+            descripcion: string;
+            /** @example 1210 */
+            precioUnitario: number;
+            /** @example 1210 */
+            subtotal: number;
+            /** @example unidades */
+            unidadMedida: string;
+        };
+        InvoiceDocumentIvaDto: {
+            /** @example 1000 */
+            baseImponible: number;
+            /** @example 21% */
+            descripcion: string;
+            /** @example 210 */
+            importe: number;
+        };
+        InvoiceDocumentReceptorDto: {
+            /** @example Consumidor Final */
+            condicionIva: string;
+            /**
+             * @description `0` si no se identifica.
+             * @example 0
+             */
+            documentoNro: string;
+            /** @enum {string} */
+            documentoTipo: "CUIT" | "Sin Identificar";
+            /** @example Consumidor Final */
+            razonSocial: string;
+        };
+        InvoiceDto: {
+            /** @example 86380920935994 */
+            cae?: string | null;
+            /**
+             * Format: date
+             * @description Vencimiento del CAE (AAAA-MM-DD).
+             */
+            caeVto?: string | null;
+            /** Format: date */
+            cbteFch?: string | null;
+            cbteNro?: number | null;
+            /** @description Código de ARCA: 1 = A, 6 = B, 11 = C. */
+            cbteTipo?: number | null;
+            /** Format: uuid */
+            entryId: string;
+            /** @description Código estable (`ARCA_*` / `INVOICE_*`) del último problema. */
+            errorCode?: string | null;
+            /** @description Detalle, por ejemplo las observaciones de ARCA al rechazar. */
+            errorMessage?: string | null;
+            /** Format: uuid */
+            id: string;
+            impIva?: number | null;
+            impNeto?: number | null;
+            impTotal: number;
+            /** Format: date-time */
+            issuedAt?: string | null;
+            ptoVta?: number | null;
+            /** @description CUIT del receptor, o `0` a consumidor final. */
+            receptorDocNro?: string | null;
+            /** @description DocTipo de ARCA: 80 = CUIT (Factura A), 99 = consumidor final. */
+            receptorDocTipo?: number | null;
+            /** @description A quién se emitió: «Consumidor Final» o la razón social del receptor de la A. */
+            receptorNombre?: string | null;
+            status: components["schemas"]["InvoiceStatus"];
+            syncSeq: number;
+            /** Format: uuid */
+            tenantId: string;
+            /** Format: date-time */
+            updatedAt: string;
+            version: number;
+        };
+        InvoiceReceiverDto: {
+            condicionIvaReceptorId: number | null;
+            /** @example 30712345671 */
+            cuit: string;
+            /** Format: date-time */
+            lastUsedAt: string;
+            /** @example EMPRESA SA */
+            razonSocial: string | null;
+        };
+        /** @enum {string} */
+        InvoiceStatus: "not_required" | "pending" | "issuing" | "issued" | "error";
+        InvoiceSummaryDto: {
+            /** @example 86380920935994 */
+            cae?: string | null;
+            /**
+             * Format: date
+             * @description Vencimiento del CAE (AAAA-MM-DD).
+             */
+            caeVto?: string | null;
+            cbteNro?: number | null;
+            /** @description Código de ARCA: 1 = A, 6 = B, 11 = C. */
+            cbteTipo?: number | null;
+            /** @description Código estable (`ARCA_*` / `INVOICE_*`) del último problema. */
+            errorCode?: string | null;
+            /** @description Detalle, por ejemplo las observaciones de ARCA al rechazar. */
+            errorMessage?: string | null;
+            /** Format: uuid */
+            id: string;
+            ptoVta?: number | null;
+            /** @description A quién se emitió: «Consumidor Final» o la razón social del receptor de la A. */
+            receptorNombre?: string | null;
+            status: components["schemas"]["InvoiceStatus"];
+        };
+        IssueInvoiceBatchDto: {
+            /** @description Estadías cobradas a facturar a consumidor final (1 a 50). */
+            entryIds: string[];
+        };
+        IssueInvoiceDto: {
+            /**
+             * @description CUIT del cliente, con o sin guiones. La letra la decide el padrón: A si el emisor es RI y el receptor RI o monotributista; si no, B o C identificada con el CUIT. Sin él se emite a consumidor final.
+             * @example 30-71234567-1
+             */
+            receiverCuit?: string;
+        };
         LoginDto: {
             /**
              * Format: email
@@ -2080,6 +3672,7 @@ export interface components {
             lastSeenAt: string;
             location: string;
             normalizedText?: string | null;
+            plateBbox?: components["schemas"]["PlateBboxDto"] | null;
             /** @enum {string} */
             qualityStatus: "valid_high" | "valid_low" | "invalid_format" | "low_confidence";
             rawText?: string | null;
@@ -2130,6 +3723,8 @@ export interface components {
              * @enum {string}
              */
             role: "owner" | "operator";
+            /** @description Entity (tenant) street address as one display line, or `null` if the entity never declared one. The desktop prints it on the entry ticket. */
+            tenantAddress: string | null;
             /**
              * Format: uuid
              * @description Entity (tenant) id.
@@ -2146,12 +3741,238 @@ export interface components {
             /** @description Entities the caller belongs to, with their per-entity role. */
             memberships: components["schemas"]["MeMembershipDto"][];
             /**
+             * @description Full name of the user, or `null` for accounts created before the name was required (or social logins without a name).
+             * @example Jane Doe
+             */
+            name: string | null;
+            /**
              * @description GLOBAL platform role (`admin | user`).
              * @enum {string}
              */
             role: "admin" | "user";
         };
+        MetricsProjectionsDto: {
+            monthHistoricalForecast: components["schemas"]["RevenueProjectionDto"];
+            monthWithOpenEntries: components["schemas"]["RevenueProjectionDto"];
+            todayHistoricalForecast: components["schemas"]["RevenueProjectionDto"];
+            todayWithOpenEntries: components["schemas"]["RevenueProjectionDto"];
+        };
+        MetricsSummaryDto: {
+            alerts: components["schemas"]["SummaryAlertsDto"];
+            comparison: components["schemas"]["SummaryComparisonDto"];
+            /**
+             * @description Current civil day in `tz`, `YYYY-MM-DD`.
+             * @example 2026-08-27
+             */
+            day: string;
+            /**
+             * Format: date-time
+             * @description Instant the snapshot was taken. Also the upper bound of the "today" window and the offset the baselines are truncated to.
+             */
+            generatedAt: string;
+            /** @description Live occupancy at `generatedAt`. */
+            occupancy: components["schemas"]["OccupancyDto"];
+            projections: components["schemas"]["MetricsProjectionsDto"];
+            /** @description Totals from the start of the current civil day up to `generatedAt`. */
+            today: components["schemas"]["DayTotalsDto"];
+            /**
+             * @description IANA timezone the civil days were computed in.
+             * @example America/Argentina/Buenos_Aires
+             */
+            tz: string;
+        };
+        MpAccountDto: {
+            /**
+             * Format: date-time
+             * @description When the current access token expires. Renewed by the refresh job; exposed so the panel can warn before it lapses.
+             * @example 2026-09-14T01:00:00.000Z
+             */
+            accessTokenExpiresAt: string;
+            /**
+             * Format: date-time
+             * @description Row creation timestamp.
+             * @example 2026-09-14T01:00:00.000Z
+             */
+            createdAt: string;
+            /**
+             * @description Our own POS identifier (`external_id` on the Mercado Pago side).
+             * @example parkit-11111111
+             */
+            externalPosId?: string | null;
+            /**
+             * Format: uuid
+             * @description Identifier of the linked Mercado Pago account row.
+             * @example 9f1c2b3a-4d5e-4f6a-8b9c-0d1e2f3a4b5c
+             */
+            id: string;
+            /**
+             * Format: date-time
+             * @description Last SUCCESSFUL token refresh. Null while the tokens are still the original ones.
+             * @example null
+             */
+            lastRefreshAt?: string | null;
+            /**
+             * Format: date-time
+             * @description When the link was completed. Separate from `createdAt` because re-linking rewrites the row.
+             * @example 2026-09-14T01:00:00.000Z
+             */
+            linkedAt: string;
+            /**
+             * @description Seller identifier in Mercado Pago. NOT unique across entities: one owner with several parking lots has a single Mercado Pago account and separates lots by store/POS.
+             * @example 446566691
+             */
+            mpUserId: string;
+            /**
+             * @description Mercado Pago `POS` identifier: the till the QR code is generated against.
+             * @example 2711382
+             */
+            posId?: string | null;
+            /**
+             * @description URL of the static QR image for this entity.
+             * @example https://www.mercadopago.com/instore/merchant/qr/2711382/abc123.png
+             */
+            qrImageUrl?: string | null;
+            /**
+             * @description URL of the printable PDF carrying the QR code — the sign the owner puts on the counter.
+             * @example https://www.mercadopago.com/instore/merchant/qr/2711382/template_abc123.pdf
+             */
+            qrTemplateDocumentUrl?: string | null;
+            /**
+             * @description Consecutive refresh failures. A counter, not a flag: a single Mercado Pago 500 must not knock an entity offline.
+             * @example 0
+             */
+            refreshFailureCount: number;
+            /**
+             * @description Lifecycle of the link. `linked` is operational; `token_expired` needs the owner to re-authorize; `revoked` means the link was undone.
+             * @example linked
+             */
+            status: components["schemas"]["MpAccountStatus"];
+            /**
+             * @description Mercado Pago `Store` identifier created for this entity.
+             * @example 1234567
+             */
+            storeId?: string | null;
+            /**
+             * Format: uuid
+             * @description Entity (parking lot / tenant) that owns this linked account.
+             * @example 11111111-1111-7111-8111-111111111111
+             */
+            tenantId: string;
+            /**
+             * Format: date-time
+             * @description Row last-update timestamp.
+             * @example 2026-09-14T01:00:00.000Z
+             */
+            updatedAt: string;
+        };
+        /**
+         * @description Lifecycle of the link. `linked` is operational; `token_expired` needs the owner to re-authorize; `revoked` means the link was undone.
+         * @enum {string}
+         */
+        MpAccountStatus: "linked" | "token_expired" | "revoked";
+        MpAuthorizationUrlDto: {
+            /**
+             * @description Mercado Pago authorization URL the owner must open to grant access. Carries the PKCE `code_challenge` and the single-use `state`.
+             * @example https://auth.mercadopago.com/authorization?client_id=123&response_type=code&platform_id=mp&state=6f9619ff-8b86-4d01-b42d-00cf4fc964ff&redirect_uri=https%3A%2F%2Fpanel.parkit.app%2Fintegraciones%2Fmercadopago%2Fcallback&code_challenge=E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM&code_challenge_method=S256
+             */
+            authorizationUrl: string;
+            /**
+             * Format: date-time
+             * @description When the `state` expires (10 minutes), matching the lifetime of the Mercado Pago authorization code itself.
+             * @example 2026-09-14T01:10:00.000Z
+             */
+            expiresAt: string;
+            /**
+             * Format: uuid
+             * @description The single-use `state` tying the callback to this flow. Returned so the client can correlate, never to be reused.
+             * @example 6f9619ff-8b86-4d01-b42d-00cf4fc964ff
+             */
+            state: string;
+        };
+        MpOauthCallbackDto: {
+            /**
+             * @description The `authorization_code` Mercado Pago returned in the redirect. Single-use and valid for 10 minutes.
+             * @example TG-1a2b3c4d5e6f7a8b9c0d1e2f-241983636
+             */
+            code: string;
+            /**
+             * Format: uuid
+             * @description The `state` issued when the flow started. Single-use: it is consumed atomically, so a replayed callback is rejected.
+             * @example 6f9619ff-8b86-4d01-b42d-00cf4fc964ff
+             */
+            state: string;
+        };
+        MpOauthCallbackResultDto: {
+            /** @description The freshly linked Mercado Pago account. Never carries tokens. */
+            account: components["schemas"]["MpAccountDto"];
+            /**
+             * @description Internal panel route the flow started from, validated when it was stored. Null when the caller did not ask for one.
+             * @example /configuracion/cobros
+             */
+            returnPath?: string | null;
+        };
         Object: Record<string, never>;
+        OccupancyByVehicleTypeDto: {
+            /** @description Open entries of this type. */
+            occupied: number;
+            /**
+             * @description Vehicle type of the open entries — the name snapshotted from the tenant’s `vehicle-types` catalogue at ingress — or `unknown` when the entry never declared one.
+             * @example Auto
+             */
+            type: string;
+        };
+        OccupancyDto: {
+            /**
+             * @description Total spots, from `tenant.settings.capacity.total` (the entity profile). `0` when the lot has not declared its capacity yet.
+             * @example 100
+             */
+            capacity: number;
+            /**
+             * @description Free spots, or `null` when capacity is unknown. Floored at 0 — a lot can be overbooked past its configured capacity.
+             * @example 37
+             */
+            free: number | null;
+            /**
+             * @description Occupied over capacity, `0`–`1` (may exceed 1 if overbooked). `null` when capacity is unknown, so the client can show "sin configurar" instead of a fake 0%.
+             * @example 0.63
+             */
+            occupancyPct: number | null;
+            /**
+             * @description Vehicles currently inside (entries with no `leftAt`).
+             * @example 63
+             */
+            occupied: number;
+        };
+        OccupancyResponseDto: {
+            /**
+             * @description Open entries grouped by `vehicleType`, most occupied first. **Best effort, counts only.**
+             *
+             *     Two caveats the UI must respect: `vehicleType` is only populated on LPR ingress (`source = "auto"`), so lots working manually report almost everything under `unknown`; and capacity is a single lot-wide total, not a per-type quota, so these counts cannot be turned into percentages.
+             *
+             *     The names come from the entries themselves, not from the live catalogue: a type the owner has since renamed or deleted still shows up here under the name it had at ingress.
+             */
+            byVehicleType: components["schemas"]["OccupancyByVehicleTypeDto"][];
+            /**
+             * @description Total spots, from `tenant.settings.capacity.total` (the entity profile). `0` when the lot has not declared its capacity yet.
+             * @example 100
+             */
+            capacity: number;
+            /**
+             * @description Free spots, or `null` when capacity is unknown. Floored at 0 — a lot can be overbooked past its configured capacity.
+             * @example 37
+             */
+            free: number | null;
+            /**
+             * @description Occupied over capacity, `0`–`1` (may exceed 1 if overbooked). `null` when capacity is unknown, so the client can show "sin configurar" instead of a fake 0%.
+             * @example 0.63
+             */
+            occupancyPct: number | null;
+            /**
+             * @description Vehicles currently inside (entries with no `leftAt`).
+             * @example 63
+             */
+            occupied: number;
+        };
         OnboardingApplicationDto: {
             /**
              * @description ISO-8601 UTC timestamp of creation.
@@ -2201,6 +4022,36 @@ export interface components {
              */
             tenantId: string | null;
         };
+        OpenEntriesByRateDto: {
+            counts: components["schemas"]["OpenEntriesForRateDto"][];
+            /** @description Autos adentro SIN tarifa asignada — los que creó la cámara. No los alcanza ninguna propagación porque no tienen precio congelado. */
+            withoutRate: number;
+        };
+        OpenEntriesForRateDto: {
+            /** @description Autos adentro con esta tarifa. */
+            openEntries: number;
+            /** Format: uuid */
+            rateId: string;
+        };
+        PaginatedAuditDto: {
+            /** @description Events on this page, most recent first. */
+            items: components["schemas"]["AuditEventDto"][];
+            /**
+             * @description 1-based page number.
+             * @example 1
+             */
+            page: number;
+            /**
+             * @description Items per page.
+             * @example 20
+             */
+            pageSize: number;
+            /**
+             * @description Total events matching the filters, across every page.
+             * @example 137
+             */
+            total: number;
+        };
         PaginatedLprDetectionEventsDto: {
             items: components["schemas"]["LprDetectionEventDto"][];
             /**
@@ -2237,6 +4088,25 @@ export interface components {
              */
             total: number;
         };
+        PaginatedStaffDto: {
+            /** @description People on this page, ordered by name then email. */
+            items: components["schemas"]["StaffMemberDto"][];
+            /**
+             * @description 1-based page number.
+             * @example 1
+             */
+            page: number;
+            /**
+             * @description Items per page.
+             * @example 20
+             */
+            pageSize: number;
+            /**
+             * @description Total matching **people** (not memberships).
+             * @example 7
+             */
+            total: number;
+        };
         PaginatedUsersDto: {
             items: components["schemas"]["AdminUserDto"][];
             /**
@@ -2256,7 +4126,7 @@ export interface components {
             total: number;
         };
         ParkingDto: {
-            /** @description Street address, if any. */
+            /** @description Dirección en una línea, para mostrar. Mismo valor que `location.formatted`; se conserva por retrocompatibilidad. */
             address: string | null;
             /**
              * Format: date-time
@@ -2274,6 +4144,8 @@ export interface components {
             id: string;
             /** @description Registered legal/company name, if any. */
             legalName: string | null;
+            /** @description Dirección estructurada (calle, altura, localidad, provincia, coordenadas). Campos en `null` cuando el estacionamiento es anterior a la migración 20260913164617: no hubo backfill. */
+            location: components["schemas"]["EntityAddressDto"];
             /** @description Display name of the parking lot. */
             name: string;
             /** @description Contact phone, if any. */
@@ -2284,6 +4156,101 @@ export interface components {
              */
             status: "active" | "maintenance";
         };
+        PaymentIntentDto: {
+            /**
+             * @description Amount to charge, in ARS. Frozen when the intent was created.
+             * @example 1500
+             */
+            amount: number;
+            /**
+             * Format: date-time
+             * @description When Mercado Pago credited the payment. It is the instant reported by Mercado Pago, not ours.
+             * @example 2026-09-21T03:02:11.000Z
+             */
+            approvedAt?: string | null;
+            /**
+             * Format: date-time
+             * @description When the intent was turned into a payment transaction and closed the stay.
+             * @example null
+             */
+            consumedAt?: string | null;
+            /**
+             * Format: date-time
+             * @example 2026-09-21T03:00:00.000Z
+             */
+            createdAt: string;
+            /**
+             * Format: uuid
+             * @description Operator who ordered the charge. Null when the row was written by the webhook or the reconciler, or when that user was deleted.
+             * @example 22222222-2222-7222-8222-222222222222
+             */
+            createdByUserId?: string | null;
+            /**
+             * Format: uuid
+             * @description Stay being charged.
+             * @example 018f44f7-1111-7f75-9e9c-44ed9432fc12
+             */
+            entryId: string;
+            /**
+             * Format: date-time
+             * @description When this intent stops being usable. Computed once at creation from the same TTL sent to Mercado Pago as `expiration_time`.
+             * @example 2026-09-21T03:05:00.000Z
+             */
+            expiresAt: string;
+            /**
+             * @description Why it failed, free text for humans. Never carries tokens or payer personal data.
+             * @example null
+             */
+            failureReason?: string | null;
+            /**
+             * Format: uuid
+             * @description Identifier of the payment intent (client-generated UUIDv7).
+             * @example 018f44f7-9a96-7f75-9e9c-44ed9432fc12
+             */
+            id: string;
+            /**
+             * @description Identifier of the order on the Mercado Pago side. Null between the insert and the answer of `POST /v1/orders` — and it stays null when that call died on a timeout and we do not know whether the order exists.
+             * @example 01HRYF6XN0ABCD1234567890
+             */
+            mpOrderId?: string | null;
+            /**
+             * @description Raw `status` reported by Mercado Pago, untranslated. Diagnostics only: the state that drives behaviour is `status`.
+             * @example processed
+             */
+            mpStatus?: string | null;
+            /**
+             * @description Raw `status_detail` reported by Mercado Pago. Diagnostics only.
+             * @example accredited
+             */
+            mpStatusDetail?: string | null;
+            /**
+             * Format: uuid
+             * @description The transaction this intent produced when it was consumed.
+             * @example null
+             */
+            paymentTransactionId?: string | null;
+            /**
+             * @description Our own state, the one that drives behaviour. `created` means the row exists but the Mercado Pago order may or may not; `pending` means the order exists and is waiting for the customer to scan; `approved` means Mercado Pago credited the payment and it still has to be turned into a transaction. Everything else is terminal.
+             * @example pending
+             */
+            status: components["schemas"]["PaymentIntentStatus"];
+            /**
+             * Format: uuid
+             * @description Entity (parking lot / tenant) this charge belongs to.
+             * @example 11111111-1111-7111-8111-111111111111
+             */
+            tenantId: string;
+            /**
+             * Format: date-time
+             * @example 2026-09-21T03:00:01.000Z
+             */
+            updatedAt: string;
+        };
+        /**
+         * @description Our own state, the one that drives behaviour. `created` means the row exists but the Mercado Pago order may or may not; `pending` means the order exists and is waiting for the customer to scan; `approved` means Mercado Pago credited the payment and it still has to be turned into a transaction. Everything else is terminal.
+         * @enum {string}
+         */
+        PaymentIntentStatus: "created" | "pending" | "approved" | "consumed" | "expired" | "canceled" | "failed" | "refunded" | "charged_back";
         PaymentLineDto: {
             amount: number;
             /**
@@ -2293,16 +4260,85 @@ export interface components {
             id: string;
             /**
              * Format: uuid
+             * @description Mercado Pago payment intent that funds THIS line. When present, closeEntry burns it (approved -> consumed) in the same transaction that closes the entry.
+             */
+            paymentIntentId?: string;
+            /**
+             * Format: uuid
              * @description Payment method ID (may be absent if PM was deleted).
              */
             paymentMethodId?: string;
             /** @example Efectivo */
             paymentMethodName: string;
+            /**
+             * @description Payment method type at the time of the charge (snapshot). Resolved server-side from paymentMethodId when omitted, for older clients.
+             * @example cash
+             */
+            paymentMethodType?: components["schemas"]["PaymentMethodType"];
+        };
+        PaymentMethodBreakdownDto: {
+            /**
+             * @description Portion of `total` that has itemised transactions behind it.
+             * @example 25000
+             */
+            allocated: number;
+            /**
+             * @description Currency of every monetary figure.
+             * @example ARS
+             */
+            currency: string;
+            /** Format: date-time */
+            from: string;
+            /** @description One slice per payment method, largest first. */
+            methods: components["schemas"]["PaymentMethodSliceDto"][];
+            /** Format: date-time */
+            to: string;
+            /**
+             * @description Authoritative revenue for the window, summed from `entries.amountPaid`. This is the figure the KPI shows.
+             * @example 29300
+             */
+            total: number;
+            /**
+             * @description Revenue with **no payment-method breakdown**: `total - allocated`.
+             *
+             *     Closing a stay accepts a bare `amountPaid` with no `payments[]` (the offline fallback the desktop uses), and that path records no transaction row. Without this field the slices would silently fail to add up to the KPI and the dashboard would look broken. Render it as its own "sin detalle" slice.
+             *
+             *     A negative value means transactions exceed the stays’ recorded totals — a data inconsistency worth surfacing, not a rendering bug.
+             * @example 4300
+             */
+            unallocated: number;
         };
         PaymentMethodChangesResponseDto: {
             items: components["schemas"]["PaymentMethodSummaryDto"][];
             /** @description Highest syncSeq in the returned batch. Pass as afterSeq on the next poll. */
             maxSeq: number;
+        };
+        /**
+         * @description Facturación al cobrar con este medio: none = no se factura, auto = se emite al cobrar, manual = queda pendiente para el Historial.
+         * @enum {string}
+         */
+        PaymentMethodInvoiceMode: "none" | "auto" | "manual";
+        PaymentMethodSliceDto: {
+            /**
+             * @description Total collected, in ARS.
+             * @example 12300
+             */
+            amount: number;
+            /**
+             * @description Transactions recorded for this method.
+             * @example 21
+             */
+            count: number;
+            /**
+             * @description Payment method name, as snapshotted on the transaction. Snapshots are used rather than a join, so methods deleted since the payment still report correctly.
+             * @example Efectivo
+             */
+            name: string;
+            /**
+             * @description Share of `total`, `0`–`1`. Shares across every slice plus `unallocated` add up to 1, so the pie is complete. `null` when `total` is 0.
+             * @example 0.42
+             */
+            share: number;
         };
         PaymentMethodSummaryDto: {
             /**
@@ -2310,6 +4346,11 @@ export interface components {
              * @description Creation timestamp.
              */
             createdAt: string;
+            /**
+             * Format: date-time
+             * @description Baja lógica. No nulo = este medio se borró; el feed de cambios lo manda igual para que los equipos offline se enteren y lo saquen de su copia local.
+             */
+            deletedAt?: string | null;
             /**
              * @description Whether the method is currently enabled for the entity.
              * @example true
@@ -2322,12 +4363,17 @@ export interface components {
              */
             id: string;
             /**
+             * @description Facturación al cobrar con este medio: none = no se factura, auto = se emite al cobrar, manual = queda pendiente para el Historial.
+             * @example none
+             */
+            invoiceMode: components["schemas"]["PaymentMethodInvoiceMode"];
+            /**
              * @description Whether this is the default payment method of the entity.
              * @example false
              */
             isDefault: boolean;
             /**
-             * @description Whether this is a built-in system method (`cash`, `transfer`). System methods can be enabled/disabled but never deleted.
+             * @description Whether this is a built-in system method — `cash` and `transfer` (seeded with the entity), plus `mercadopago_qr` (created when the Mercado Pago account is linked). System methods can be renamed and enabled/disabled, but never deleted. Enabling an integration-backed one (`mercadopago_qr`) requires its account to be linked.
              * @example true
              */
             isSystem: boolean;
@@ -2339,6 +4385,11 @@ export interface components {
             /** @description Monotonically-increasing sync sequence number. */
             syncSeq: number;
             /**
+             * @description What the method IS, as opposed to `name` (what the owner calls it). The desktop snapshots this on every charge so the cash count never has to guess from the name.
+             * @example cash
+             */
+            type: components["schemas"]["PaymentMethodType"];
+            /**
              * Format: date-time
              * @description Last modification timestamp.
              */
@@ -2346,6 +4397,11 @@ export interface components {
             /** @description Optimistic-lock version. */
             version: number;
         };
+        /**
+         * @description Payment method type at the time of the charge (snapshot). Resolved server-side from paymentMethodId when omitted, for older clients.
+         * @enum {string}
+         */
+        PaymentMethodType: "transfer" | "cash" | "other" | "mercadopago_qr";
         PaymentTransactionChangesResponseDto: {
             items: components["schemas"]["PaymentTransactionDto"][];
             /** @description Highest sync sequence included in this page. */
@@ -2355,6 +4411,8 @@ export interface components {
             amount: number;
             /** Format: uuid */
             cashSessionId?: string;
+            /** Format: date-time */
+            deletedAt?: string | null;
             /** Format: uuid */
             entryId: string;
             /** Format: uuid */
@@ -2363,12 +4421,23 @@ export interface components {
             paymentMethodId?: string;
             /** @example Efectivo */
             paymentMethodName: string;
+            /**
+             * @description Payment method type at the time of the charge (snapshot). The desktop cash count keys off this, never off the name.
+             * @example cash
+             */
+            paymentMethodType: components["schemas"]["PaymentMethodType"];
             syncSeq: number;
             /** Format: uuid */
             tenantId: string;
             /** Format: date-time */
             updatedAt: string;
             version: number;
+        };
+        PlateBboxDto: {
+            h: number;
+            w: number;
+            x: number;
+            y: number;
         };
         ProblemDetailsDto: {
             /**
@@ -2397,12 +4466,35 @@ export interface components {
              */
             title: string;
         };
+        QuoteDto: {
+            durationMinutes: number;
+            /** Format: date-time */
+            entryAt: string;
+            /** Format: date-time */
+            exitAt: string;
+            /** Format: uuid */
+            parkingId: string;
+            /** @description Tarifa de reservas de la playa con la que se cotizó. */
+            rate: components["schemas"]["QuoteRateDto"];
+            /** @description Total en ARS con el mismo motor que cobra la playa (entries/pricing.ts). */
+            totalArs: number;
+        };
+        QuoteRateDto: {
+            fractionPriceArs: number;
+            hourPriceArs: number;
+            /** @description Tope de 12 h (0 = sin tope). */
+            mediaEstadiaPriceArs: number;
+            name: string;
+            /** @description Tope de 24 h (0 = sin tope). */
+            stayPriceArs: number;
+        };
         RateChangesResponseDto: {
             items: components["schemas"]["RateDto"][];
             /** @description Highest sync sequence included in this page. */
             maxSeq: number;
         };
         RateDto: {
+            autoFractionPrice: boolean;
             /** Format: date-time */
             createdAt: string;
             /**
@@ -2415,6 +4507,7 @@ export interface components {
             /** Format: uuid */
             id: string;
             isActive: boolean;
+            mediaEstadiaPriceArs: number;
             name: string;
             shortcutNumber: number | null;
             stayPriceArs: number;
@@ -2446,6 +4539,11 @@ export interface components {
              */
             email: string;
             /**
+             * @description Full name of the person registering (first and last name). Stored in `public.users.name` and in the Supabase `user_metadata.full_name`.
+             * @example Jane Doe
+             */
+            name: string;
+            /**
              * @description Password. Minimum 8 characters; the Supabase project may enforce stricter rules.
              * @example CorrectHorseBatteryStaple1!
              */
@@ -2470,11 +4568,117 @@ export interface components {
              */
             token: string;
         };
+        ReuseArcaCertificateDto: {
+            /**
+             * Format: uuid
+             * @description La otra playa del mismo dueño, ya vinculada con este CUIT.
+             */
+            fromTenantId: string;
+        };
+        RevenueBucketDto: {
+            /**
+             * Format: date-time
+             * @description Start of the bucket (inclusive). Clipped to the requested window, so the first bucket often starts mid-period.
+             */
+            from: string;
+            /**
+             * @description Bucket label in `tz`: `YYYY-MM-DDTHH` (hour), `YYYY-MM-DD` (day, and week labelled by its Monday) or `YYYY-MM` (month).
+             * @example 2026-08-07
+             */
+            key: string;
+            /**
+             * @description Revenue attributed to this bucket, in ARS. Anchored on `leftAt`.
+             * @example 12300
+             */
+            revenue: number;
+            /**
+             * Format: date-time
+             * @description End of the bucket (exclusive). Clipped to the requested window.
+             */
+            to: string;
+            /**
+             * @description Stays that **entered** during this bucket. Anchored on `enteredAt`.
+             * @example 21
+             */
+            vehiclesIn: number;
+            /**
+             * @description Stays that **left** during this bucket. Anchored on `leftAt`.
+             * @example 19
+             */
+            vehiclesOut: number;
+        };
+        RevenueProjectionDto: {
+            /**
+             * @description Confidence level based on the amount of historical data.
+             * @example medium
+             * @enum {string}
+             */
+            confidence: "low" | "medium" | "high";
+            /**
+             * @description Historical days used by the trend model.
+             * @example 6
+             */
+            historicalDays: number;
+            /**
+             * @description Open entries included in the projection.
+             * @example 8
+             */
+            openEntries: number;
+            /**
+             * @description Projected revenue in ARS. Orientative, not an accounting total.
+             * @example 245000
+             */
+            value: number;
+        };
+        RevenueResponseDto: {
+            /** @description Chronological buckets covering the window with no gaps or overlaps. First and last are clipped to the requested instants. */
+            buckets: components["schemas"]["RevenueBucketDto"][];
+            /**
+             * @description Currency of every monetary figure.
+             * @example ARS
+             */
+            currency: string;
+            /**
+             * Format: date-time
+             * @description Resolved start of the window.
+             */
+            from: string;
+            /**
+             * @description Bucket width used.
+             * @example day
+             * @enum {string}
+             */
+            granularity: "hour" | "day" | "week" | "month";
+            /**
+             * @description Table the revenue was summed from. Switches to `paymentTransactions` when `paymentMethod` or `cashSessionId` is set.
+             * @example entries
+             * @enum {string}
+             */
+            revenueSource: "entries" | "paymentTransactions";
+            /**
+             * Format: date-time
+             * @description Resolved end of the window.
+             */
+            to: string;
+            /**
+             * @description Totals across the whole window. `key`, `from` and `to` mirror the request.
+             *
+             *     **The two series use different time anchors.** Revenue lands on the bucket a stay *left* (payments carry no timestamp of their own, so exit time is the only sound axis), while `vehiclesIn` lands on the bucket it *arrived*. A car entering Monday and leaving Wednesday adds its visit to Monday and its money to Wednesday — so the dashboard toggle between $ and cars is not just a rescale of the same bars.
+             */
+            totals: components["schemas"]["RevenueBucketDto"];
+            /**
+             * @description Timezone the buckets were aligned to.
+             * @example America/Argentina/Buenos_Aires
+             */
+            tz: string;
+        };
         ScheduleChangesResponseDto: {
             items: components["schemas"]["ScheduleDto"][];
             /** @description Highest sync sequence included in this page. */
             maxSeq: number;
         };
+        /** @enum {string} */
+        ScheduleDay: "monday" | "tuesday" | "wednesday" | "thursday" | "friday" | "saturday" | "sunday";
         ScheduleDto: {
             /** @description Minutes since midnight (1..1440). */
             closeMinute: number;
@@ -2497,6 +4701,13 @@ export interface components {
             /** @enum {string} */
             code: "ADVANCE_RESERVATION";
             enabled: boolean;
+            /** @description Plazas que se pueden reservar a la vez (sólo ADVANCE_RESERVATION). */
+            reservableSpots: number | null;
+            /**
+             * Format: uuid
+             * @description Tarifa con la que se cotizan y cobran las reservas, sin distinción de vehículo (sólo ADVANCE_RESERVATION).
+             */
+            reservationRateId: string | null;
         };
         ServiceChangesResponseDto: {
             items: components["schemas"]["ServiceDto"][];
@@ -2511,6 +4722,13 @@ export interface components {
             enabled: boolean;
             /** Format: uuid */
             id: string;
+            /** @description ADVANCE_RESERVATION: plazas que se pueden reservar a la vez. null = sin configurar. */
+            reservableSpots: number | null;
+            /**
+             * Format: uuid
+             * @description ADVANCE_RESERVATION: tarifa con la que se cobran las reservas. null = sin configurar.
+             */
+            reservationRateId: string | null;
             syncSeq: number;
             /** Format: uuid */
             tenantId: string;
@@ -2539,12 +4757,201 @@ export interface components {
              */
             tokenType: string;
         };
+        SetArcaSalesPointDto: {
+            /**
+             * Format: date
+             * @description Fecha de inicio de actividades: va impresa en la factura (RG 1415). Obligatoria si la cuenta todavía no la tiene.
+             * @example 2020-01-01
+             */
+            inicioActividad?: string;
+            /** @example 3 */
+            ptoVta: number;
+        };
+        StaffMemberDto: {
+            /**
+             * Format: date-time
+             * @description Account creation date.
+             */
+            createdAt: string;
+            /**
+             * Format: email
+             * @example ana@example.com
+             */
+            email: string;
+            /**
+             * @description Platform-level role (`admin` | `user`). Not the role at a lot — that lives in `memberships`.
+             * @example user
+             * @enum {string}
+             */
+            globalRole: "admin" | "user";
+            /** Format: uuid */
+            id: string;
+            /** @description Roles held across the caller’s lots only, oldest link first. Lots the caller does not own are never revealed, even when the person works there. */
+            memberships: components["schemas"]["StaffMembershipDto"][];
+            /**
+             * @description Display name mirrored from Supabase Auth. `null` for accounts created by email/password without one.
+             * @example Ana Gómez
+             */
+            name: string | null;
+        };
+        StaffMembershipDto: {
+            /**
+             * Format: date-time
+             * @description When the person was linked to this lot.
+             */
+            createdAt: string;
+            /**
+             * @description Role held at this lot.
+             * @example operator
+             * @enum {string}
+             */
+            role: "owner" | "operator";
+            /**
+             * Format: uuid
+             * @description Lot (tenant) identifier.
+             */
+            tenantId: string;
+            /**
+             * @description Lot display name, so the table needs no second lookup.
+             * @example Estacionamiento Once
+             */
+            tenantName: string;
+        };
+        StaffMembershipResultDto: {
+            /**
+             * Format: date-time
+             * @description Antigüedad de la persona en la empresa. Se conserva al mudarla de lote, así que puede ser anterior al alta del lote destino.
+             */
+            createdAt: string;
+            /**
+             * Format: email
+             * @example ana@example.com
+             */
+            email: string;
+            /**
+             * @description Rol de plataforma (`admin` | `user`), no el del lote. El del lote es `role`.
+             * @example user
+             * @enum {string}
+             */
+            globalRole: "admin" | "user";
+            /**
+             * @description Nombre espejado de Supabase Auth. `null` en cuentas de email/password creadas sin uno.
+             * @example Ana Gómez
+             */
+            name: string | null;
+            /**
+             * @example operator
+             * @enum {string}
+             */
+            role: "owner" | "operator";
+            /**
+             * Format: uuid
+             * @description Lote donde quedó la membresía. Difiere del `:tenantId` de la URL cuando el PATCH fue una mudanza.
+             */
+            tenantId: string;
+            /**
+             * @description Nombre del lote, para no obligar a un segundo lookup.
+             * @example Estacionamiento Once
+             */
+            tenantName: string;
+            /**
+             * Format: uuid
+             * @description Id de la persona. Es el `:userId` de los PATCH/DELETE posteriores.
+             */
+            userId: string;
+        };
+        SummaryAlertsDto: {
+            /**
+             * @description Unreviewed, non-archived LPR detections (`status = pending`). Detail lives at `GET /tenants/:tenantId/lpr-events?status=pending`.
+             * @example 4
+             */
+            pendingLprEvents: number;
+        };
+        SummaryComparisonDto: {
+            /** @description Yesterday, truncated to the same elapsed offset as today. */
+            previousDay: components["schemas"]["DayComparisonDto"];
+            /** @description Same weekday one week back, truncated to the same elapsed offset. Weekday-aligned because parking demand swings hard between weekdays and weekends. */
+            previousWeek: components["schemas"]["DayComparisonDto"];
+        };
+        TaxpayerDto: {
+            /** @description Homologación: ARCA no tiene datos de prueba de este CUIT y se tomó como Responsable Inscripto para poder probar la Factura A. */
+            assumed: boolean;
+            /** @example IVA Responsable Inscripto */
+            condicionIva: string | null;
+            /** @description `CondicionIVAReceptorId` de ARCA. `null` si no se identifica. */
+            condicionIvaReceptorId: number | null;
+            /**
+             * @description Sólo dígitos.
+             * @example 30712345671
+             */
+            cuit: string;
+            /** @description Si la factura sale identificada con este CUIT. `false` = ARCA no tiene datos del CUIT (producción): la factura va a consumidor final. */
+            identified: boolean;
+            /**
+             * @description La letra que sale: A si el emisor es RI y el receptor RI o monotributista; C siempre para un emisor monotributista o exento.
+             * @enum {string}
+             */
+            letter: "A" | "B" | "C";
+            /** @example EMPRESA SA */
+            razonSocial: string | null;
+        };
+        TicketTemplateDto: {
+            /**
+             * @description Optional CUIT override printed on the ticket.
+             * @example 30-12345678-9
+             */
+            cuitOverride: string;
+            /** @description Ordered ticket fields. */
+            fields: components["schemas"]["TicketTemplateFieldDto"][];
+            /**
+             * @description Gross income registration text printed on the ticket.
+             * @example IIBB: 1027025-06
+             */
+            grossIncomeText: string;
+            /**
+             * @description Non-fiscal control legend printed on the ticket.
+             * @example Control no fiscal
+             */
+            nonFiscalControlText: string;
+            /**
+             * @description Template schema version.
+             * @example 1
+             * @enum {integer}
+             */
+            version: 1;
+        };
+        TicketTemplateFieldDto: {
+            /**
+             * @description Text emphasis.
+             * @example bold
+             * @enum {string}
+             */
+            emphasis: "normal" | "bold";
+            /**
+             * @description Font size in points.
+             * @example 13
+             */
+            fontSizePt: number;
+            /**
+             * @description Stable ticket field identifier.
+             * @example plate
+             * @enum {string}
+             */
+            id: "parkingName" | "parkingAddress" | "parkingCuit" | "grossIncome" | "nonFiscalControl" | "ticketNumber" | "plate" | "vehicleBrand" | "vehicleModel" | "color" | "rate" | "entryDate" | "entryTime" | "cochera" | "notes";
+            /**
+             * @description Whether the field is printed.
+             * @example true
+             */
+            visible: boolean;
+        };
         TogglePaymentMethodDto: {
             /**
              * @description Whether the payment method should be enabled (true) or disabled (false).
              * @example true
              */
             enabled?: boolean;
+            /** @description Qué pasa con la factura al cobrar con este medio: none = no se factura, auto = se emite al cobrar, manual = queda pendiente para el Historial. */
+            invoiceMode?: components["schemas"]["PaymentMethodInvoiceMode"];
             /**
              * @description Whether this method becomes the default for the entity.
              * @example true
@@ -2552,6 +4959,56 @@ export interface components {
             isDefault?: boolean;
             /** @example Naranja X */
             name?: string;
+        };
+        TopPlateDto: {
+            /**
+             * @description Mean stay length in minutes (`totalMinutes / visits`, rounded).
+             * @example 180
+             */
+            averageMinutes: number;
+            /**
+             * @description Vehicle plate, upper-cased.
+             * @example AB123CD
+             */
+            plate: string;
+            /**
+             * @description Total left behind across every stay in the window, in ARS.
+             * @example 18500
+             */
+            revenue: number;
+            /**
+             * @description Minutes parked, summed across those stays.
+             * @example 1260
+             */
+            totalMinutes: number;
+            /**
+             * @description Stays closed in the window.
+             * @example 7
+             */
+            visits: number;
+        };
+        TopPlatesResponseDto: {
+            /**
+             * @description Currency of every monetary figure.
+             * @example ARS
+             */
+            currency: string;
+            /** Format: date-time */
+            from: string;
+            /**
+             * @description Ranked plates, best first.
+             *
+             *     Built from stays that **ended** inside the window, since an open stay has neither a final amount nor a known duration. A vehicle still parked will not appear until it leaves.
+             */
+            items: components["schemas"]["TopPlateDto"][];
+            /**
+             * @description Criterion the list is sorted by, descending.
+             * @example revenue
+             * @enum {string}
+             */
+            orderBy: "revenue" | "visits" | "duration";
+            /** Format: date-time */
+            to: string;
         };
         UpdateAdminUserDto: {
             /**
@@ -2562,12 +5019,12 @@ export interface components {
         };
         UpdateApplicationDto: {
             /**
-             * @description Address of the parking lot.
+             * @description Dirección en una línea (campo de display, legacy). Pasó a ser OPCIONAL: el wizard nuevo manda `location` con los campos separados y su `formatted`. Si se mandan los dos, gana `location.formatted`.
              * @example Av. Corrientes 1234, CABA
              */
             address?: string;
             /**
-             * @description CUIT, 11 digits
+             * @description CUIT, 11 digits. OPCIONAL: ya no se pide en el alta. Si viene, tiene que tener 11 dígitos.
              * @example 30123456789
              */
             cuit?: string;
@@ -2578,25 +5035,153 @@ export interface components {
              */
             email?: string;
             /**
-             * @description Registered legal name of the entity.
+             * @description Registered legal name of the entity. OPCIONAL: ya no se pide en el alta, se completa después desde la configuración del perfil. Ausente → el tenant queda con `legalName` en null.
              * @example Estacionamientos del Centro S.A.
              */
             legalName?: string;
+            /** @description Dirección estructurada declarada, normalizada en el front contra la API Georef. Opcional: hay borradores en vuelo que sólo traen `address`. Se materializa en columnas de `tenants` al aprobar la solicitud. */
+            location?: components["schemas"]["UpdateEntityAddressDto"];
             /**
              * @description Display name of the parking lot.
              * @example Estacionamiento del Centro
              */
             name?: string;
             /**
-             * @description Contact phone of the entity.
-             * @example +541145678900
+             * @description Contact phone of the person in charge, in international E.164 format (with the leading `+` and country code, no spaces).
+             * @example +5491123456789
              */
             phone?: string;
+            /** @description Horarios de atención declarados: una fila por franja (un día puede tener varias). Se crean como `schedules` del tenant al aprobar. Se validan con la misma regla que `/schedules` (open < close, sin solapes en el mismo día; franjas contiguas OK) y, si no cumplen, se responde 422 `ONBOARDING_NOT_SUBMITTABLE` con `validationsErrors` en `declaredEntity.schedules.<i>`. Un PATCH con `schedules` REEMPLAZA la lista entera. */
+            schedules?: components["schemas"]["CreateScheduleDto"][];
             /**
              * @description Plazas totales declaradas (van a `tenant.settings.capacity.total`).
              * @example 110
              */
             totalSpots?: number;
+        };
+        UpdateArcaAccountDto: {
+            /** @description Sólo homologación (`fiscalDataEditable`). */
+            condicionIva?: components["schemas"]["ArcaTaxCondition"];
+            /** @description Sólo homologación (`fiscalDataEditable`). */
+            domicilioFiscal?: string;
+            /**
+             * @description Número de inscripción en Ingresos Brutos, o «No contribuyente» si la actividad no está alcanzada (RG 1415, Anexo II). Va impreso en la factura. «Exento» no reemplaza al número: un exento está inscripto.
+             * @example 901-123456-7
+             */
+            iibb?: string;
+            /**
+             * Format: date
+             * @description Va impresa en la factura. Editable en cualquier entorno.
+             * @example 2020-01-01
+             */
+            inicioActividad?: string;
+            /** @example 21 */
+            ivaRate?: number;
+            /** @description Sólo homologación (`fiscalDataEditable`). */
+            razonSocial?: string;
+        };
+        UpdateCashSessionDto: {
+            /** @description Shift notes. Send an empty string to clear them. Omitting the field leaves them untouched. */
+            notes?: string;
+        };
+        UpdateDesktopCameraConfigDto: {
+            /** @description Stable camera identifier sent with LPR detections. */
+            cameraId?: string;
+            /**
+             * @description OpenCV webcam index.
+             * @example 0
+             */
+            deviceIndex?: number;
+            /**
+             * @description IP camera host. Empty for webcam mode.
+             * @example 192.168.1.26
+             */
+            host?: string;
+            /**
+             * @description Camera location.
+             * @example entrada
+             * @enum {string}
+             */
+            location?: "entrada" | "salida";
+            /**
+             * @description Video source mode.
+             * @example ip
+             * @enum {string}
+             */
+            mode?: "webcam" | "ip";
+            /**
+             * @description IP camera RTSP port.
+             * @example 554
+             */
+            port?: number;
+            /**
+             * @description IP camera stream path.
+             * @example /h264_stream
+             */
+            streamPath?: string;
+            /** @description Camera detection tuning, including ROI. Passwords are never stored here. */
+            tuning?: Record<string, never> | null;
+            /** @description IP camera username. Password is intentionally not persisted. */
+            username?: string;
+        };
+        UpdateEntityAddressDto: {
+            /**
+             * @description Localidad.
+             * @example Balvanera
+             */
+            cityName?: string | null;
+            /**
+             * @description Piso y/o departamento.
+             * @example PB
+             */
+            floor?: string | null;
+            /**
+             * @description Dirección completa en una línea (la `nomenclatura` de Georef). Se guarda en la columna `address`. Si se manda junto con el `address` plano del perfil, GANA este valor.
+             * @example Av. Corrientes 1234, Balvanera, CABA
+             */
+            formatted?: string | null;
+            /**
+             * Format: date-time
+             * @description Cuándo se normalizó/cargó la dirección (ISO-8601). Lo manda el cliente que normalizó.
+             * @example 2026-09-13T16:46:17.000Z
+             */
+            geocodedAt?: string | null;
+            /**
+             * @description Origen del dato: `georef` si lo normalizó la API Georef, `manual` si lo escribió una persona.
+             * @example georef
+             * @enum {string|null}
+             */
+            geocodingSource?: "georef" | "manual" | null;
+            /**
+             * @description Latitud en grados decimales, hasta 6 decimales (la columna es `numeric(9,6)`). Se manda junto con `longitude` o ninguna de las dos: media coordenada es un 400.
+             * @example -34.603722
+             */
+            latitude?: number | null;
+            /**
+             * @description Longitud en grados decimales, hasta 6 decimales. Ver `latitude`.
+             * @example -58.381592
+             */
+            longitude?: number | null;
+            /**
+             * @description Código postal.
+             * @example C1043
+             */
+            postalCode?: string | null;
+            /**
+             * @description Provincia (o Ciudad Autónoma de Buenos Aires).
+             * @example Ciudad Autónoma de Buenos Aires
+             */
+            stateName?: string | null;
+            /**
+             * @description Nombre de la calle, sin altura.
+             * @example Avenida Corrientes
+             */
+            streetName?: string | null;
+            /**
+             * @description Altura de la calle. Texto, no número: `S/N`, `1234 bis` y `Km 5` son alturas válidas.
+             * @example 1234
+             */
+            streetNumber?: string | null;
         };
         UpdateEntityCapacityDto: {
             /**
@@ -2607,7 +5192,7 @@ export interface components {
         };
         UpdateEntityProfileDto: {
             /**
-             * @description New address of the entity.
+             * @description Nueva dirección en una línea (campo de display, legacy). Si también se manda `location.formatted`, gana ese.
              * @example Av. Corrientes 1000, Buenos Aires
              */
             address?: string;
@@ -2618,6 +5203,8 @@ export interface components {
              * @example 30123456789
              */
             cuit?: string;
+            /** @description Desktop camera configuration owned by this entity, excluding the password. */
+            desktopCameraConfig?: components["schemas"]["UpdateDesktopCameraConfigDto"];
             /**
              * Format: email
              * @description New contact email of the entity.
@@ -2625,18 +5212,36 @@ export interface components {
              */
             email?: string;
             /**
+             * @description Stable identifier of this parking lot's entrance camera. The desktop app sends it as CAMERA_ID and it ends up in every LPR detection. Send null to unlink. Owner-only.
+             * @example cam-entrada
+             */
+            entryCameraId?: string | null;
+            /**
+             * @description Human-readable name of the entrance camera, so the owner can tell it apart. Owner-only.
+             * @example Portón Rivadavia
+             */
+            entryCameraLabel?: string | null;
+            /**
              * @description New legal name of the entity.
              * @example Estacionamientos del Centro S.A.
              */
             legalName?: string;
+            /** @description Dirección estructurada. Sólo se actualizan los campos presentes; mandar `null` explícito borra ese campo. Las coordenadas van completas (lat + lng) o ninguna: la base rechaza media coordenada. */
+            location?: components["schemas"]["UpdateEntityAddressDto"];
+            /**
+             * @description How long (in days) a `registered` LPR detection image is kept after the stay exit before the retention job purges it. One of 30/60/90. Owner-only.
+             * @example 30
+             * @enum {integer}
+             */
+            lprImageRetentionDays?: 30 | 60 | 90;
             /**
              * @description New display name of the entity.
              * @example Estacionamiento del Centro
              */
             name?: string;
             /**
-             * @description New contact phone number of the entity.
-             * @example +54 11 5555-1234
+             * @description New contact phone number of the entity, in international E.164 format (`+5491123456789`). The format is only enforced when the value CHANGES: legacy profiles keep their stored free-text phone, and sending it back unchanged is accepted.
+             * @example +5491155551234
              */
             phone?: string;
             /**
@@ -2645,6 +5250,8 @@ export interface components {
              * @enum {string}
              */
             status?: "active" | "maintenance";
+            /** @description Ticket template owned by this entity. Owner-only; local printer/device settings remain client-side. */
+            ticketTemplate?: components["schemas"]["UpdateTicketTemplateDto"];
         };
         UpdateLprDetectionEventDto: {
             /**
@@ -2671,7 +5278,7 @@ export interface components {
             role: "owner" | "operator";
         };
         UpdateParkingDto: {
-            /** @description Street address. */
+            /** @description Dirección en una línea (campo de display, legacy). Si también se manda `location.formatted`, gana ese. */
             address?: string;
             /** @description Tax id (CUIT). */
             cuit?: string;
@@ -2679,6 +5286,8 @@ export interface components {
             email?: string;
             /** @description Registered legal/company name. */
             legalName?: string;
+            /** @description Dirección estructurada. Es el MISMO tenant que edita el dueño desde el portal (misma tabla `tenants`), así que el alta por panel tiene que poder cargarla: si no, un estacionamiento dado de alta acá nace sin los datos que Mercado Pago necesita. */
+            location?: components["schemas"]["UpdateEntityAddressDto"];
             /** @description Display name of the parking lot. */
             name?: string;
             /** @description Contact phone. */
@@ -2691,6 +5300,16 @@ export interface components {
             status: "active" | "maintenance";
         };
         UpdateRateDto: {
+            /**
+             * @description Si los autos que están adentro con esta tarifa pasan a los precios nuevos. Ausente o false = se quedan con el precio que tenían al entrar, que es el comportamiento histórico. Sólo aplica si el body trae algún precio: mandarlo con un cambio de nombre no hace nada.
+             * @example false
+             */
+            applyToOpenEntries?: boolean;
+            /**
+             * @description Si la fracción se deriva de hora / 12 en el formulario. Preferencia de UI: el valor derivado se guarda igual en fractionPriceArs.
+             * @example false
+             */
+            autoFractionPrice?: boolean;
             /**
              * @description Precio de la fraccion en ARS.
              * @example 325
@@ -2706,6 +5325,11 @@ export interface components {
              * @example true
              */
             isActive?: boolean;
+            /**
+             * @description Tope de las primeras 12 horas en ARS. 0 = la tarifa no tiene este escalón.
+             * @example 12000
+             */
+            mediaEstadiaPriceArs?: number;
             /** @example NOCHE AUTO */
             name?: string;
             /**
@@ -2740,6 +5364,67 @@ export interface components {
         UpdateServiceDto: {
             /** @description Whether the amenity is offered by the tenant. */
             enabled?: boolean;
+            /** @description Sólo ADVANCE_RESERVATION: plazas que se pueden reservar a la vez. null lo deja sin configurar. */
+            reservableSpots?: number | null;
+            /**
+             * Format: uuid
+             * @description Sólo ADVANCE_RESERVATION: id de una tarifa activa de la playa con la que se cotizan y cobran las reservas. null la desasocia.
+             */
+            reservationRateId?: string | null;
+        };
+        UpdateStaffMemberDto: {
+            /**
+             * @description Nuevo rol. Si además viene `tenantId`, se aplica en el lote destino. Omitirlo en una mudanza conserva el rol actual.
+             * @enum {string}
+             */
+            role?: "owner" | "operator";
+            /**
+             * Format: uuid
+             * @description **Mueve** la membresía a este lote: el de la URL deja de tenerla.
+             *
+             *     El caller tiene que ser owner de los dos. Mandar el mismo id que el de la URL no es una mudanza — se trata como un cambio de rol común.
+             */
+            tenantId?: string;
+        };
+        UpdateTicketTemplateDto: {
+            /** @description Optional CUIT override printed on the ticket. */
+            cuitOverride?: string;
+            /** @description Ordered ticket fields. */
+            fields?: components["schemas"]["UpdateTicketTemplateFieldDto"][];
+            /** @description Gross income registration text printed on the ticket. */
+            grossIncomeText?: string;
+            /** @description Non-fiscal control legend printed on the ticket. */
+            nonFiscalControlText?: string;
+            /**
+             * @description Template schema version.
+             * @example 1
+             * @enum {integer}
+             */
+            version?: 1;
+        };
+        UpdateTicketTemplateFieldDto: {
+            /**
+             * @description Text emphasis.
+             * @example bold
+             * @enum {string}
+             */
+            emphasis?: "normal" | "bold";
+            /**
+             * @description Font size in points.
+             * @example 13
+             */
+            fontSizePt?: number;
+            /**
+             * @description Stable ticket field identifier.
+             * @example plate
+             * @enum {string}
+             */
+            id?: "parkingName" | "parkingAddress" | "parkingCuit" | "grossIncome" | "nonFiscalControl" | "ticketNumber" | "plate" | "vehicleBrand" | "vehicleModel" | "color" | "rate" | "entryDate" | "entryTime" | "cochera" | "notes";
+            /**
+             * @description Whether the field is printed.
+             * @example true
+             */
+            visible?: boolean;
         };
         UpdateVehicleDto: {
             /** @example Toyota */
@@ -2756,6 +5441,10 @@ export interface components {
             accepted?: boolean;
             /** @example Utilitario */
             name?: string;
+        };
+        UploadArcaCertificateDto: {
+            /** @description Contenido del `.crt` que devolvió ARCA (PEM, con las líneas BEGIN/END CERTIFICATE). */
+            certificate: string;
         };
         UpsertLprDetectionEventDto: {
             bestCaptureId?: string;
@@ -2776,6 +5465,7 @@ export interface components {
             lastSeenAt: string;
             location: string;
             normalizedText?: string;
+            plateBbox?: components["schemas"]["PlateBboxDto"];
             /** @enum {string} */
             qualityStatus: "valid_high" | "valid_low" | "invalid_format" | "low_confidence";
             rawText?: string;
@@ -4097,6 +6787,141 @@ export interface operations {
             };
         };
     };
+    DriverController_findNearby: {
+        parameters: {
+            query: {
+                /** @description Latitud del centro. */
+                latitude: number;
+                /** @description Longitud del centro. */
+                longitude: number;
+                /** @description Radio de búsqueda en metros. */
+                radiusMeters?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DriverNearbyParkingDto"][];
+                };
+            };
+        };
+    };
+    DriverController_findOne: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                parkingId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DriverParkingDetailDto"];
+                };
+            };
+        };
+    };
+    DriverController_quote: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                parkingId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateQuoteDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuoteDto"];
+                };
+            };
+        };
+    };
+    DriverReservationsController_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DriverReservationDto"][];
+                };
+            };
+        };
+    };
+    DriverReservationsController_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateReservationDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DriverReservationDto"];
+                };
+            };
+        };
+    };
+    DriverReservationsController_cancel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                reservationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DriverReservationDto"];
+                };
+            };
+        };
+    };
     healthCheck: {
         parameters: {
             query?: never;
@@ -4122,6 +6947,170 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HealthResponseDto"];
+                };
+            };
+        };
+    };
+    mercadoPagoWebhook: {
+        parameters: {
+            query?: {
+                /** @description Id of the Mercado Pago order. The only event field the signature authenticates. */
+                "data.id"?: unknown;
+            };
+            header: {
+                /** @description Request id of the notification. Part of the signed manifest. */
+                "x-request-id"?: string;
+                /** @description Mercado Pago signature, formatted as `ts=<ts>,v1=<hex hmac>`. */
+                "x-signature": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Notification acknowledged (processed, ignored, or already handled). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The signature is missing, invalid, or its `ts` falls outside the replay window. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description The order could not be re-read from Mercado Pago (MP_WEBHOOK_ORDER_UNVERIFIED). Mercado Pago will retry. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    staffList: {
+        parameters: {
+            query?: {
+                /** @description 1-based page number. */
+                page?: number;
+                /** @description Number of items per page (capped at 100). */
+                pageSize?: number;
+                /**
+                 * @description Keep only people holding this role in at least one of the caller’s lots.
+                 *
+                 *     It selects **who** appears, not what is shown: a matching person still lists every membership they hold within the caller’s lots, so someone who is `operator` in one branch and `owner` in another appears under either filter with both roles visible.
+                 */
+                role?: "owner" | "operator";
+                /** @description Case-insensitive search matched against the person’s name and email. */
+                search?: string;
+                /** @description Narrow to a single lot. Must be one the caller owns, otherwise the request is rejected. */
+                tenantId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedStaffDto"];
+                };
+            };
+            /** @description Invalid query parameters (validation failed). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblemDetailsDto"];
+                };
+            };
+            /** @description Missing, malformed, or expired bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description `tenantId` names a lot the caller does not own (`ENTITY_NO_ACCESS`). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    mercadoPagoOauthCallback: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MpOauthCallbackDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MpOauthCallbackResultDto"];
+                };
+            };
+            /** @description The `state` is unknown, expired, already used, or does not belong to the caller (MP_OAUTH_STATE_INVALID); or the payload is malformed. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description Missing, malformed, or expired bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description The entity address is incomplete (MP_ENTITY_ADDRESS_INCOMPLETE). */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description Mercado Pago rejected or could not serve the token exchange, the store or the POS creation (MP_OAUTH_CODE_EXCHANGE_FAILED, MP_STORE_CREATE_FAILED, MP_POS_CREATE_FAILED). Nothing is persisted in that case. */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
                 };
             };
         };
@@ -4433,6 +7422,15 @@ export interface operations {
                     "application/json": components["schemas"]["ProblemDetailsDto"];
                 };
             };
+            /** @description The declared entity has no usable address (`ONBOARDING_NOT_SUBMITTABLE`). `validationsErrors` lists the missing `declaredEntity.location.*` fields. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
         };
     };
     tenantsListMine: {
@@ -4586,13 +7584,688 @@ export interface operations {
             };
         };
     };
+    arcaGetAccount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description ID of the entity (parking lot / tenant). */
+                tenantId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArcaAccountDto"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description Not a member of the entity, or not an `owner` for a write operation. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    arcaCreateAccount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description ID of the entity (parking lot / tenant). */
+                tenantId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateArcaAccountDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArcaAccountDto"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description Not a member of the entity, or not an `owner` for a write operation. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description ARCA_ALREADY_LINKED. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description ARCA_CUIT_INVALID. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description ARCA_UNAVAILABLE: invoicing is off in this environment. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    arcaUnlinkAccount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description ID of the entity (parking lot / tenant). */
+                tenantId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description Not a member of the entity, or not an `owner` for a write operation. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    arcaUpdateAccount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description ID of the entity (parking lot / tenant). */
+                tenantId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateArcaAccountDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArcaAccountDto"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description Not a member of the entity, or not an `owner` for a write operation. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description ARCA_LINK_STEP_INVALID. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    arcaUploadCertificate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description ID of the entity (parking lot / tenant). */
+                tenantId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UploadArcaCertificateDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArcaCertificateResultDto"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description Not a member of the entity, or not an `owner` for a write operation. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description ARCA_LINK_STEP_INVALID. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description ARCA_CERT_INVALID, ARCA_CERT_CUIT_MISMATCH, ARCA_CERT_KEY_MISMATCH, ARCA_CERT_EXPIRED, ARCA_CERT_NOT_AUTHORIZED, ARCA_PADRON_NOT_FOUND. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description ARCA_UNAVAILABLE. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    arcaGetCsr: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description ID of the entity (parking lot / tenant). */
+                tenantId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArcaCsrDto"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description Not a member of the entity, or not an `owner` for a write operation. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description ARCA_LINK_STEP_INVALID. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    arcaUploadRenewalCertificate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description ID of the entity (parking lot / tenant). */
+                tenantId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UploadArcaCertificateDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArcaAccountDto"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description Not a member of the entity, or not an `owner` for a write operation. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description ARCA_LINK_STEP_INVALID. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description ARCA_CERT_INVALID, ARCA_CERT_CUIT_MISMATCH, ARCA_CERT_KEY_MISMATCH, ARCA_CERT_EXPIRED, ARCA_CERT_NOT_AUTHORIZED. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description ARCA_UNAVAILABLE. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    arcaGetRenewalCsr: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description ID of the entity (parking lot / tenant). */
+                tenantId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArcaCsrDto"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description Not a member of the entity, or not an `owner` for a write operation. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description ARCA_LINK_STEP_INVALID: the account is not linked. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    arcaListReusableCertificates: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description ID of the entity (parking lot / tenant). */
+                tenantId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArcaReusableCertificateDto"][];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description Not a member of the entity, or not an `owner` for a write operation. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    arcaReuseCertificate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description ID of the entity (parking lot / tenant). */
+                tenantId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReuseArcaCertificateDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArcaAccountDto"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description Not a member of the entity, or not an `owner` for a write operation. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description ARCA_LINK_STEP_INVALID. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    arcaSetSalesPoint: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description ID of the entity (parking lot / tenant). */
+                tenantId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetArcaSalesPointDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArcaAccountDto"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description Not a member of the entity, or not an `owner` for a write operation. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description ARCA_LINK_STEP_INVALID. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description ARCA_POS_NOT_FOUND, ARCA_POS_DISABLED, ARCA_PADRON_NOT_FOUND. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description ARCA_UNAVAILABLE. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    InvoicesController_taxpayer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Con o sin guiones */
+                cuit: string;
+                /** @description Parking lot tenant ID */
+                tenantId: unknown;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaxpayerDto"];
+                };
+            };
+        };
+    };
     entitiesListAudit: {
         parameters: {
             query?: {
-                /** @description Maximum number of audit events to return. */
-                limit?: number;
+                /** @description Filter by a single action from the catalog (`<entity>.<verb>`). Validated against the catalog, so a typo fails loudly instead of silently returning nothing. */
+                action?: "application.created" | "application.updated" | "application.submitted" | "application.document_added" | "application.rejected" | "user.promoted_to_owner" | "entity.approved" | "entity.rejected" | "entity.profile_updated" | "payment_method.toggled" | "entry.corrected" | "rate.prices_propagated" | "entry.undercharged" | "lpr_event.registered" | "lpr_event.dismissed" | "lpr_event.suppressed" | "lpr_event.archived" | "lpr_event.unarchived" | "lpr_event.image_purged" | "parking.created" | "parking.updated" | "parking.deleted" | "user.role_updated" | "user.deleted" | "membership.created" | "membership.updated" | "membership.deleted" | "mp_account.linked" | "mp_account.unlinked" | "mp_account.link_failed" | "arca_account.linked" | "arca_account.unlinked" | "arca_account.renewal_prepared" | "arca_account.certificate_renewed" | "arca_account.certificate_expired" | "invoice.cert_expired" | "mp_account.token_refreshed" | "mp_account.token_expired" | "payment_intent.cancel_mp_failed" | "payment_intent.refunded";
+                /** @description Only events at or after this instant. ISO-8601 **with an explicit offset** (e.g. `-03:00`), matching the metrics endpoints. */
+                from?: string;
+                /** @description 1-based page number. */
+                page?: number;
+                /** @description Number of items per page (capped at 100). */
+                pageSize?: number;
                 /** @description Filter events by severity. Returns all severities when omitted. */
                 severity?: "info" | "warn" | "crit";
+                /** @description Only events strictly before this instant, same format as `from`. */
+                to?: string;
             };
             header?: never;
             path: {
@@ -4608,10 +8281,10 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AuditEventDto"][];
+                    "application/json": components["schemas"]["PaginatedAuditDto"];
                 };
             };
-            /** @description Invalid query parameters (validation failed). */
+            /** @description Invalid query parameters, an unknown `action`, a date-time without an explicit offset, or `from` not earlier than `to`. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -4642,7 +8315,14 @@ export interface operations {
     };
     CashSessionsController_findAll: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Only shifts still running after this instant (they overlap the window). ISO-8601 with explicit offset. */
+                from?: string;
+                /** @description Max shifts to return, most recent first. The endpoint used to return every shift ever; it now caps at this many. */
+                limit?: components["schemas"]["Object"];
+                /** @description Only shifts opened before this instant (exclusive). ISO-8601 with explicit offset. */
+                to?: string;
+            };
             header?: never;
             path: {
                 /** @description Parking lot tenant ID */
@@ -4660,6 +8340,15 @@ export interface operations {
                     "application/json": components["schemas"]["CashSessionDto"][];
                 };
             };
+            /** @description `from` is not before `to`, a date-time lacks an explicit offset, or `limit` is out of range. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblemDetailsDto"];
+                };
+            };
         };
     };
     CashSessionsController_create: {
@@ -4675,6 +8364,36 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["CreateCashSessionDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CashSessionDto"];
+                };
+            };
+        };
+    };
+    CashSessionsController_update: {
+        parameters: {
+            query: {
+                /** @description Expected current version of the row. Used for optimistic locking. */
+                expectedVersion: number;
+            };
+            header?: never;
+            path: {
+                sessionId: string;
+                /** @description Parking lot tenant ID */
+                tenantId: unknown;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateCashSessionDto"];
             };
         };
         responses: {
@@ -4837,7 +8556,64 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    "application/json": components["schemas"]["CloseEntryResponseDto"];
+                };
+            };
+        };
+    };
+    EntriesController_correct: {
+        parameters: {
+            query: {
+                /** @description Expected current version of the row. Used for optimistic locking. */
+                expectedVersion: number;
+            };
+            header?: never;
+            path: {
+                entryId: string;
+                /** @description Parking lot tenant ID */
+                tenantId: unknown;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CorrectEntryDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
                     "application/json": components["schemas"]["EntryDto"];
+                };
+            };
+        };
+    };
+    InvoicesController_issue: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entryId: string;
+                /** @description Parking lot tenant ID */
+                tenantId: unknown;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IssueInvoiceDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvoiceSummaryDto"];
                 };
             };
         };
@@ -4891,6 +8667,108 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EntryDto"];
+                };
+            };
+        };
+    };
+    InvoicesController_receivers: {
+        parameters: {
+            query?: {
+                limit?: components["schemas"]["Object"];
+                /** @description Con dígitos busca por el principio del CUIT; con letras, dentro de la razón social. Vacío: los más recientes. */
+                q?: string;
+            };
+            header?: never;
+            path: {
+                /** @description Parking lot tenant ID */
+                tenantId: unknown;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvoiceReceiverDto"][];
+                };
+            };
+        };
+    };
+    InvoicesController_document: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                invoiceId: string;
+                /** @description Parking lot tenant ID */
+                tenantId: unknown;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvoiceDocumentDto"];
+                };
+            };
+        };
+    };
+    InvoicesController_issueBatch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Parking lot tenant ID */
+                tenantId: unknown;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IssueInvoiceBatchDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvoiceBatchResponseDto"];
+                };
+            };
+        };
+    };
+    InvoicesController_pullChanges: {
+        parameters: {
+            query?: {
+                /** @description Return rows with syncSeq greater than this value. */
+                afterSeq?: components["schemas"]["Object"];
+                /** @description Max items per page. */
+                limit?: components["schemas"]["Object"];
+            };
+            header?: never;
+            path: {
+                /** @description Parking lot tenant ID */
+                tenantId: unknown;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvoiceChangesResponseDto"];
                 };
             };
         };
@@ -5101,6 +8979,806 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["LprDetectionEventChangesResponseDto"];
+                };
+            };
+        };
+    };
+    mercadoPagoGetAccount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description ID of the entity (parking lot / tenant). */
+                tenantId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MpAccountDto"];
+                };
+            };
+            /** @description Missing, malformed, or expired bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description The caller is authenticated but is not a member of the `:tenantId` entity, or is not an `owner` for a write operation. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description The entity has no Mercado Pago account linked (MP_NOT_LINKED). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    mercadoPagoUnlinkAccount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description ID of the entity (parking lot / tenant). */
+                tenantId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing, malformed, or expired bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description The caller is authenticated but is not a member of the `:tenantId` entity, or is not an `owner` for a write operation. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description The entity has no Mercado Pago account linked (MP_NOT_LINKED). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    mercadoPagoCreateAuthorizationUrl: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description ID of the entity (parking lot / tenant). */
+                tenantId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateMpAuthorizationUrlDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MpAuthorizationUrlDto"];
+                };
+            };
+            /** @description Invalid payload — typically a `returnPath` that is not an internal path. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblemDetailsDto"];
+                };
+            };
+            /** @description Missing, malformed, or expired bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description The caller is authenticated but is not a member of the `:tenantId` entity, or is not an `owner` for a write operation. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description The entity already has an active Mercado Pago account (MP_ALREADY_LINKED). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description The entity address is incomplete (MP_ENTITY_ADDRESS_INCOMPLETE). */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    mercadoPagoResyncPos: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description ID of the entity (parking lot / tenant). */
+                tenantId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MpAccountDto"];
+                };
+            };
+            /** @description Missing, malformed, or expired bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description The caller is authenticated but is not a member of the `:tenantId` entity, or is not an `owner` for a write operation. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description The entity has no Mercado Pago account linked (MP_NOT_LINKED). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description The link is not operational (MP_ACCOUNT_TOKEN_EXPIRED, MP_ACCOUNT_REVOKED). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description Mercado Pago is down or rate-limiting us (MP_UNAVAILABLE). */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    metricsGetOccupancy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Parking lot tenant ID */
+                tenantId: unknown;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OccupancyResponseDto"];
+                };
+            };
+            /** @description Caller is an `operator` (`ENTITY_INSUFFICIENT_ROLE`) or has no membership in this lot (`ENTITY_NO_ACCESS`). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    metricsGetRevenue: {
+        parameters: {
+            query?: {
+                /**
+                 * @description Restrict to what one cash session (shift) **collected** — the figures for a cash-up.
+                 *
+                 *     Matches `payment_transactions.cashSessionId`: the drawer that took the money when the stay was closed. **Not** `entries.cashSessionId`, which records the drawer a car *entered* under and is reassigned to the next shift for every car still inside when a shift closes.
+                 *
+                 *     With it, `from`/`to` become optional. A bound you send is used verbatim; a missing one is derived from the shift (`openedAt` → `closedAt`, or now if still open), **widened to cover every payment the shift collected**: the offline desktop can sync a close late with a `leftAt` outside its own shift, and clipping to the shift would drop it. The window actually used comes back in the response `from`/`to`.
+                 *
+                 *     Revenue then comes from the transactions, as with `paymentMethod` (reported in `revenueSource`), and the bucket limit applies to the derived window like to any other — prefer `granularity=hour` for a shift.
+                 *
+                 *     `404 CASH_SESSION_NOT_FOUND` when the session does not exist in this parking lot.
+                 */
+                cashSessionId?: string;
+                /**
+                 * @description Start of the window (inclusive), ISO-8601 **with an explicit offset**.
+                 *
+                 *     **Required unless `cashSessionId` is given**, in which case it defaults to the start of the shift — see `cashSessionId`.
+                 *
+                 *     The offset is mandatory: a naive `2026-08-07T13:00:00` would be resolved against the server clock, silently shifting the numbers by the Argentine offset. Send `-03:00` for Argentine wall-clock time.
+                 */
+                from?: string;
+                /** @description Bucket width. Buckets follow the civil calendar of `tz`, so a DST day stays one bucket. */
+                granularity?: "hour" | "day" | "week" | "month";
+                /**
+                 * @description Restrict to stays paid with this payment method (the snapshot name stored on the transaction, e.g. `Efectivo`).
+                 *
+                 *     Setting it switches `revenue` to sum `payment_transactions` instead of `entries.amountPaid` — the transactions table is the only place the per-method split exists. The response reports this in `revenueSource`.
+                 */
+                paymentMethod?: string;
+                /** @description End of the window (exclusive), ISO-8601 with explicit offset. **Required unless `cashSessionId` is given.** */
+                to?: string;
+                /** @description IANA timezone used to delimit civil days (e.g. `America/Argentina/Buenos_Aires`). Defaults to Argentina. */
+                tz?: string;
+                /**
+                 * @description Restrict to a vehicle type, matched **exactly** against `entries.vehicleType`.
+                 *
+                 *     Free text rather than a closed enum: vehicle types are a per-tenant catalogue (`GET /tenants/:tenantId/vehicle-types`), which is where the client should populate this filter from. `entries.vehicleType` stores a *snapshot* of the type name taken at ingress, so renaming a type does not rewrite history — stays registered under the old name keep answering to the old name.
+                 *
+                 *     **Partial data:** `entries.vehicleType` is only populated on LPR ingress (`source = "auto"`); manually registered stays leave it null and are excluded by this filter.
+                 */
+                vehicleType?: string;
+            };
+            header?: never;
+            path: {
+                /** @description Parking lot tenant ID */
+                tenantId: unknown;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RevenueResponseDto"];
+                };
+            };
+            /** @description `from`/`to` missing without a `cashSessionId`, `from` not before `to`, a date-time without an explicit offset, or a malformed `cashSessionId`. Also when the range and granularity together exceed the bucket limit. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblemDetailsDto"];
+                };
+            };
+            /** @description Caller is an `operator` (`ENTITY_INSUFFICIENT_ROLE`) or has no membership in this lot (`ENTITY_NO_ACCESS`). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description `cashSessionId` does not exist in this parking lot (`CASH_SESSION_NOT_FOUND`). A session of another lot gets the same answer. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    metricsGetPaymentMethodBreakdown: {
+        parameters: {
+            query?: {
+                /**
+                 * @description Restrict to what one cash session (shift) **collected** — the figures for a cash-up.
+                 *
+                 *     Matches `payment_transactions.cashSessionId`: the drawer that took the money when the stay was closed. **Not** `entries.cashSessionId`, which records the drawer a car *entered* under and is reassigned to the next shift for every car still inside when a shift closes.
+                 *
+                 *     With it, `from`/`to` become optional. A bound you send is used verbatim; a missing one is derived from the shift (`openedAt` → `closedAt`, or now if still open), **widened to cover every payment the shift collected**: the offline desktop can sync a close late with a `leftAt` outside its own shift, and clipping to the shift would drop it. The window actually used comes back in the response `from`/`to`.
+                 *
+                 *     Revenue then comes from the transactions, as with `paymentMethod` (reported in `revenueSource`), and the bucket limit applies to the derived window like to any other — prefer `granularity=hour` for a shift.
+                 *
+                 *     `404 CASH_SESSION_NOT_FOUND` when the session does not exist in this parking lot.
+                 */
+                cashSessionId?: string;
+                /**
+                 * @description Start of the window (inclusive), ISO-8601 **with an explicit offset**.
+                 *
+                 *     **Required unless `cashSessionId` is given**, in which case it defaults to the start of the shift — see `cashSessionId`.
+                 *
+                 *     The offset is mandatory: a naive `2026-08-07T13:00:00` would be resolved against the server clock, silently shifting the numbers by the Argentine offset. Send `-03:00` for Argentine wall-clock time.
+                 */
+                from?: string;
+                /** @description End of the window (exclusive), ISO-8601 with explicit offset. **Required unless `cashSessionId` is given.** */
+                to?: string;
+                /** @description IANA timezone used to delimit civil days (e.g. `America/Argentina/Buenos_Aires`). Defaults to Argentina. */
+                tz?: string;
+                /**
+                 * @description Restrict to a vehicle type, matched **exactly** against `entries.vehicleType`.
+                 *
+                 *     Free text rather than a closed enum: vehicle types are a per-tenant catalogue (`GET /tenants/:tenantId/vehicle-types`), which is where the client should populate this filter from. `entries.vehicleType` stores a *snapshot* of the type name taken at ingress, so renaming a type does not rewrite history — stays registered under the old name keep answering to the old name.
+                 *
+                 *     **Partial data:** `entries.vehicleType` is only populated on LPR ingress (`source = "auto"`); manually registered stays leave it null and are excluded by this filter.
+                 */
+                vehicleType?: string;
+            };
+            header?: never;
+            path: {
+                /** @description Parking lot tenant ID */
+                tenantId: unknown;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentMethodBreakdownDto"];
+                };
+            };
+            /** @description `from`/`to` missing without a `cashSessionId`, `from` not before `to`, a date-time without an explicit offset, or a malformed `cashSessionId`. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblemDetailsDto"];
+                };
+            };
+            /** @description Caller is an `operator` (`ENTITY_INSUFFICIENT_ROLE`) or has no membership in this lot (`ENTITY_NO_ACCESS`). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description `cashSessionId` does not exist in this parking lot (`CASH_SESSION_NOT_FOUND`). A session of another lot gets the same answer. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    metricsGetSummary: {
+        parameters: {
+            query?: {
+                /** @description IANA timezone used to delimit civil days (e.g. `America/Argentina/Buenos_Aires`). Defaults to Argentina. */
+                tz?: string;
+            };
+            header?: never;
+            path: {
+                /** @description Parking lot tenant ID */
+                tenantId: unknown;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MetricsSummaryDto"];
+                };
+            };
+            /** @description Caller is an `operator` (`ENTITY_INSUFFICIENT_ROLE`) or has no membership in this lot (`ENTITY_NO_ACCESS`). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    metricsGetTopPlates: {
+        parameters: {
+            query?: {
+                /**
+                 * @description Restrict to what one cash session (shift) **collected** — the figures for a cash-up.
+                 *
+                 *     Matches `payment_transactions.cashSessionId`: the drawer that took the money when the stay was closed. **Not** `entries.cashSessionId`, which records the drawer a car *entered* under and is reassigned to the next shift for every car still inside when a shift closes.
+                 *
+                 *     With it, `from`/`to` become optional. A bound you send is used verbatim; a missing one is derived from the shift (`openedAt` → `closedAt`, or now if still open), **widened to cover every payment the shift collected**: the offline desktop can sync a close late with a `leftAt` outside its own shift, and clipping to the shift would drop it. The window actually used comes back in the response `from`/`to`.
+                 *
+                 *     Revenue then comes from the transactions, as with `paymentMethod` (reported in `revenueSource`), and the bucket limit applies to the derived window like to any other — prefer `granularity=hour` for a shift.
+                 *
+                 *     `404 CASH_SESSION_NOT_FOUND` when the session does not exist in this parking lot.
+                 */
+                cashSessionId?: string;
+                /**
+                 * @description Start of the window (inclusive), ISO-8601 **with an explicit offset**.
+                 *
+                 *     **Required unless `cashSessionId` is given**, in which case it defaults to the start of the shift — see `cashSessionId`.
+                 *
+                 *     The offset is mandatory: a naive `2026-08-07T13:00:00` would be resolved against the server clock, silently shifting the numbers by the Argentine offset. Send `-03:00` for Argentine wall-clock time.
+                 */
+                from?: string;
+                /** @description How many plates to return. */
+                limit?: number;
+                /**
+                 * @description Ranking criterion: money left behind (`revenue`), number of stays (`visits`), or time parked (`duration`).
+                 *
+                 *     Every metric is returned regardless, so switching the ranking is a re-sort rather than a different dataset.
+                 */
+                orderBy?: "revenue" | "visits" | "duration";
+                /** @description End of the window (exclusive), ISO-8601 with explicit offset. **Required unless `cashSessionId` is given.** */
+                to?: string;
+                /** @description IANA timezone used to delimit civil days (e.g. `America/Argentina/Buenos_Aires`). Defaults to Argentina. */
+                tz?: string;
+                /**
+                 * @description Restrict to a vehicle type, matched **exactly** against `entries.vehicleType`.
+                 *
+                 *     Free text rather than a closed enum: vehicle types are a per-tenant catalogue (`GET /tenants/:tenantId/vehicle-types`), which is where the client should populate this filter from. `entries.vehicleType` stores a *snapshot* of the type name taken at ingress, so renaming a type does not rewrite history — stays registered under the old name keep answering to the old name.
+                 *
+                 *     **Partial data:** `entries.vehicleType` is only populated on LPR ingress (`source = "auto"`); manually registered stays leave it null and are excluded by this filter.
+                 */
+                vehicleType?: string;
+            };
+            header?: never;
+            path: {
+                /** @description Parking lot tenant ID */
+                tenantId: unknown;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TopPlatesResponseDto"];
+                };
+            };
+            /** @description `from`/`to` missing without a `cashSessionId`, `from` not before `to`, a date-time without an explicit offset, or a malformed `cashSessionId`. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblemDetailsDto"];
+                };
+            };
+            /** @description Caller is an `operator` (`ENTITY_INSUFFICIENT_ROLE`) or has no membership in this lot (`ENTITY_NO_ACCESS`). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description `cashSessionId` does not exist in this parking lot (`CASH_SESSION_NOT_FOUND`). A session of another lot gets the same answer. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    paymentIntentsListUnconsumed: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description ID of the entity (parking lot / tenant). */
+                tenantId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentIntentDto"][];
+                };
+            };
+            /** @description Missing, malformed, or expired bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description The caller is authenticated but is not a member of the `:tenantId` entity. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    paymentIntentsCreate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description ID of the entity (parking lot / tenant). */
+                tenantId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreatePaymentIntentDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentIntentDto"];
+                };
+            };
+            /** @description Invalid payload — bad uuid, or a non-positive amount. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblemDetailsDto"];
+                };
+            };
+            /** @description Missing, malformed, or expired bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description The caller is authenticated but is not a member of the `:tenantId` entity. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description The stay does not exist in this entity, or the entity has no Mercado Pago account linked (MP_NOT_LINKED). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /**
+             * @description The charge cannot be started right now:
+             *
+             *     - `PAYMENT_INTENT_ALREADY_OPEN` — that stay already has a live charge.
+             *     - `PAYMENT_INTENT_POS_BUSY` — the till already has a QR charge in progress for ANOTHER stay. With a static QR the printed sign is bound to one POS and it holds a single order at a time.
+             *     - `PAYMENT_INTENT_ENTRY_CLOSED` — the stay already has an exit registered.
+             *     - `MP_POS_NOT_PROVISIONED` — the account is linked but has no POS yet; re-sync it.
+             *     - `MP_ACCOUNT_TOKEN_EXPIRED`, `MP_ACCOUNT_REVOKED` — the link is not operational.
+             */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description Mercado Pago is down or rate-limiting us (MP_UNAVAILABLE). */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    paymentIntentsGetById: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description ID of the payment intent. */
+                paymentIntentId: string;
+                /** @description ID of the entity (parking lot / tenant). */
+                tenantId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentIntentDto"];
+                };
+            };
+            /** @description Missing, malformed, or expired bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description The caller is authenticated but is not a member of the `:tenantId` entity. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description No such payment intent in this entity (PAYMENT_INTENT_NOT_FOUND). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    paymentIntentsCancel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description ID of the payment intent. */
+                paymentIntentId: string;
+                /** @description ID of the entity (parking lot / tenant). */
+                tenantId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentIntentDto"];
+                };
+            };
+            /** @description Missing, malformed, or expired bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description The caller is authenticated but is not a member of the `:tenantId` entity. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description No such payment intent in this entity (PAYMENT_INTENT_NOT_FOUND). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description The intent is no longer open — already paid, expired, canceled or consumed (PAYMENT_INTENT_NOT_CANCELABLE). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
                 };
             };
         };
@@ -5317,6 +9995,15 @@ export interface operations {
                     "application/json": components["schemas"]["ProblemDetailsDto"];
                 };
             };
+            /** @description Attempted to enable or set as default an integration-backed method whose integration is not linked (PAYMENT_METHOD_INTEGRATION_NOT_LINKED). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
         };
     };
     entitiesPullPaymentMethodChanges: {
@@ -5520,6 +10207,28 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RateChangesResponseDto"];
+                };
+            };
+        };
+    };
+    RatesController_openEntriesByRate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The ID of the tenant (parking lot) */
+                tenantId: unknown;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OpenEntriesByRateDto"];
                 };
             };
         };
@@ -5730,6 +10439,207 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ServiceChangesResponseDto"];
+                };
+            };
+        };
+    };
+    tenantStaffAdd: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description ID de la entidad (estacionamiento / tenant). */
+                tenantId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateStaffMemberDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StaffMembershipResultDto"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblemDetailsDto"];
+                };
+            };
+            /** @description Missing, malformed, or expired bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description Caller is not a member of the entity (`ENTITY_NO_ACCESS`), or is a member without the `owner` role (`ENTITY_INSUFFICIENT_ROLE`). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description No account registered with that email (`USER_NOT_FOUND`). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description The person already works at this lot (`MEMBERSHIP_ALREADY_EXISTS`). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    tenantStaffRemove: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description ID de la entidad (estacionamiento / tenant). */
+                tenantId: string;
+                /** @description Id de la persona. */
+                userId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Membership removed. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing, malformed, or expired bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description Own membership (`STAFF_SELF_MANAGEMENT`). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description The person does not work at this lot (`MEMBERSHIP_NOT_FOUND`). A repeated DELETE lands here. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description Would leave the lot without an owner (`STAFF_LAST_OWNER`). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    tenantStaffUpdate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description ID de la entidad (estacionamiento / tenant). */
+                tenantId: string;
+                /** @description Id de la persona (no el de la membresía: no tiene id propio). */
+                userId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateStaffMemberDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StaffMembershipResultDto"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblemDetailsDto"];
+                };
+            };
+            /** @description Missing, malformed, or expired bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description Own membership (`STAFF_SELF_MANAGEMENT`), or the destination lot is not the caller’s (`ENTITY_NO_ACCESS`). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description `MEMBERSHIP_NOT_FOUND` | `ENTITY_NOT_FOUND` (destination). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description `STAFF_LAST_OWNER` (would leave the lot ownerless) | `MEMBERSHIP_ALREADY_EXISTS` (already works at the destination). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
                 };
             };
         };

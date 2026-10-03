@@ -12,6 +12,7 @@ import { LoginScreen } from './src/features/auth/LoginScreen';
 import { RegisterScreen } from './src/features/auth/RegisterScreen';
 import { getErrorMessage } from './src/features/auth/errors';
 import { authStyles } from './src/features/auth/styles';
+import { useSessionExpiry } from './src/features/auth/useSessionExpiry';
 import { DriverApp } from './src/features/driver/DriverApp';
 import { ToastProvider, useToast } from './src/lib/notifications/ToastProvider';
 import {
@@ -38,6 +39,7 @@ export default function App() {
 
 function AppInner() {
   const { showToast } = useToast();
+  useSessionExpiry();
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState<AuthView>('login');

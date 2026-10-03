@@ -51,6 +51,24 @@ async function parseProblem(
   }
 }
 
+type UnauthorizedHandler = () => void;
+let unauthorizedHandler: UnauthorizedHandler | null = null;
+
+/**
+ * Registra qué hacer cuando el backend rechaza una llamada AUTENTICADA con 401
+ * (token vencido o revocado que Supabase no pudo refrescar). Un 401 sin token
+ * —p. ej. credenciales incorrectas en el login— no lo dispara. Devuelve la
+ * función para desregistrarlo.
+ */
+export function setUnauthorizedHandler(
+  handler: UnauthorizedHandler,
+): () => void {
+  unauthorizedHandler = handler;
+  return () => {
+    if (unauthorizedHandler === handler) unauthorizedHandler = null;
+  };
+}
+
 export type RequestOptions = {
   method: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH';
   path: string;
@@ -84,6 +102,9 @@ export async function apiRequest<TResponse>(
   }
 
   if (!response.ok) {
+    if (response.status === 401 && options.bearer) {
+      unauthorizedHandler?.();
+    }
     const problem = await parseProblem(response);
     const message =
       problem?.detail ?? `Request failed with status ${response.status}`;
