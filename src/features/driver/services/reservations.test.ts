@@ -20,7 +20,6 @@ describe('reservas', () => {
       code: 'R-C1BD05',
       state: 'active',
       cancellable: true,
-      parkingId: 'p-1',
       parkingName: 'Estacionamiento Once',
       parkingAddress: 'BARTOLOME MITRE 2500, Comuna 3, CABA',
       latitude: -34.6086,
@@ -29,8 +28,6 @@ describe('reservas', () => {
       entryAt: '2026-09-28T13:00:00.000Z',
       exitAt: '2026-09-28T15:00:00.000Z',
       totalArs: 9000,
-      rateName: 'RESERVAS',
-      createdAt: '2026-09-27T22:00:00.000Z',
     });
     expect(booking).toMatchObject({
       address: 'Bartolome Mitre 2500',

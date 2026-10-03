@@ -10,7 +10,7 @@ const request = vi.mocked(apiRequest);
 const ROW = {
   id: 'v-1',
   plate: 'AB123CD',
-  kind: 'suv_pickup' as const,
+  category: 'pickup' as const,
   brand: null,
   model: 'Hilux',
   isPrimary: true,
@@ -21,7 +21,7 @@ const ROW = {
 const CURRENT: DriverVehicle = {
   id: 'v-1',
   plate: 'AB123CD',
-  kind: 'Camioneta',
+  category: 'pickup',
   brand: '',
   model: 'Hilux',
   isPrimary: false,
@@ -33,11 +33,11 @@ describe('vehículos del conductor', () => {
     request.mockResolvedValue(ROW);
   });
 
-  it('traduce la categoría y deja marca/modelo vacíos en vez de null', () => {
+  it('conserva la categoría y deja marca/modelo vacíos en vez de null', () => {
     expect(toDriverVehicle(ROW)).toEqual({
       id: 'v-1',
       plate: 'AB123CD',
-      kind: 'Camioneta',
+      category: 'pickup',
       brand: '',
       model: 'Hilux',
       isPrimary: true,
@@ -46,7 +46,12 @@ describe('vehículos del conductor', () => {
 
   it('al crear normaliza la patente y manda null en lo vacío', async () => {
     await createVehicle(
-      { plate: 'ab-123 cd', kind: 'Moto', brand: '  ', model: 'Wave' },
+      {
+        plate: 'ab-123 cd',
+        category: 'motorcycle',
+        brand: '  ',
+        model: 'Wave',
+      },
       true,
       'token',
     );
@@ -55,7 +60,7 @@ describe('vehículos del conductor', () => {
       path: '/driver/vehicles',
       body: {
         plate: 'AB123CD',
-        kind: 'motorcycle',
+        category: 'motorcycle',
         brand: null,
         model: 'Wave',
         isPrimary: true,
@@ -69,7 +74,7 @@ describe('vehículos del conductor', () => {
       CURRENT,
       {
         plate: 'AB 123 CD',
-        kind: 'Camioneta',
+        category: 'pickup',
         brand: 'Toyota',
         model: 'Hilux',
       },
@@ -86,7 +91,7 @@ describe('vehículos del conductor', () => {
 
     await updateVehicle(
       CURRENT,
-      { plate: 'AC456DE', kind: 'Auto', brand: '', model: '' },
+      { plate: 'AC456DE', category: 'car', brand: '', model: '' },
       true,
       'token',
     );
@@ -94,7 +99,7 @@ describe('vehículos del conductor', () => {
       expect.objectContaining({
         body: {
           plate: 'AC456DE',
-          kind: 'car',
+          category: 'car',
           brand: null,
           model: null,
           isPrimary: true,

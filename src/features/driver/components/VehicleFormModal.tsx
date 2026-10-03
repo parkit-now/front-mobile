@@ -12,12 +12,14 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { VEHICLE_KINDS, type VehicleKind } from '../mock';
 import { driverColors, driverRadius, driverSpacing } from '../theme';
 import {
   formatPlate,
+  isReservableCategory,
   validateVehicle,
   type DriverVehicle,
+  type ReservableCategory,
+  type ReservableCategoryOption,
   type VehicleDraft,
   type VehicleFieldErrors,
 } from '../vehicles';
@@ -27,6 +29,8 @@ type Props = {
   // null = alta de un vehículo nuevo.
   vehicle: DriverVehicle | null;
   vehicles: DriverVehicle[];
+  // Categorías reservables entre las que se elige.
+  categories: ReservableCategoryOption[];
   // Con una reserva activa no se cambian patente ni tipo ni se elimina.
   lockedByReservation: boolean;
   onCancel: () => void;
@@ -38,6 +42,7 @@ type Props = {
 export function VehicleFormModal({
   vehicle,
   vehicles,
+  categories,
   lockedByReservation,
   onCancel,
   onSave,
@@ -48,7 +53,9 @@ export function VehicleFormModal({
   // desmarcar: se cambia marcando otro.
   const primaryLocked = isNew ? vehicles.length === 0 : vehicle.isPrimary;
   const [plate, setPlate] = useState(vehicle ? formatPlate(vehicle.plate) : '');
-  const [kind, setKind] = useState<VehicleKind>(vehicle?.kind ?? 'Auto');
+  const [category, setCategory] = useState<ReservableCategory | null>(
+    vehicle && isReservableCategory(vehicle.category) ? vehicle.category : null,
+  );
   const [brand, setBrand] = useState(vehicle?.brand ?? '');
   const [model, setModel] = useState(vehicle?.model ?? '');
   const [makePrimary, setMakePrimary] = useState(primaryLocked);
@@ -58,7 +65,7 @@ export function VehicleFormModal({
   function handleSave() {
     const draft: VehicleDraft = {
       plate,
-      kind,
+      category: category ?? categories[0].code,
       brand: brand.trim(),
       model: model.trim(),
     };
@@ -140,11 +147,12 @@ export function VehicleFormModal({
             <View style={styles.field}>
               <Text style={styles.label}>Tipo</Text>
               <View style={styles.kinds} accessibilityRole="radiogroup">
-                {VEHICLE_KINDS.map((option) => {
-                  const selected = option === kind;
+                {categories.map((option) => {
+                  const selected =
+                    option.code === (category ?? categories[0]?.code);
                   return (
                     <Pressable
-                      key={option}
+                      key={option.code}
                       style={({ pressed }) => [
                         styles.kind,
                         selected && styles.kindSelected,
@@ -152,7 +160,7 @@ export function VehicleFormModal({
                         pressed && styles.pressed,
                       ]}
                       onPress={() => {
-                        setKind(option);
+                        setCategory(option.code);
                       }}
                       disabled={lockedByReservation}
                       accessibilityRole="radio"
@@ -162,7 +170,7 @@ export function VehicleFormModal({
                       }}
                     >
                       <DriverIcon
-                        name={vehicleIconName(option)}
+                        name={vehicleIconName(option.code)}
                         size={18}
                         color={
                           selected ? driverColors.surface : driverColors.brand
@@ -174,7 +182,7 @@ export function VehicleFormModal({
                           selected && styles.kindTextSelected,
                         ]}
                       >
-                        {option}
+                        {option.label}
                       </Text>
                     </Pressable>
                   );

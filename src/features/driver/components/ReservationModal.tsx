@@ -18,6 +18,7 @@ import {
 import type { DriverQuote } from '../services/driver';
 import { newReservationId } from '../services/reservations';
 import { driverColors, driverRadius, driverSpacing } from '../theme';
+import { useDriverData } from '../hooks/useDriverData';
 import {
   describeVehicle,
   formatPlate,
@@ -54,6 +55,7 @@ export function ReservationModal({
   onConfirm,
   onManageVehicles,
 }: Props) {
+  const { vehicleCategories } = useDriverData();
   const [selectedId, setSelectedId] = useState(
     () => pickReservationVehicle(vehicles)?.id,
   );
@@ -237,10 +239,10 @@ export function ReservationModal({
                       }}
                       accessibilityRole="radio"
                       accessibilityState={{ selected }}
-                      accessibilityLabel={`${formatPlate(vehicle.plate)}, ${describeVehicle(vehicle)}`}
+                      accessibilityLabel={`${formatPlate(vehicle.plate)}, ${describeVehicle(vehicle, vehicleCategories)}`}
                     >
                       <DriverIcon
-                        name={vehicleIconName(vehicle.kind)}
+                        name={vehicleIconName(vehicle.category)}
                         size={20}
                         color={driverColors.brand}
                       />
@@ -252,7 +254,7 @@ export function ReservationModal({
                           ) : null}
                         </Text>
                         <Text style={styles.vehicleMeta} numberOfLines={1}>
-                          {describeVehicle(vehicle)}
+                          {describeVehicle(vehicle, vehicleCategories)}
                         </Text>
                       </View>
                       <View

@@ -38,6 +38,7 @@ export function ProfileScreen({ session }: Props) {
     vehicles,
     vehiclesStatus,
     refreshVehicles,
+    vehicleCategories,
     saveVehicle,
     removeVehicle,
   } = useDriverData();
@@ -129,11 +130,11 @@ export function ProfileScreen({ session }: Props) {
                 setVehicleForm(vehicle);
               }}
               accessibilityRole="button"
-              accessibilityLabel={`${formatPlate(vehicle.plate)}, ${describeVehicle(vehicle)}${vehicle.isPrimary ? ', vehículo principal' : ''}. Tocar para editar`}
+              accessibilityLabel={`${formatPlate(vehicle.plate)}, ${describeVehicle(vehicle, vehicleCategories)}${vehicle.isPrimary ? ', vehículo principal' : ''}. Tocar para editar`}
             >
               <View style={styles.vehicleIcon}>
                 <DriverIcon
-                  name={vehicleIconName(vehicle.kind)}
+                  name={vehicleIconName(vehicle.category)}
                   size={24}
                   color={driverColors.brand}
                 />
@@ -141,7 +142,7 @@ export function ProfileScreen({ session }: Props) {
               <View style={styles.vehicleCopy}>
                 <Text style={styles.plate}>{formatPlate(vehicle.plate)}</Text>
                 <Text style={styles.hint} numberOfLines={1}>
-                  {describeVehicle(vehicle)}
+                  {describeVehicle(vehicle, vehicleCategories)}
                 </Text>
               </View>
               {vehicle.isPrimary ? (
@@ -176,6 +177,7 @@ export function ProfileScreen({ session }: Props) {
         <VehicleFormModal
           vehicle={editingVehicle}
           vehicles={vehicles}
+          categories={vehicleCategories}
           lockedByReservation={
             editingVehicle !== null &&
             hasActiveReservation(editingVehicle, bookings)

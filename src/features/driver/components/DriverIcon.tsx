@@ -1,5 +1,4 @@
 import Svg, { Circle, Path } from 'react-native-svg';
-import type { VehicleKind } from '../mock';
 import { driverColors } from '../theme';
 
 export type DriverIconName =
@@ -8,7 +7,9 @@ export type DriverIconName =
   | 'user'
   | 'car'
   | 'moto'
+  | 'suv'
   | 'pickup'
+  | 'van'
   | 'plus'
   | 'pin'
   | 'ticket'
@@ -92,6 +93,26 @@ export function DriverIcon({
           <Circle cx="17" cy="17.5" r="1.5" {...common} />
         </>
       ) : null}
+      {name === 'suv' ? (
+        <>
+          <Path
+            d="M3 16v-4l2-4h9l4 3.5 3 .5v4M3 16h18M9 8v3.5M5 11.5h14"
+            {...common}
+          />
+          <Circle cx="7" cy="17.5" r="1.5" {...common} />
+          <Circle cx="17" cy="17.5" r="1.5" {...common} />
+        </>
+      ) : null}
+      {name === 'van' ? (
+        <>
+          <Path
+            d="M2 16V7a1 1 0 0 1 1-1h11v10M14 9h4l4 4v3M2 16h20M14 9v4h8"
+            {...common}
+          />
+          <Circle cx="7" cy="17.5" r="1.5" {...common} />
+          <Circle cx="17" cy="17.5" r="1.5" {...common} />
+        </>
+      ) : null}
       {name === 'plus' ? <Path d="M12 5v14M5 12h14" {...common} /> : null}
       {name === 'pin' ? (
         <>
@@ -160,8 +181,4 @@ export function DriverIcon({
   );
 }
 
-export function vehicleIconName(kind: VehicleKind): DriverIconName {
-  if (kind === 'Moto') return 'moto';
-  if (kind === 'Camioneta') return 'pickup';
-  return 'car';
-}
+export { vehicleIconName } from '../vehicles';

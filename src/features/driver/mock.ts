@@ -1,7 +1,3 @@
-// Categoría del vehículo del conductor. Es un dato del vehículo: la reserva se
-// cobra con la tarifa de reservas de la playa, igual para cualquier vehículo.
-export type VehicleKind = 'Auto' | 'Camioneta' | 'Moto';
-
 export type ParkingSchedule = {
   day:
     | 'monday'
@@ -62,8 +58,6 @@ export type Booking = {
     longitude: number;
   };
 };
-
-export const VEHICLE_KINDS: VehicleKind[] = ['Auto', 'Camioneta', 'Moto'];
 
 export const PARKING_LOTS: ParkingLot[] = [
   {
