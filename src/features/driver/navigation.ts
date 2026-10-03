@@ -13,6 +13,18 @@ export type DiscoveryStackParamList = {
   };
 };
 
+/** Pantalla de una reserva: pago, espera de confirmación y estado final. */
+export type ReservationDetailParams = {
+  reservationId: string;
+  /** Cuándo volvió el conductor del checkout (deep link): arranca la espera. */
+  returnedAt?: number;
+};
+
+export type DriverRootParamList = {
+  Tabs: NavigatorScreenParams<DriverTabParamList> | undefined;
+  ReservationDetail: ReservationDetailParams;
+};
+
 export type DriverTabParamList = {
   Explore: NavigatorScreenParams<DiscoveryStackParamList> | undefined;
   Reservations: undefined;
