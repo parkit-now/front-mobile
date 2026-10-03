@@ -2,7 +2,10 @@ import type { NavigationContainerRefWithCurrent } from '@react-navigation/native
 import * as Linking from 'expo-linking';
 import { useCallback, useEffect, useRef } from 'react';
 import type { DriverRootParamList } from '../navigation';
-import { parseReservationLink } from '../reservationLinks';
+import {
+  parseReservationLink,
+  type ReservationLink,
+} from '../reservationLinks';
 
 // El link con el que se abrió la app se atiende una sola vez, aunque el
 // componente se vuelva a montar (cierre y apertura de sesión).
@@ -19,22 +22,31 @@ let initialUrlHandled = false;
 export function useReservationLinks(
   navigationRef: NavigationContainerRefWithCurrent<DriverRootParamList>,
 ) {
-  const pending = useRef<string | null>(null);
+  const pending = useRef<ReservationLink | null>(null);
+
+  // Sólo el redirect del checkout (trae `status`) arranca la espera del pago;
+  // un link suelto abre la reserva y muestra el estado que tenga.
+  const navigateTo = useCallback(
+    (link: ReservationLink) => {
+      navigationRef.navigate('ReservationDetail', {
+        reservationId: link.reservationId,
+        returnedAt: link.hint ? Date.now() : undefined,
+      });
+    },
+    [navigationRef],
+  );
 
   const open = useCallback(
     (url: string | null) => {
       const link = parseReservationLink(url);
       if (!link) return;
       if (!navigationRef.isReady()) {
-        pending.current = link.reservationId;
+        pending.current = link;
         return;
       }
-      navigationRef.navigate('ReservationDetail', {
-        reservationId: link.reservationId,
-        returnedAt: Date.now(),
-      });
+      navigateTo(link);
     },
-    [navigationRef],
+    [navigationRef, navigateTo],
   );
 
   useEffect(() => {
@@ -53,11 +65,8 @@ export function useReservationLinks(
   /** Para el `onReady` del NavigationContainer. */
   return useCallback(() => {
     if (!pending.current) return;
-    const reservationId = pending.current;
+    const link = pending.current;
     pending.current = null;
-    navigationRef.navigate('ReservationDetail', {
-      reservationId,
-      returnedAt: Date.now(),
-    });
-  }, [navigationRef]);
+    navigateTo(link);
+  }, [navigateTo]);
 }
