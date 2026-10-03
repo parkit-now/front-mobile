@@ -27,7 +27,7 @@ const ICON_BY_ROUTE: Record<keyof DriverTabParamList, DriverIconName> = {
 
 export function DriverApp({ session }: Props) {
   return (
-    <DriverDataProvider>
+    <DriverDataProvider accessToken={session.access_token}>
       <View style={styles.page}>
         <NavigationContainer>
           <Tab.Navigator

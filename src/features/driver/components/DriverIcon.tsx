@@ -1,4 +1,5 @@
 import Svg, { Circle, Path } from 'react-native-svg';
+import type { VehicleKind } from '../mock';
 import { driverColors } from '../theme';
 
 export type DriverIconName =
@@ -6,11 +7,14 @@ export type DriverIconName =
   | 'calendar'
   | 'user'
   | 'car'
+  | 'moto'
+  | 'pickup'
+  | 'plus'
   | 'pin'
   | 'ticket'
   | 'filter'
   | 'bell'
-  | 'arrow'
+  | 'directions'
   | 'back'
   | 'clock'
   | 'current-location'
@@ -71,6 +75,24 @@ export function DriverIcon({
           <Circle cx="16" cy="19" r="1" fill={color} />
         </>
       ) : null}
+      {name === 'moto' ? (
+        <>
+          <Circle cx="6" cy="16" r="3" {...common} />
+          <Circle cx="18" cy="16" r="3" {...common} />
+          <Path d="M6 16h5l3-6h3l1 6M9 10h4M15 7h3" {...common} />
+        </>
+      ) : null}
+      {name === 'pickup' ? (
+        <>
+          <Path
+            d="M3 16v-4l2-4h6v4h9a1 1 0 0 1 1 1v3M3 16h18M11 12H4"
+            {...common}
+          />
+          <Circle cx="7" cy="17.5" r="1.5" {...common} />
+          <Circle cx="17" cy="17.5" r="1.5" {...common} />
+        </>
+      ) : null}
+      {name === 'plus' ? <Path d="M12 5v14M5 12h14" {...common} /> : null}
       {name === 'pin' ? (
         <>
           <Path
@@ -105,7 +127,18 @@ export function DriverIcon({
           <Path d="M10 20h4" {...common} />
         </>
       ) : null}
-      {name === 'arrow' ? <Path d="M5 12h14M13 6l6 6-6 6" {...common} /> : null}
+      {name === 'directions' ? (
+        <>
+          <Path
+            d="M10.6 2.6a2 2 0 0 1 2.8 0l8 8a2 2 0 0 1 0 2.8l-8 8a2 2 0 0 1-2.8 0l-8-8a2 2 0 0 1 0-2.8l8-8Z"
+            {...common}
+          />
+          <Path
+            d="M9 15v-2.5a1.5 1.5 0 0 1 1.5-1.5H15M13 9l2 2-2 2"
+            {...common}
+          />
+        </>
+      ) : null}
       {name === 'back' ? (
         <Path d="M19 12H5M11 18l-6-6 6-6" {...common} />
       ) : null}
@@ -125,4 +158,10 @@ export function DriverIcon({
       {name === 'close' ? <Path d="m6 6 12 12M18 6 6 18" {...common} /> : null}
     </Svg>
   );
+}
+
+export function vehicleIconName(kind: VehicleKind): DriverIconName {
+  if (kind === 'Moto') return 'moto';
+  if (kind === 'Camioneta') return 'pickup';
+  return 'car';
 }

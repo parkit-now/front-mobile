@@ -1,6 +1,6 @@
 import type { NavigatorScreenParams } from '@react-navigation/native';
 import type { SearchDestination } from './discovery';
-import type { DiscoveredParkingLot } from './geo';
+import type { ParkingLot } from './mock';
 
 export type DiscoveryStackParamList = {
   DiscoveryHome: undefined;
@@ -9,7 +9,7 @@ export type DiscoveryStackParamList = {
     destination: SearchDestination;
   };
   ParkingDetails: {
-    parking: DiscoveredParkingLot;
+    parking: ParkingLot;
   };
 };
 

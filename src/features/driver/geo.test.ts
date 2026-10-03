@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { PARKING_LOTS } from './mock';
+import { PARKING_LOTS as ALL_PARKING_LOTS } from './mock';
+
+// Fixture estable: los datos de demo pueden crecer sin romper estos casos.
+const PARKING_LOTS = ALL_PARKING_LOTS.filter((parking) =>
+  ['once-central', 'belgrano-norte', 'microcentro-sur'].includes(parking.id),
+);
 import { calculateDistanceMeters, discoverParkingLots } from './geo';
 
 describe('calculateDistanceMeters', () => {

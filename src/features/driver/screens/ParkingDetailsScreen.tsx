@@ -1,14 +1,20 @@
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { translateApiError } from '../../../lib/api/translate';
 import { useToast } from '../../../lib/notifications/ToastProvider';
+import { availabilityLabel, availabilityLevel } from '../availability';
 import { DriverIcon } from '../components/DriverIcon';
 import { ReservationModal } from '../components/ReservationModal';
 import { useDriverData } from '../hooks/useDriverData';
+import { useParkingDetail } from '../hooks/useParkingDetail';
 import type { ParkingLot } from '../mock';
 import type { DiscoveryStackParamList } from '../navigation';
+import { weeklySchedule } from '../schedules';
+import { fetchParkingQuote } from '../services/driver';
 import {
+  availabilityColors,
   driverColors,
   driverLayout,
   driverRadius,
@@ -20,10 +26,31 @@ type Props = NativeStackScreenProps<DiscoveryStackParamList, 'ParkingDetails'>;
 export function ParkingDetailsScreen({ navigation, route }: Props) {
   const insets = useSafeAreaInsets();
   const { showToast } = useToast();
-  const { createReservation } = useDriverData();
+  const { accessToken, createReservation, vehicles } = useDriverData();
   const [reservationParking, setReservationParking] =
     useState<ParkingLot | null>(null);
-  const { parking } = route.params;
+  const routeParking = route.params.parking;
+  const detail = useParkingDetail(routeParking.id, accessToken);
+  const parking: ParkingLot = detail.parking
+    ? {
+        ...detail.parking,
+        distance: routeParking.distance,
+        eta: routeParking.eta,
+      }
+    : routeParking;
+  const quoteReservation = useCallback(
+    (input: { entryAt: string; exitAt: string }) =>
+      fetchParkingQuote(
+        parking.id,
+        { entryAt: input.entryAt, exitAt: input.exitAt },
+        accessToken,
+      ),
+    [accessToken, parking.id],
+  );
+  const availability =
+    availabilityColors[
+      availabilityLevel(parking.availableSpots, parking.totalSpots)
+    ];
 
   return (
     <View style={styles.page}>
@@ -61,11 +88,69 @@ export function ParkingDetailsScreen({ navigation, route }: Props) {
 
         <View style={styles.summary}>
           <SummaryValue label="Precio" value={parking.priceLabel} />
-          <SummaryValue label="Distancia" value={parking.distanceLabel} />
+          <SummaryValue label="Distancia" value={parking.distance} />
           <SummaryValue
             label="Disponibles"
-            value={String(parking.availableSpots)}
+            value={
+              parking.availableSpots === null
+                ? '—'
+                : String(parking.availableSpots)
+            }
           />
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Horarios</Text>
+          <Text
+            style={[
+              styles.openStatus,
+              detail.status === 'success' &&
+                parking.openNow === true &&
+                styles.openStatusOpen,
+              detail.status === 'success' &&
+                parking.openNow === false &&
+                styles.openStatusClosed,
+            ]}
+          >
+            {detail.status === 'loading'
+              ? 'Consultando horarios…'
+              : detail.status === 'error'
+                ? 'No pudimos cargar los horarios.'
+                : parking.openNow === null
+                  ? 'Horario no informado'
+                  : parking.openNow
+                    ? 'Abierto ahora'
+                    : 'Cerrado ahora'}
+          </Text>
+          {detail.status === 'error' ? (
+            <Pressable
+              style={({ pressed }) => [
+                styles.retryButton,
+                pressed && styles.pressed,
+              ]}
+              onPress={detail.retry}
+              accessibilityRole="button"
+            >
+              <Text style={styles.retryText}>Reintentar</Text>
+            </Pressable>
+          ) : null}
+          {parking.schedules.length > 0 ? (
+            <View style={styles.scheduleList}>
+              {weeklySchedule(parking.schedules).map((row) => (
+                <View key={row.day} style={styles.scheduleRow}>
+                  <Text style={styles.scheduleDay}>{row.label}</Text>
+                  <Text
+                    style={[
+                      styles.scheduleHours,
+                      row.closed && styles.scheduleHoursClosed,
+                    ]}
+                  >
+                    {row.hours}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          ) : null}
         </View>
 
         <View style={styles.section}>
@@ -79,9 +164,11 @@ export function ParkingDetailsScreen({ navigation, route }: Props) {
           </View>
         </View>
 
-        <View style={styles.notice}>
-          <Text style={styles.noticeTitle}>
-            {parking.availableSpots} lugares libres ahora
+        <View
+          style={[styles.notice, { backgroundColor: availability.surface }]}
+        >
+          <Text style={[styles.noticeTitle, { color: availability.text }]}>
+            {availabilityLabel(parking.availableSpots)}
           </Text>
           <Text style={styles.noticeCopy}>
             La disponibilidad es informativa y no garantiza un lugar hasta
@@ -92,13 +179,14 @@ export function ParkingDetailsScreen({ navigation, route }: Props) {
         <Pressable
           style={({ pressed }) => [
             styles.reserveButton,
-            !parking.acceptsReservations && styles.disabledButton,
+            (!parking.acceptsReservations || detail.status !== 'success') &&
+              styles.disabledButton,
             pressed && styles.pressed,
           ]}
           onPress={() => {
             setReservationParking(parking);
           }}
-          disabled={!parking.acceptsReservations}
+          disabled={!parking.acceptsReservations || detail.status !== 'success'}
           accessibilityRole="button"
           accessibilityState={{ disabled: !parking.acceptsReservations }}
         >
@@ -110,20 +198,48 @@ export function ParkingDetailsScreen({ navigation, route }: Props) {
         </Pressable>
       </ScrollView>
 
-      <ReservationModal
-        parking={reservationParking}
-        onCancel={() => {
-          setReservationParking(null);
-        }}
-        onConfirm={(selectedParking) => {
-          createReservation(selectedParking);
-          setReservationParking(null);
-          showToast({
-            message: 'Reserva confirmada. Podés verla en Mis reservas.',
-            kind: 'success',
-          });
-        }}
-      />
+      {reservationParking ? (
+        <ReservationModal
+          parking={reservationParking}
+          vehicles={vehicles}
+          onQuote={quoteReservation}
+          onCancel={() => {
+            setReservationParking(null);
+          }}
+          onManageVehicles={() => {
+            setReservationParking(null);
+            navigation.getParent()?.navigate('Profile');
+          }}
+          onConfirm={async ({
+            reservationId,
+            parking: selected,
+            vehicle,
+            quote,
+          }) => {
+            try {
+              await createReservation({
+                id: reservationId,
+                parking: selected,
+                vehicle,
+                entryAt: quote.entryAt,
+                exitAt: quote.exitAt,
+              });
+              setReservationParking(null);
+              showToast({
+                message: 'Reserva confirmada. Podés verla en Mis reservas.',
+                kind: 'success',
+              });
+            } catch (error) {
+              showToast({
+                message: translateApiError(error, {
+                  endpoint: 'driver.reservations',
+                }),
+                kind: 'error',
+              });
+            }
+          }}
+        />
+      ) : null}
     </View>
   );
 }
@@ -210,6 +326,24 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
   },
+  openStatus: {
+    color: driverColors.textSecondary,
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  openStatusOpen: { color: driverColors.success },
+  openStatusClosed: { color: driverColors.danger },
+  scheduleList: { gap: 6 },
+  scheduleRow: { flexDirection: 'row', justifyContent: 'space-between' },
+  scheduleDay: { color: driverColors.textSecondary, fontSize: 13 },
+  scheduleHours: { color: driverColors.text, fontSize: 13, fontWeight: '600' },
+  scheduleHoursClosed: { color: driverColors.textMuted, fontWeight: '400' },
+  retryButton: {
+    minHeight: 40,
+    alignSelf: 'flex-start',
+    justifyContent: 'center',
+  },
+  retryText: { color: driverColors.brand, fontSize: 14, fontWeight: '700' },
   services: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -231,11 +365,9 @@ const styles = StyleSheet.create({
   notice: {
     padding: driverSpacing.md,
     borderRadius: driverRadius.control,
-    backgroundColor: driverColors.successSurface,
     gap: 5,
   },
   noticeTitle: {
-    color: driverColors.success,
     fontSize: 14,
     fontWeight: '700',
   },
