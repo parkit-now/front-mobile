@@ -39,14 +39,18 @@ export type ParkingLot = {
 
 export type BookingStatus = 'active' | 'completed' | 'cancelled';
 
+/** Fecha y hora de un extremo de la reserva, ya formateadas en hora argentina. */
+export type BookingMoment = { dateLabel: string; timeLabel: string };
+
 export type Booking = {
   id: string;
   parkingName: string;
   address: string;
   /** ISO del ingreso, para ordenar. */
   entryAt: string;
-  dateLabel: string;
-  timeLabel: string;
+  /** Ingreso y egreso por separado: la estadía puede terminar otro día. */
+  entry: BookingMoment;
+  exit: BookingMoment;
   status: BookingStatus;
   ticketCode: string;
   priceLabel: string;
