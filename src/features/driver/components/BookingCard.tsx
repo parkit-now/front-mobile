@@ -1,6 +1,7 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import type { Booking } from '../mock';
 import { driverColors, driverRadius, driverSpacing } from '../theme';
+import { formatPlate } from '../vehicles';
 import { DriverIcon } from './DriverIcon';
 
 const STATUS_LABELS: Record<Booking['status'], string> = {
@@ -11,10 +12,34 @@ const STATUS_LABELS: Record<Booking['status'], string> = {
 
 type Props = {
   booking: Booking;
-  onViewTicket: (booking: Booking) => void;
+  onDirections: (booking: Booking) => void;
+  onCancel: (booking: Booking) => void;
+  cancelling?: boolean;
 };
 
-export function BookingCard({ booking, onViewTicket }: Props) {
+export function BookingCard({
+  booking,
+  onDirections,
+  onCancel,
+  cancelling = false,
+}: Props) {
+  function confirmCancel() {
+    Alert.alert(
+      'Cancelar reserva',
+      `¿Querés cancelar la reserva en ${booking.parkingName} del ${booking.dateLabel}, ${booking.timeLabel}?`,
+      [
+        { text: 'Volver', style: 'cancel' },
+        {
+          text: 'Cancelar reserva',
+          style: 'destructive',
+          onPress: () => {
+            onCancel(booking);
+          },
+        },
+      ],
+    );
+  }
+
   return (
     <View style={styles.card}>
       <View style={styles.header}>
@@ -24,6 +49,9 @@ export function BookingCard({ booking, onViewTicket }: Props) {
         <View style={styles.heading}>
           <Text style={styles.name}>{booking.parkingName}</Text>
           <Text style={styles.address}>{booking.address}</Text>
+          <Text style={styles.ticketCode}>
+            Reserva {booking.ticketCode} · {formatPlate(booking.vehiclePlate)}
+          </Text>
         </View>
         <View
           style={[
@@ -48,22 +76,42 @@ export function BookingCard({ booking, onViewTicket }: Props) {
         <Detail label="Total" value={booking.priceLabel} />
       </View>
 
-      <View style={styles.actions}>
-        <Text style={styles.ticketCode}>{booking.ticketCode}</Text>
+      {booking.status === 'active' ? (
         <Pressable
           style={({ pressed }) => [
-            styles.ticketButton,
+            styles.directionsButton,
             pressed && styles.pressed,
           ]}
           onPress={() => {
-            onViewTicket(booking);
+            onDirections(booking);
           }}
           accessibilityRole="button"
-          accessibilityLabel={`Ver ticket ${booking.ticketCode}`}
+          accessibilityLabel={`Cómo llegar a ${booking.parkingName} con Google Maps`}
         >
-          <Text style={styles.ticketButtonText}>Ver ticket</Text>
+          <DriverIcon
+            name="directions"
+            size={18}
+            color={driverColors.surface}
+          />
+          <Text style={styles.directionsButtonText}>Cómo llegar</Text>
         </Pressable>
-      </View>
+      ) : null}
+      {booking.cancellable ? (
+        <Pressable
+          style={({ pressed }) => [
+            styles.cancelButton,
+            pressed && styles.pressed,
+          ]}
+          onPress={confirmCancel}
+          disabled={cancelling}
+          accessibilityRole="button"
+          accessibilityState={{ disabled: cancelling, busy: cancelling }}
+        >
+          <Text style={styles.cancelButtonText}>
+            {cancelling ? 'Cancelando…' : 'Cancelar reserva'}
+          </Text>
+        </Pressable>
+      ) : null}
     </View>
   );
 }
@@ -88,7 +136,7 @@ const styles = StyleSheet.create({
   },
   header: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: driverSpacing.xs,
   },
   ticketIcon: {
@@ -152,26 +200,33 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: driverColors.text,
   },
-  actions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: driverSpacing.sm,
-  },
   ticketCode: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: driverColors.text,
+    marginTop: 4,
+    fontSize: 12,
+    fontWeight: '600',
+    color: driverColors.textSecondary,
   },
-  ticketButton: {
+  directionsButton: {
     minHeight: 44,
     paddingHorizontal: driverSpacing.md,
     borderRadius: driverRadius.control,
     backgroundColor: driverColors.brand,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  cancelButton: {
+    minHeight: 40,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  ticketButtonText: {
+  cancelButtonText: {
+    color: driverColors.danger,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  directionsButtonText: {
     color: driverColors.surface,
     fontSize: 14,
     fontWeight: '700',
