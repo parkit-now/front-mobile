@@ -3,7 +3,7 @@ import { apiRequest } from '../../../lib/api/client';
 import type { Booking } from '../mock';
 import { displayAddress } from './driver';
 
-type ReservationDto = components['schemas']['DriverReservationDto'];
+type ReservationDto = components['schemas']['DriverReservationDetailDto'];
 type CreateReservationDto = components['schemas']['CreateReservationDto'];
 
 const TIME_ZONE = 'America/Argentina/Buenos_Aires';
@@ -63,7 +63,24 @@ export async function cancelReservation(
   return toBooking(row);
 }
 
-export function toBooking(row: ReservationDto): Booking {
+// Sólo los campos que muestra la app; el resto (pago, política) es de la fase 4.
+type ReservationRow = Pick<
+  ReservationDto,
+  | 'id'
+  | 'code'
+  | 'state'
+  | 'cancellable'
+  | 'parkingName'
+  | 'parkingAddress'
+  | 'latitude'
+  | 'longitude'
+  | 'vehiclePlate'
+  | 'entryAt'
+  | 'exitAt'
+  | 'totalArs'
+>;
+
+export function toBooking(row: ReservationRow): Booking {
   const entry = new Date(row.entryAt);
   const exit = new Date(row.exitAt);
   const day = new Intl.DateTimeFormat('es-AR', {

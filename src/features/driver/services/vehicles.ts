@@ -1,6 +1,5 @@
 import type { components } from '../../../generated/api-types';
 import { apiRequest } from '../../../lib/api/client';
-import type { VehicleKind } from '../mock';
 import {
   normalizePlate,
   type DriverVehicle,
@@ -8,21 +7,8 @@ import {
 } from '../vehicles';
 
 type VehicleDto = components['schemas']['DriverVehicleDto'];
-type ApiVehicleKind = components['schemas']['DriverVehicleKind'];
 type CreateVehicleDto = components['schemas']['CreateDriverVehicleDto'];
 type UpdateVehicleDto = components['schemas']['UpdateDriverVehicleDto'];
-
-const API_KIND_BY_MOBILE: Record<VehicleKind, ApiVehicleKind> = {
-  Auto: 'car',
-  Camioneta: 'suv_pickup',
-  Moto: 'motorcycle',
-};
-
-const MOBILE_KIND_BY_API: Record<ApiVehicleKind, VehicleKind> = {
-  car: 'Auto',
-  suv_pickup: 'Camioneta',
-  motorcycle: 'Moto',
-};
 
 export async function listVehicles(bearer: string): Promise<DriverVehicle[]> {
   const rows = await apiRequest<VehicleDto[]>({
@@ -67,7 +53,7 @@ export async function updateVehicle(
     model: next.model,
   };
   if (next.plate !== current.plate) body.plate = next.plate;
-  if (draft.kind !== current.kind) body.kind = next.kind;
+  if (next.category !== current.category) body.category = next.category;
   if (makePrimary && !current.isPrimary) body.isPrimary = true;
   const row = await apiRequest<VehicleDto>({
     method: 'PATCH',
@@ -93,7 +79,7 @@ export function toDriverVehicle(row: VehicleDto): DriverVehicle {
   return {
     id: row.id,
     plate: row.plate,
-    kind: MOBILE_KIND_BY_API[row.kind],
+    category: row.category,
     brand: row.brand ?? '',
     model: row.model ?? '',
     isPrimary: row.isPrimary,
@@ -103,7 +89,7 @@ export function toDriverVehicle(row: VehicleDto): DriverVehicle {
 function toApiDraft(draft: VehicleDraft) {
   return {
     plate: normalizePlate(draft.plate),
-    kind: API_KIND_BY_MOBILE[draft.kind],
+    category: draft.category,
     brand: draft.brand.trim() || null,
     model: draft.model.trim() || null,
   };

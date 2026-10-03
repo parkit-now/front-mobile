@@ -85,6 +85,8 @@ const CODE_MESSAGES: Record<string, string> = {
   RESERVATION_NOT_CANCELLABLE: 'La reserva ya empezó o ya estaba cancelada.',
   RESERVATION_ID_CONFLICT: 'No pudimos crear la reserva. Intentá de nuevo.',
   RESERVATION_VEHICLE_NOT_FOUND: 'Elegí uno de tus vehículos para reservar.',
+  RESERVATION_VEHICLE_CATEGORY_NOT_ACCEPTED:
+    'Este estacionamiento no acepta reservas para ese tipo de vehículo.',
   DRIVER_VEHICLE_NOT_FOUND: 'No encontramos ese vehículo.',
   DRIVER_VEHICLE_PLATE_TAKEN: 'Ya tenés un vehículo con esta patente.',
   DRIVER_VEHICLE_HAS_ACTIVE_RESERVATION:

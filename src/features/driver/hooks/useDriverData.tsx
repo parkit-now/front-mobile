@@ -19,7 +19,13 @@ import {
   listVehicles,
   updateVehicle as updateVehicleRequest,
 } from '../services/vehicles';
-import type { DriverVehicle, VehicleDraft } from '../vehicles';
+import { listReservableCategories } from '../services/vehicleCategories';
+import {
+  FALLBACK_RESERVABLE_CATEGORIES,
+  type DriverVehicle,
+  type ReservableCategoryOption,
+  type VehicleDraft,
+} from '../vehicles';
 
 type LoadStatus = 'loading' | 'success' | 'error';
 
@@ -31,6 +37,8 @@ type DriverDataContextValue = {
   vehicles: DriverVehicle[];
   vehiclesStatus: LoadStatus;
   refreshVehicles: () => Promise<void>;
+  /** Categorías reservables; si falla la carga, quedan las de respaldo. */
+  vehicleCategories: ReservableCategoryOption[];
   /** Crea la reserva en el backend; lanza ApiError si falla. */
   createReservation: (input: {
     id: string;
@@ -66,6 +74,26 @@ export function DriverDataProvider({
   >('loading');
   const [vehicles, setVehicles] = useState<DriverVehicle[]>([]);
   const [vehiclesStatus, setVehiclesStatus] = useState<LoadStatus>('loading');
+
+  const [vehicleCategories, setVehicleCategories] = useState<
+    ReservableCategoryOption[]
+  >(FALLBACK_RESERVABLE_CATEGORIES);
+
+  useEffect(() => {
+    let cancelled = false;
+    listReservableCategories(accessToken)
+      .then((categories) => {
+        if (!cancelled && categories.length > 0) {
+          setVehicleCategories(categories);
+        }
+      })
+      .catch(() => {
+        // Se mantienen las de respaldo.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [accessToken]);
 
   const refreshBookings = useCallback(async () => {
     setBookingsStatus((current) =>
@@ -182,6 +210,7 @@ export function DriverDataProvider({
       vehicles,
       vehiclesStatus,
       refreshVehicles,
+      vehicleCategories,
       createReservation,
       cancelReservation,
       saveVehicle,
@@ -195,6 +224,7 @@ export function DriverDataProvider({
       vehicles,
       vehiclesStatus,
       refreshVehicles,
+      vehicleCategories,
       createReservation,
       cancelReservation,
       saveVehicle,

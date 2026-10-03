@@ -1,20 +1,80 @@
-import type { Booking, VehicleKind } from './mock';
+import type { components } from '../../generated/api-types';
+import type { DriverIconName } from './components/DriverIcon';
+import type { Booking } from './mock';
 
-// Vehículo del conductor, guardado en el backend (/driver/vehicles). La
-// categoría se muestra como Auto / Camioneta / Moto; services/vehicles.ts la
-// traduce a la del backend.
+// Categoría de la plataforma (GET /vehicle-categories). El conductor sólo puede
+// guardar las reservables; el vehículo puede traer cualquiera.
+export type VehicleCategory = components['schemas']['VehicleCategory'];
+export type ReservableCategory =
+  components['schemas']['ReservableVehicleCategory'];
+
+export type VehicleCategoryOption = {
+  code: VehicleCategory;
+  label: string;
+};
+
+export type ReservableCategoryOption = VehicleCategoryOption & {
+  code: ReservableCategory;
+};
+
+// Respaldo si no carga /vehicle-categories: las reservables, en el orden y con
+// las etiquetas de la plataforma.
+export const FALLBACK_RESERVABLE_CATEGORIES: ReservableCategoryOption[] = [
+  { code: 'car', label: 'Auto' },
+  { code: 'suv', label: 'SUV' },
+  { code: 'pickup', label: 'Pickup' },
+  { code: 'van', label: 'Utilitario / Van' },
+  { code: 'motorcycle', label: 'Moto' },
+];
+
+const RESERVABLE_CODES = new Set<string>(
+  FALLBACK_RESERVABLE_CATEGORIES.map((option) => option.code),
+);
+
+export function isReservableCategory(code: string): code is ReservableCategory {
+  return RESERVABLE_CODES.has(code);
+}
+
+const FALLBACK_LABELS: Record<VehicleCategory, string> = {
+  car: 'Auto',
+  suv: 'SUV',
+  pickup: 'Pickup',
+  van: 'Utilitario / Van',
+  motorcycle: 'Moto',
+  bicycle: 'Bici',
+  truck: 'Camión',
+  other: 'Otro',
+};
+
+export function categoryLabel(
+  code: VehicleCategory,
+  categories: VehicleCategoryOption[] = [],
+): string {
+  return (
+    categories.find((option) => option.code === code)?.label ??
+    FALLBACK_LABELS[code] ??
+    code
+  );
+}
+
+// Vehículo del conductor, guardado en el backend (/driver/vehicles).
 export type DriverVehicle = {
   id: string;
   plate: string;
-  kind: VehicleKind;
+  category: VehicleCategory;
   brand: string;
   model: string;
   isPrimary: boolean;
 };
 
-export type VehicleDraft = Omit<DriverVehicle, 'id' | 'isPrimary'>;
+export type VehicleDraft = Omit<
+  DriverVehicle,
+  'id' | 'isPrimary' | 'category'
+> & {
+  category: ReservableCategory;
+};
 
-export type VehicleField = 'plate' | 'kind';
+export type VehicleField = 'plate' | 'category';
 export type VehicleFieldErrors = Partial<Record<VehicleField, string>>;
 
 // Formatos argentinos vigentes, con el agrupado que se usa al mostrarlos.
@@ -49,12 +109,16 @@ export function formatPlate(value: string): string {
     .join(' ');
 }
 
-export function describeVehicle(vehicle: DriverVehicle): string {
+export function describeVehicle(
+  vehicle: DriverVehicle,
+  categories: VehicleCategoryOption[] = [],
+): string {
+  const label = categoryLabel(vehicle.category, categories);
   const name = [vehicle.brand, vehicle.model]
     .map((part) => part.trim())
     .filter(Boolean)
     .join(' ');
-  return name ? `${vehicle.kind} · ${name}` : vehicle.kind;
+  return name ? `${label} · ${name}` : label;
 }
 
 export function validateVehicle(
@@ -99,4 +163,21 @@ export function hasActiveReservation(
     (booking) =>
       booking.status === 'active' && booking.vehiclePlate === vehicle.plate,
   );
+}
+
+// Ícono de la categoría; las que no tienen uno propio usan el del auto.
+export function vehicleIconName(category: VehicleCategory): DriverIconName {
+  switch (category) {
+    case 'motorcycle':
+      return 'moto';
+    case 'suv':
+      return 'suv';
+    case 'pickup':
+      return 'pickup';
+    case 'van':
+    case 'truck':
+      return 'van';
+    default:
+      return 'car';
+  }
 }
