@@ -1,5 +1,3 @@
-import type { DriverVehicle } from './vehicles';
-
 // Categoría del vehículo del conductor. Es un dato del vehículo: la reserva se
 // cobra con la tarifa de reservas de la playa, igual para cualquier vehículo.
 export type VehicleKind = 'Auto' | 'Camioneta' | 'Moto';
@@ -181,24 +179,5 @@ export const PARKING_LOTS: ParkingLot[] = [
     schedules: [],
     reservationMaxDaysAhead: 7,
     coordinate: { latitude: -34.5889, longitude: -58.3966 },
-  },
-];
-
-export const DRIVER_VEHICLES: DriverVehicle[] = [
-  {
-    id: 'vehicle-etios',
-    plate: 'AB123CD',
-    kind: 'Auto',
-    brand: 'Toyota',
-    model: 'Etios',
-    isPrimary: true,
-  },
-  {
-    id: 'vehicle-wave',
-    plate: 'A123BCD',
-    kind: 'Moto',
-    brand: 'Honda',
-    model: 'Wave',
-    isPrimary: false,
   },
 ];

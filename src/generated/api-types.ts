@@ -508,6 +508,42 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/driver/vehicles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The signed-in driver's vehicles, primary first */
+        get: operations["DriverVehiclesController_list"];
+        put?: never;
+        /** Add a vehicle (the first one is always primary) */
+        post: operations["DriverVehiclesController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/driver/vehicles/{vehicleId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete a vehicle without an active reservation (the oldest one becomes primary if needed) */
+        delete: operations["DriverVehiclesController_remove"];
+        options?: never;
+        head?: never;
+        /** Edit a vehicle or mark it as primary (plate and kind are locked while it has an active reservation) */
+        patch: operations["DriverVehiclesController_update"];
+        trace?: never;
+    };
     "/health": {
         parameters: {
             query?: never;
@@ -2699,6 +2735,18 @@ export interface components {
              */
             openingCash: number;
         };
+        CreateDriverVehicleDto: {
+            brand?: string | null;
+            /** @description Marcarlo como principal. El primer vehículo del conductor es principal siempre. */
+            isPrimary?: boolean;
+            kind: components["schemas"]["DriverVehicleKind"];
+            model?: string | null;
+            /**
+             * @description Se normaliza (mayúsculas, sin espacios ni guiones).
+             * @example AB123CD
+             */
+            plate: string;
+        };
         CreateEntryDto: {
             /**
              * Format: uuid
@@ -3137,6 +3185,22 @@ export interface components {
             /** @description Minutos desde 00:00. */
             openMinute: number;
         };
+        DriverVehicleDto: {
+            brand: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** @description Tiene una reserva activa: no se puede borrar ni cambiar patente o categoría. */
+            hasActiveReservation: boolean;
+            /** Format: uuid */
+            id: string;
+            isPrimary: boolean;
+            kind: components["schemas"]["DriverVehicleKind"];
+            model: string | null;
+            /** @example AB123CD */
+            plate: string;
+        };
+        /** @enum {string} */
+        DriverVehicleKind: "car" | "suv_pickup" | "motorcycle";
         EntityAddressDto: {
             /**
              * @description Localidad.
@@ -5124,6 +5188,19 @@ export interface components {
             /** @description IP camera username. Password is intentionally not persisted. */
             username?: string;
         };
+        UpdateDriverVehicleDto: {
+            brand?: string | null;
+            /** @description true lo marca como principal (y desmarca al anterior). Para cambiar el principal se marca otro: false no se acepta. */
+            isPrimary?: boolean;
+            /** @description No se puede cambiar con una reserva activa del vehículo. */
+            kind?: components["schemas"]["DriverVehicleKind"];
+            model?: string | null;
+            /**
+             * @description Se normaliza. No se puede cambiar con una reserva activa del vehículo.
+             * @example AB123CD
+             */
+            plate?: string;
+        };
         UpdateEntityAddressDto: {
             /**
              * @description Localidad.
@@ -5364,7 +5441,7 @@ export interface components {
         UpdateServiceDto: {
             /** @description Whether the amenity is offered by the tenant. */
             enabled?: boolean;
-            /** @description Sólo ADVANCE_RESERVATION: plazas que se pueden reservar a la vez. null lo deja sin configurar. */
+            /** @description Sólo ADVANCE_RESERVATION: plazas que se pueden reservar a la vez, hasta la capacidad de la playa. null lo deja sin configurar. */
             reservableSpots?: number | null;
             /**
              * Format: uuid
@@ -6918,6 +6995,92 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DriverReservationDto"];
+                };
+            };
+        };
+    };
+    DriverVehiclesController_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DriverVehicleDto"][];
+                };
+            };
+        };
+    };
+    DriverVehiclesController_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateDriverVehicleDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DriverVehicleDto"];
+                };
+            };
+        };
+    };
+    DriverVehiclesController_remove: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                vehicleId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    DriverVehiclesController_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                vehicleId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateDriverVehicleDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DriverVehicleDto"];
                 };
             };
         };

@@ -1,7 +1,8 @@
 import type { Booking, VehicleKind } from './mock';
 
-// Vehículo del conductor. Vive en memoria hasta que exista el endpoint del
-// conductor; los nombres (`plate`, `brand`, `model`) siguen al backend.
+// Vehículo del conductor, guardado en el backend (/driver/vehicles). La
+// categoría se muestra como Auto / Camioneta / Moto; services/vehicles.ts la
+// traduce a la del backend.
 export type DriverVehicle = {
   id: string;
   plate: string;
@@ -77,71 +78,6 @@ export function validateVehicle(
   }
 
   return errors;
-}
-
-export function getPrimaryVehicle(
-  vehicles: DriverVehicle[],
-): DriverVehicle | null {
-  return vehicles.find((vehicle) => vehicle.isPrimary) ?? null;
-}
-
-// Invariante: si hay vehículos, exactamente uno es el principal. El primero
-// que se agrega lo es siempre; los demás, solo si el usuario lo pide.
-export function addVehicle(
-  vehicles: DriverVehicle[],
-  draft: VehicleDraft,
-  { id, makePrimary }: { id: string; makePrimary: boolean },
-): DriverVehicle[] {
-  const isPrimary = makePrimary || vehicles.length === 0;
-  const added: DriverVehicle = {
-    ...draft,
-    id,
-    plate: normalizePlate(draft.plate),
-    isPrimary,
-  };
-  const current = isPrimary
-    ? vehicles.map((vehicle) => ({ ...vehicle, isPrimary: false }))
-    : vehicles;
-
-  return [...current, added];
-}
-
-export function updateVehicle(
-  vehicles: DriverVehicle[],
-  id: string,
-  draft: VehicleDraft,
-): DriverVehicle[] {
-  return vehicles.map((vehicle) =>
-    vehicle.id === id
-      ? { ...vehicle, ...draft, plate: normalizePlate(draft.plate) }
-      : vehicle,
-  );
-}
-
-export function setPrimaryVehicle(
-  vehicles: DriverVehicle[],
-  id: string,
-): DriverVehicle[] {
-  if (!vehicles.some((vehicle) => vehicle.id === id)) return vehicles;
-  return vehicles.map((vehicle) => ({
-    ...vehicle,
-    isPrimary: vehicle.id === id,
-  }));
-}
-
-// Si se borra el principal, pasa a serlo el primero que queda.
-export function removeVehicle(
-  vehicles: DriverVehicle[],
-  id: string,
-): DriverVehicle[] {
-  const removed = vehicles.find((vehicle) => vehicle.id === id);
-  const remaining = vehicles.filter((vehicle) => vehicle.id !== id);
-  if (!removed?.isPrimary || remaining.length === 0) return remaining;
-
-  return remaining.map((vehicle, index) => ({
-    ...vehicle,
-    isPrimary: index === 0,
-  }));
 }
 
 // Vehículo sugerido para reservar: el principal, o el primero si no hay.

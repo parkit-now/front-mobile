@@ -1,17 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import type { Booking } from './mock';
 import {
-  addVehicle,
   describeVehicle,
   formatPlate,
-  getPrimaryVehicle,
   hasActiveReservation,
   isValidPlate,
   normalizePlate,
   pickReservationVehicle,
-  removeVehicle,
-  setPrimaryVehicle,
-  updateVehicle,
   validateVehicle,
   type DriverVehicle,
   type VehicleDraft,
@@ -80,43 +75,6 @@ describe('validateVehicle', () => {
     expect(
       validateVehicle(draft({ plate: 'ab 123 cd' }), [AUTO], AUTO.id),
     ).toEqual({});
-  });
-});
-
-describe('vehículo principal', () => {
-  it('el primer vehículo agregado queda como principal', () => {
-    const vehicles = addVehicle([], draft(), { id: 'n', makePrimary: false });
-    expect(getPrimaryVehicle(vehicles)?.plate).toBe('AC456FG');
-  });
-
-  it('agregar como principal desmarca al anterior', () => {
-    const vehicles = addVehicle([AUTO], draft(), {
-      id: 'n',
-      makePrimary: true,
-    });
-    expect(vehicles.filter((vehicle) => vehicle.isPrimary)).toHaveLength(1);
-    expect(getPrimaryVehicle(vehicles)?.id).toBe('n');
-  });
-
-  it('cambiar el principal deja uno solo marcado', () => {
-    const vehicles = setPrimaryVehicle([AUTO, MOTO], MOTO.id);
-    expect(vehicles.map((vehicle) => vehicle.isPrimary)).toEqual([false, true]);
-  });
-
-  it('al borrar el principal pasa a serlo el siguiente', () => {
-    expect(getPrimaryVehicle(removeVehicle([AUTO, MOTO], AUTO.id))?.id).toBe(
-      MOTO.id,
-    );
-    expect(removeVehicle([AUTO], AUTO.id)).toEqual([]);
-  });
-
-  it('editar conserva el principal y normaliza la patente', () => {
-    const [edited] = updateVehicle(
-      [AUTO],
-      AUTO.id,
-      draft({ plate: 'zz 999 yy' }),
-    );
-    expect(edited).toMatchObject({ plate: 'ZZ999YY', isPrimary: true });
   });
 });
 

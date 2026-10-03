@@ -26,7 +26,8 @@ export type EndpointKey =
   | 'driver.parkingDetail'
   | 'driver.quote'
   | 'driver.reservations'
-  | 'driver.cancelReservation';
+  | 'driver.cancelReservation'
+  | 'driver.vehicles';
 
 export type TranslateContext = {
   endpoint?: EndpointKey;
@@ -83,6 +84,13 @@ const CODE_MESSAGES: Record<string, string> = {
   RESERVATION_NOT_FOUND: 'No encontramos esa reserva.',
   RESERVATION_NOT_CANCELLABLE: 'La reserva ya empezó o ya estaba cancelada.',
   RESERVATION_ID_CONFLICT: 'No pudimos crear la reserva. Intentá de nuevo.',
+  RESERVATION_VEHICLE_NOT_FOUND: 'Elegí uno de tus vehículos para reservar.',
+  DRIVER_VEHICLE_NOT_FOUND: 'No encontramos ese vehículo.',
+  DRIVER_VEHICLE_PLATE_TAKEN: 'Ya tenés un vehículo con esta patente.',
+  DRIVER_VEHICLE_HAS_ACTIVE_RESERVATION:
+    'Este vehículo tiene una reserva activa: no podés cambiar la patente ni el tipo, ni eliminarlo.',
+  DRIVER_VEHICLE_PRIMARY_REQUIRED:
+    'Para cambiar el principal, marcá otro vehículo como principal.',
 
   // Validacion (envoltorio — el detalle por campo se traduce con
   // translateValidationCode).

@@ -30,8 +30,9 @@ type Props = {
   // Con una reserva activa no se cambian patente ni tipo ni se elimina.
   lockedByReservation: boolean;
   onCancel: () => void;
-  onSave: (draft: VehicleDraft, makePrimary: boolean) => void;
-  onDelete: (vehicle: DriverVehicle) => void;
+  /** Guarda en el backend. Si rechaza, el formulario queda abierto. */
+  onSave: (draft: VehicleDraft, makePrimary: boolean) => Promise<void>;
+  onDelete: (vehicle: DriverVehicle) => Promise<void>;
 };
 
 export function VehicleFormModal({
@@ -52,6 +53,7 @@ export function VehicleFormModal({
   const [model, setModel] = useState(vehicle?.model ?? '');
   const [makePrimary, setMakePrimary] = useState(primaryLocked);
   const [errors, setErrors] = useState<VehicleFieldErrors>({});
+  const [saving, setSaving] = useState(false);
 
   function handleSave() {
     const draft: VehicleDraft = {
@@ -63,7 +65,10 @@ export function VehicleFormModal({
     const nextErrors = validateVehicle(draft, vehicles, vehicle?.id ?? null);
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length > 0) return;
-    onSave(draft, makePrimary);
+    setSaving(true);
+    void onSave(draft, makePrimary).finally(() => {
+      setSaving(false);
+    });
   }
 
   function confirmDelete(target: DriverVehicle) {
@@ -76,7 +81,10 @@ export function VehicleFormModal({
           text: 'Eliminar',
           style: 'destructive',
           onPress: () => {
-            onDelete(target);
+            setSaving(true);
+            void onDelete(target).finally(() => {
+              setSaving(false);
+            });
           },
         },
       ],
@@ -231,12 +239,17 @@ export function VehicleFormModal({
               <Pressable
                 style={({ pressed }) => [
                   styles.primaryButton,
+                  saving && styles.buttonDisabled,
                   pressed && styles.pressed,
                 ]}
                 onPress={handleSave}
+                disabled={saving}
                 accessibilityRole="button"
+                accessibilityState={{ disabled: saving, busy: saving }}
               >
-                <Text style={styles.primaryText}>Guardar</Text>
+                <Text style={styles.primaryText}>
+                  {saving ? 'Guardando...' : 'Guardar'}
+                </Text>
               </Pressable>
             </View>
 
@@ -256,7 +269,9 @@ export function VehicleFormModal({
                 onPress={() => {
                   confirmDelete(vehicle);
                 }}
+                disabled={saving}
                 accessibilityRole="button"
+                accessibilityState={{ disabled: saving }}
               >
                 <Text style={styles.deleteText}>Eliminar vehículo</Text>
               </Pressable>
@@ -269,6 +284,7 @@ export function VehicleFormModal({
 }
 
 const styles = StyleSheet.create({
+  buttonDisabled: { opacity: 0.6 },
   backdrop: {
     flex: 1,
     padding: driverSpacing.lg,
