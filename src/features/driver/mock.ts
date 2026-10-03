@@ -1,3 +1,7 @@
+import type { components } from '../../generated/api-types';
+
+type ReservableCategory = components['schemas']['ReservableVehicleCategory'];
+
 export type ParkingSchedule = {
   day:
     | 'monday'
@@ -9,6 +13,19 @@ export type ParkingSchedule = {
     | 'sunday';
   openMinute: number;
   closeMinute: number;
+};
+
+/** Reglas de la reserva que muestra el detalle (GET /driver/parkings/:id). */
+export type ReservationRules = {
+  acceptanceMode: 'auto' | 'manual';
+  /** Cancelación gratis hasta estos minutos antes del ingreso. */
+  freeCancelMinutes: number;
+  /** % que se devuelve si se cancela pasado el corte gratis. */
+  lateCancelRefundPct: number;
+  /** Minutos antes del ingreso desde los que se puede llegar. */
+  earlyArrivalMinutes: number;
+  /** Tolerancia tras la hora de ingreso. */
+  graceMinutes: number;
 };
 
 export type ParkingLot = {
@@ -31,13 +48,29 @@ export type ParkingLot = {
   openNow: boolean | null;
   schedules: ParkingSchedule[];
   reservationMaxDaysAhead: number;
+  /** Horario efectivo de reservas (el de apertura si el dueño no cargó uno). */
+  reservationHours: ParkingSchedule[];
+  /** Categorías de vehículo que pueden reservar; vacío si no toma reservas. */
+  reservationVehicleCategories: ReservableCategory[];
+  reservationRules: ReservationRules | null;
   coordinate: {
     latitude: number;
     longitude: number;
   };
 };
 
+/** Estado "grueso" del backend: activa, completada o cancelada. */
 export type BookingStatus = 'active' | 'completed' | 'cancelled';
+
+/** Ciclo de vida completo de la reserva (ReservationStatus del backend). */
+export type ReservationLifecycle = components['schemas']['ReservationStatus'];
+
+export type RefundStatus =
+  | 'none'
+  | 'pending'
+  | 'refunded'
+  | 'partial'
+  | 'failed';
 
 /** Fecha y hora de un extremo de la reserva, ya formateadas en hora argentina. */
 export type BookingMoment = { dateLabel: string; timeLabel: string };
@@ -46,21 +79,49 @@ export type Booking = {
   id: string;
   parkingName: string;
   address: string;
-  /** ISO del ingreso, para ordenar. */
+  /** ISO del ingreso, para ordenar y para calcular los plazos de la política. */
   entryAt: string;
+  /** ISO del egreso. */
+  exitAt: string;
   /** Ingreso y egreso por separado: la estadía puede terminar otro día. */
   entry: BookingMoment;
   exit: BookingMoment;
   status: BookingStatus;
+  /** Ciclo de vida completo: lo que define qué se muestra. */
+  lifecycle: ReservationLifecycle;
   ticketCode: string;
   priceLabel: string;
+  totalArs: number;
   vehiclePlate: string;
   /** Activa y sin empezar: se puede cancelar. */
   cancellable: boolean;
+  refundStatus: RefundStatus;
+  refundedAmountArs: number | null;
+  /** Quién canceló o rechazó, y por qué (texto del dueño o código del sistema). */
+  cancelledBy: 'driver' | 'owner' | 'system' | null;
+  reason: string | null;
+  /** Hasta cuándo se puede pagar (pending_payment). */
+  holdExpiresAt: string | null;
+  /** Hasta cuándo puede responder el dueño (pending_approval). */
+  approvalDeadlineAt: string | null;
+  /** Estado del último intento de pago (created, approved, rejected, …). */
+  paymentStatus: string | null;
+  /** Donde se paga; sólo mientras el pago está pendiente. */
+  checkoutUrl: string | null;
+  policy: ReservationPolicy;
   coordinate: {
     latitude: number;
     longitude: number;
   };
+};
+
+export type ReservationPolicy = {
+  freeCancelMinutes: number;
+  lateCancelRefundPct: number;
+  earlyArrivalMinutes: number;
+  graceMinutes: number;
+  acceptanceMode: 'auto' | 'manual';
+  approvalWindowMinutes: number;
 };
 
 export const PARKING_LOTS: ParkingLot[] = [
@@ -81,6 +142,9 @@ export const PARKING_LOTS: ParkingLot[] = [
     openNow: true,
     schedules: [],
     reservationMaxDaysAhead: 7,
+    reservationHours: [],
+    reservationVehicleCategories: [],
+    reservationRules: null,
     coordinate: { latitude: -34.6098, longitude: -58.4079 },
   },
   {
@@ -100,6 +164,9 @@ export const PARKING_LOTS: ParkingLot[] = [
     openNow: true,
     schedules: [],
     reservationMaxDaysAhead: 7,
+    reservationHours: [],
+    reservationVehicleCategories: [],
+    reservationRules: null,
     coordinate: { latitude: -34.5609, longitude: -58.4491 },
   },
   {
@@ -119,6 +186,9 @@ export const PARKING_LOTS: ParkingLot[] = [
     openNow: true,
     schedules: [],
     reservationMaxDaysAhead: 7,
+    reservationHours: [],
+    reservationVehicleCategories: [],
+    reservationRules: null,
     coordinate: { latitude: -34.6056, longitude: -58.3782 },
   },
   {
@@ -138,6 +208,9 @@ export const PARKING_LOTS: ParkingLot[] = [
     openNow: true,
     schedules: [],
     reservationMaxDaysAhead: 7,
+    reservationHours: [],
+    reservationVehicleCategories: [],
+    reservationRules: null,
     coordinate: { latitude: -34.6064, longitude: -58.4238 },
   },
   {
@@ -157,6 +230,9 @@ export const PARKING_LOTS: ParkingLot[] = [
     openNow: true,
     schedules: [],
     reservationMaxDaysAhead: 7,
+    reservationHours: [],
+    reservationVehicleCategories: [],
+    reservationRules: null,
     coordinate: { latitude: -34.5897, longitude: -58.4312 },
   },
   {
@@ -176,6 +252,9 @@ export const PARKING_LOTS: ParkingLot[] = [
     openNow: true,
     schedules: [],
     reservationMaxDaysAhead: 7,
+    reservationHours: [],
+    reservationVehicleCategories: [],
+    reservationRules: null,
     coordinate: { latitude: -34.5889, longitude: -58.3966 },
   },
 ];
