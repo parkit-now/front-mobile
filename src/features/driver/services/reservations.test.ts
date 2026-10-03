@@ -45,7 +45,6 @@ describe('reservas', () => {
       code: 'R-000002',
       state: 'active',
       cancellable: true,
-      parkingId: 'p-1',
       parkingName: 'Estacionamiento Once',
       parkingAddress: null,
       latitude: null,
@@ -55,8 +54,6 @@ describe('reservas', () => {
       entryAt: '2026-09-29T01:00:00.000Z',
       exitAt: '2026-09-29T04:00:00.000Z',
       totalArs: 13500,
-      rateName: 'RESERVAS',
-      createdAt: '2026-09-27T22:00:00.000Z',
     });
     expect(booking.entry.timeLabel).toBe('22:00');
     expect(booking.exit.timeLabel).toBe('01:00');

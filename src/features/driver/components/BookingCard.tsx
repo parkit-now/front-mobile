@@ -26,7 +26,7 @@ export function BookingCard({
   function confirmCancel() {
     Alert.alert(
       'Cancelar reserva',
-      `¿Querés cancelar la reserva en ${booking.parkingName} del ${booking.dateLabel}, ${booking.timeLabel}?`,
+      `¿Querés cancelar la reserva en ${booking.parkingName} del ${booking.entry.dateLabel}, ${booking.entry.timeLabel}?`,
       [
         { text: 'Volver', style: 'cancel' },
         {
