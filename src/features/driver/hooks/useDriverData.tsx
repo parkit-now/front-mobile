@@ -7,20 +7,21 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { DRIVER_VEHICLES, type Booking, type ParkingLot } from '../mock';
+import type { Booking, ParkingLot } from '../mock';
 import {
   cancelReservation as cancelReservationRequest,
   createReservation as createReservationRequest,
   listReservations,
 } from '../services/reservations';
 import {
-  addVehicle as addVehicleToList,
-  removeVehicle as removeVehicleFromList,
-  setPrimaryVehicle,
-  updateVehicle as updateVehicleInList,
-  type DriverVehicle,
-  type VehicleDraft,
-} from '../vehicles';
+  createVehicle,
+  deleteVehicle,
+  listVehicles,
+  updateVehicle as updateVehicleRequest,
+} from '../services/vehicles';
+import type { DriverVehicle, VehicleDraft } from '../vehicles';
+
+type LoadStatus = 'loading' | 'success' | 'error';
 
 type DriverDataContextValue = {
   accessToken: string;
@@ -28,6 +29,8 @@ type DriverDataContextValue = {
   bookingsStatus: 'loading' | 'success' | 'error';
   refreshBookings: () => Promise<void>;
   vehicles: DriverVehicle[];
+  vehiclesStatus: LoadStatus;
+  refreshVehicles: () => Promise<void>;
   /** Crea la reserva en el backend; lanza ApiError si falla. */
   createReservation: (input: {
     id: string;
@@ -38,10 +41,14 @@ type DriverDataContextValue = {
   }) => Promise<Booking>;
   /** Cancela en el backend; lanza ApiError si falla. */
   cancelReservation: (bookingId: string) => Promise<Booking>;
-  addVehicle: (draft: VehicleDraft, makePrimary: boolean) => void;
-  updateVehicle: (id: string, draft: VehicleDraft) => void;
-  removeVehicle: (id: string) => void;
-  makePrimaryVehicle: (id: string) => void;
+  /** Alta o edición en el backend; lanza ApiError si falla. */
+  saveVehicle: (input: {
+    vehicle: DriverVehicle | null;
+    draft: VehicleDraft;
+    makePrimary: boolean;
+  }) => Promise<void>;
+  /** Baja en el backend; lanza ApiError si falla. */
+  removeVehicle: (vehicleId: string) => Promise<void>;
 };
 
 const DriverDataContext = createContext<DriverDataContextValue | null>(null);
@@ -57,7 +64,8 @@ export function DriverDataProvider({
   const [bookingsStatus, setBookingsStatus] = useState<
     'loading' | 'success' | 'error'
   >('loading');
-  const [vehicles, setVehicles] = useState<DriverVehicle[]>(DRIVER_VEHICLES);
+  const [vehicles, setVehicles] = useState<DriverVehicle[]>([]);
+  const [vehiclesStatus, setVehiclesStatus] = useState<LoadStatus>('loading');
 
   const refreshBookings = useCallback(async () => {
     setBookingsStatus((current) =>
@@ -74,6 +82,22 @@ export function DriverDataProvider({
   useEffect(() => {
     void refreshBookings();
   }, [refreshBookings]);
+
+  const refreshVehicles = useCallback(async () => {
+    setVehiclesStatus((current) =>
+      current === 'success' ? current : 'loading',
+    );
+    try {
+      setVehicles(await listVehicles(accessToken));
+      setVehiclesStatus('success');
+    } catch {
+      setVehiclesStatus('error');
+    }
+  }, [accessToken]);
+
+  useEffect(() => {
+    void refreshVehicles();
+  }, [refreshVehicles]);
 
   const upsertBooking = useCallback((booking: Booking) => {
     setBookings((current) => [
@@ -117,29 +141,37 @@ export function DriverDataProvider({
     [accessToken],
   );
 
-  const addVehicle = useCallback(
-    (draft: VehicleDraft, makePrimary: boolean) => {
-      setVehicles((current) =>
-        addVehicleToList(current, draft, {
-          id: `vehicle-${Date.now()}`,
-          makePrimary,
-        }),
-      );
+  // Después de escribir se relee la lista: el backend decide el principal
+  // (el primero lo es siempre; borrar el principal promueve a otro).
+  const saveVehicle = useCallback(
+    async ({
+      vehicle,
+      draft,
+      makePrimary,
+    }: {
+      vehicle: DriverVehicle | null;
+      draft: VehicleDraft;
+      makePrimary: boolean;
+    }) => {
+      if (vehicle) {
+        await updateVehicleRequest(vehicle, draft, makePrimary, accessToken);
+      } else {
+        await createVehicle(draft, makePrimary, accessToken);
+      }
+      setVehicles(await listVehicles(accessToken));
+      setVehiclesStatus('success');
     },
-    [],
+    [accessToken],
   );
 
-  const updateVehicle = useCallback((id: string, draft: VehicleDraft) => {
-    setVehicles((current) => updateVehicleInList(current, id, draft));
-  }, []);
-
-  const removeVehicle = useCallback((id: string) => {
-    setVehicles((current) => removeVehicleFromList(current, id));
-  }, []);
-
-  const makePrimaryVehicle = useCallback((id: string) => {
-    setVehicles((current) => setPrimaryVehicle(current, id));
-  }, []);
+  const removeVehicle = useCallback(
+    async (vehicleId: string) => {
+      await deleteVehicle(vehicleId, accessToken);
+      setVehicles(await listVehicles(accessToken));
+      setVehiclesStatus('success');
+    },
+    [accessToken],
+  );
 
   const value = useMemo(
     () => ({
@@ -148,12 +180,12 @@ export function DriverDataProvider({
       bookingsStatus,
       refreshBookings,
       vehicles,
+      vehiclesStatus,
+      refreshVehicles,
       createReservation,
       cancelReservation,
-      addVehicle,
-      updateVehicle,
+      saveVehicle,
       removeVehicle,
-      makePrimaryVehicle,
     }),
     [
       accessToken,
@@ -161,12 +193,12 @@ export function DriverDataProvider({
       bookingsStatus,
       refreshBookings,
       vehicles,
+      vehiclesStatus,
+      refreshVehicles,
       createReservation,
       cancelReservation,
-      addVehicle,
-      updateVehicle,
+      saveVehicle,
       removeVehicle,
-      makePrimaryVehicle,
     ],
   );
 

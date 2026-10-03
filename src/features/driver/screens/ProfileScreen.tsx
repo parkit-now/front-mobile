@@ -2,6 +2,7 @@ import type { Session } from '@supabase/supabase-js';
 import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { translateApiError } from '../../../lib/api/translate';
 import { useToast } from '../../../lib/notifications/ToastProvider';
 import { signOut } from '../../../lib/supabase/session';
 import { getErrorMessage } from '../../auth/errors';
@@ -35,10 +36,10 @@ export function ProfileScreen({ session }: Props) {
   const {
     bookings,
     vehicles,
-    addVehicle,
-    updateVehicle,
+    vehiclesStatus,
+    refreshVehicles,
+    saveVehicle,
     removeVehicle,
-    makePrimaryVehicle,
   } = useDriverData();
   const [vehicleForm, setVehicleForm] = useState<VehicleFormState>(null);
   const editingVehicle = vehicleForm === 'new' ? null : vehicleForm;
@@ -92,7 +93,22 @@ export function ProfileScreen({ session }: Props) {
           </Pressable>
         </View>
 
-        {vehicles.length === 0 ? (
+        {vehiclesStatus === 'loading' && vehicles.length === 0 ? (
+          <View style={styles.card}>
+            <Text style={styles.hint}>Cargando tus vehículos...</Text>
+          </View>
+        ) : vehiclesStatus === 'error' && vehicles.length === 0 ? (
+          <Pressable
+            style={({ pressed }) => [styles.card, pressed && styles.pressed]}
+            onPress={() => {
+              void refreshVehicles();
+            }}
+            accessibilityRole="button"
+          >
+            <Text style={styles.value}>No pudimos cargar tus vehículos</Text>
+            <Text style={styles.hint}>Tocá para reintentar.</Text>
+          </Pressable>
+        ) : vehicles.length === 0 ? (
           <View style={styles.card}>
             <Text style={styles.value}>Todavía no agregaste vehículos</Text>
             <Text style={styles.hint}>
@@ -167,25 +183,42 @@ export function ProfileScreen({ session }: Props) {
           onCancel={() => {
             setVehicleForm(null);
           }}
-          onSave={(draft, makePrimary) => {
-            if (editingVehicle) {
-              updateVehicle(editingVehicle.id, draft);
-              if (makePrimary) makePrimaryVehicle(editingVehicle.id);
-            } else {
-              addVehicle(draft, makePrimary);
+          onSave={async (draft, makePrimary) => {
+            try {
+              await saveVehicle({
+                vehicle: editingVehicle,
+                draft,
+                makePrimary,
+              });
+              setVehicleForm(null);
+              showToast({
+                message: editingVehicle
+                  ? 'Vehículo actualizado.'
+                  : 'Vehículo agregado.',
+                kind: 'success',
+              });
+            } catch (error) {
+              showToast({
+                message: translateApiError(error, {
+                  endpoint: 'driver.vehicles',
+                }),
+                kind: 'error',
+              });
             }
-            setVehicleForm(null);
-            showToast({
-              message: editingVehicle
-                ? 'Vehículo actualizado.'
-                : 'Vehículo agregado.',
-              kind: 'success',
-            });
           }}
-          onDelete={(vehicle) => {
-            removeVehicle(vehicle.id);
-            setVehicleForm(null);
-            showToast({ message: 'Vehículo eliminado.', kind: 'success' });
+          onDelete={async (vehicle) => {
+            try {
+              await removeVehicle(vehicle.id);
+              setVehicleForm(null);
+              showToast({ message: 'Vehículo eliminado.', kind: 'success' });
+            } catch (error) {
+              showToast({
+                message: translateApiError(error, {
+                  endpoint: 'driver.vehicles',
+                }),
+                kind: 'error',
+              });
+            }
           }}
         />
       ) : null}
