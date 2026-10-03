@@ -13,6 +13,7 @@ import type { ParkingLot } from '../mock';
 import {
   dayLabel,
   dayOfIso,
+  effectiveReservationSchedules,
   entryTimeOptions,
   exitDateTimeOptions,
   monthKeyOf,
@@ -23,10 +24,13 @@ import type { DriverQuote } from '../services/driver';
 import { newReservationId } from '../services/reservations';
 import { driverColors, driverRadius, driverSpacing } from '../theme';
 import { useDriverData } from '../hooks/useDriverData';
+import { formatArs, policyText } from '../reservationStatus';
 import {
+  acceptedVehicles,
   describeVehicle,
   formatPlate,
   pickReservationVehicle,
+  unacceptedVehicleNotice,
   type DriverVehicle,
 } from '../vehicles';
 import { DriverIcon, vehicleIconName } from './DriverIcon';
@@ -67,25 +71,42 @@ export function ReservationModal({
   onManageVehicles,
 }: Props) {
   const { vehicleCategories } = useDriverData();
+  // El backend exige las dos cosas: horario de apertura y horario de reservas.
+  const schedules = useMemo(
+    () =>
+      effectiveReservationSchedules(
+        parking.schedules,
+        parking.reservationHours,
+      ),
+    [parking.schedules, parking.reservationHours],
+  );
+  // Sólo los vehículos del conductor que el estacionamiento acepta.
+  const eligibleVehicles = useMemo(
+    () => acceptedVehicles(vehicles, parking.reservationVehicleCategories),
+    [vehicles, parking.reservationVehicleCategories],
+  );
+  const vehicleNotice = unacceptedVehicleNotice(
+    vehicles,
+    parking.reservationVehicleCategories,
+  );
   const [selectedId, setSelectedId] = useState(
-    () => pickReservationVehicle(vehicles)?.id,
+    () => pickReservationVehicle(eligibleVehicles)?.id,
   );
   // Una clave por apertura del modal: un doble toque o un reintento después de
   // un timeout no duplican la reserva.
   const [reservationId] = useState(newReservationId);
   const [confirming, setConfirming] = useState(false);
   const selectedVehicle =
-    vehicles.find((vehicle) => vehicle.id === selectedId) ?? null;
+    eligibleVehicles.find((vehicle) => vehicle.id === selectedId) ?? null;
   const dates = useMemo(
     () => reservationDates(parking.reservationMaxDaysAhead),
     [parking.reservationMaxDaysAhead],
   );
   const firstAvailableDate = useMemo(
     () =>
-      dates.find(
-        (date) => entryTimeOptions(date, parking.schedules).length > 0,
-      ) ?? dates[0],
-    [dates, parking.schedules],
+      dates.find((date) => entryTimeOptions(date, schedules).length > 0) ??
+      dates[0],
+    [dates, schedules],
   );
   const [selectedDateKey, setSelectedDateKey] = useState(
     firstAvailableDate?.key,
@@ -93,22 +114,17 @@ export function ReservationModal({
   const selectedDate =
     dates.find((date) => date.key === selectedDateKey) ?? firstAvailableDate;
   const entries = useMemo(
-    () =>
-      selectedDate ? entryTimeOptions(selectedDate, parking.schedules) : [],
-    [parking.schedules, selectedDate],
+    () => (selectedDate ? entryTimeOptions(selectedDate, schedules) : []),
+    [schedules, selectedDate],
   );
   const [entryAt, setEntryAt] = useState<string>();
   const selectedEntry = entries.find((option) => option.iso === entryAt);
   const exits = useMemo(
     () =>
       selectedDate && selectedEntry
-        ? exitDateTimeOptions(
-            selectedDate,
-            selectedEntry.minute,
-            parking.schedules,
-          )
+        ? exitDateTimeOptions(selectedDate, selectedEntry.minute, schedules)
         : [],
-    [parking.schedules, selectedDate, selectedEntry],
+    [schedules, selectedDate, selectedEntry],
   );
   const [exitAt, setExitAt] = useState<string>();
   const [expanded, setExpanded] = useState<Expanded>(null);
@@ -118,12 +134,10 @@ export function ReservationModal({
     () =>
       new Set(
         dates
-          .filter(
-            (date) => entryTimeOptions(date, parking.schedules).length > 0,
-          )
+          .filter((date) => entryTimeOptions(date, schedules).length > 0)
           .map((date) => date.key),
       ),
-    [dates, parking.schedules],
+    [dates, schedules],
   );
   const entryMonths = useMemo(
     () => unique(dates.map((date) => monthKeyOf(date.key))),
@@ -308,14 +322,14 @@ export function ReservationModal({
 
             <View style={styles.vehicles}>
               <Text style={styles.vehiclesTitle}>Vas a reservar con</Text>
-              {vehicles.length === 0 ? (
+              {vehicles.length === 0 || eligibleVehicles.length === 0 ? (
                 <View style={styles.emptyVehicles}>
                   <Text style={styles.emptyText}>
-                    Agregá un vehículo para poder reservar.
+                    {vehicleNotice ?? 'Agregá un vehículo para poder reservar.'}
                   </Text>
                 </View>
               ) : (
-                vehicles.map((vehicle) => {
+                eligibleVehicles.map((vehicle) => {
                   const selected = vehicle.id === selectedId;
                   return (
                     <Pressable
@@ -388,12 +402,29 @@ export function ReservationModal({
               ) : (
                 <Text style={styles.quoteError}>
                   {quoteError ??
-                    (parking.schedules.length === 0
+                    (schedules.length === 0
                       ? 'Este estacionamiento todavía no informó sus horarios.'
                       : 'Elegí ingreso y egreso para cotizar.')}
                 </Text>
               )}
             </View>
+
+            {entryAt && parking.reservationRules ? (
+              <View style={styles.policy}>
+                <Text style={styles.policyText}>
+                  {policyText(entryAt, parking.reservationRules)}
+                </Text>
+                {parking.reservationRules.acceptanceMode === 'manual' ? (
+                  <Text style={styles.policyText}>
+                    El estacionamiento tiene que aceptar tu reserva. Si no lo
+                    hace a tiempo, te devolvemos todo.
+                  </Text>
+                ) : null}
+                <Text style={styles.policyText}>
+                  Si te pasás del egreso, el excedente se paga en la caja.
+                </Text>
+              </View>
+            ) : null}
           </ScrollView>
 
           <View style={styles.actions}>
@@ -433,8 +464,8 @@ export function ReservationModal({
                 {confirming
                   ? 'Reservando…'
                   : selectedVehicle && quote
-                    ? `Reservar con ${formatPlate(selectedVehicle.plate)}`
-                    : 'Reservar'}
+                    ? `Reservar y pagar ${formatArs(quote.totalArs)}`
+                    : 'Reservar y pagar'}
               </Text>
             </Pressable>
           </View>
@@ -536,6 +567,16 @@ const styles = StyleSheet.create({
     backgroundColor: driverColors.brandSoft,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  policy: {
+    width: '100%',
+    marginTop: driverSpacing.sm,
+    gap: 4,
+  },
+  policyText: {
+    color: driverColors.textSecondary,
+    fontSize: 12,
+    lineHeight: 17,
   },
   quoteLabel: { color: driverColors.textMuted, fontSize: 12 },
   quoteTotal: {
