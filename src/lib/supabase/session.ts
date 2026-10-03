@@ -213,3 +213,12 @@ export async function signOut(): Promise<void> {
     throw error;
   }
 }
+
+/**
+ * Cierra la sesión sólo en el dispositivo, sin avisar al backend: se usa
+ * cuando el backend ya rechazó el token (401), así que revocarlo allá
+ * fallaría igual.
+ */
+export async function signOutLocally(): Promise<void> {
+  await supabase.auth.signOut({ scope: 'local' });
+}
