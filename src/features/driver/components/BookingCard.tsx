@@ -47,8 +47,16 @@ export function BookingCard({ booking, onDirections }: Props) {
       </View>
 
       <View style={styles.details}>
-        <Detail label="Fecha" value={booking.dateLabel} />
-        <Detail label="Horario" value={booking.timeLabel} />
+        <Detail
+          label="Ingreso"
+          value={booking.entry.timeLabel}
+          caption={booking.entry.dateLabel}
+        />
+        <Detail
+          label="Egreso"
+          value={booking.exit.timeLabel}
+          caption={booking.exit.dateLabel}
+        />
         <Detail label="Total" value={booking.priceLabel} />
       </View>
 
@@ -76,10 +84,27 @@ export function BookingCard({ booking, onDirections }: Props) {
   );
 }
 
-function Detail({ label, value }: { label: string; value: string }) {
+function Detail({
+  label,
+  value,
+  caption,
+}: {
+  label: string;
+  value: string;
+  caption?: string;
+}) {
   return (
-    <View style={styles.detail}>
+    <View
+      style={styles.detail}
+      accessible
+      accessibilityLabel={[label, caption, value].filter(Boolean).join(', ')}
+    >
       <Text style={styles.detailLabel}>{label}</Text>
+      {caption ? (
+        <Text style={styles.detailCaption} numberOfLines={1}>
+          {caption}
+        </Text>
+      ) : null}
       <Text style={styles.detailValue}>{value}</Text>
     </View>
   );
@@ -153,6 +178,11 @@ const styles = StyleSheet.create({
   detailLabel: {
     fontSize: 12,
     color: driverColors.textMuted,
+  },
+  detailCaption: {
+    marginTop: 4,
+    fontSize: 13,
+    color: driverColors.text,
   },
   detailValue: {
     marginTop: 4,

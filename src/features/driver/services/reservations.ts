@@ -56,6 +56,7 @@ export function toBooking(row: ReservationDto): Booking {
   const exit = new Date(row.exitAt);
   const day = new Intl.DateTimeFormat('es-AR', {
     timeZone: TIME_ZONE,
+    weekday: 'short',
     day: 'numeric',
     month: 'short',
   });
@@ -72,8 +73,8 @@ export function toBooking(row: ReservationDto): Booking {
       ? displayAddress(row.parkingAddress)
       : 'Dirección no informada',
     entryAt: row.entryAt,
-    dateLabel: day.format(entry),
-    timeLabel: `${time.format(entry)} - ${time.format(exit)}`,
+    entry: { dateLabel: day.format(entry), timeLabel: time.format(entry) },
+    exit: { dateLabel: day.format(exit), timeLabel: time.format(exit) },
     status: row.state,
     ticketCode: row.code,
     priceLabel: `$${row.totalArs.toLocaleString('es-AR')}`,
