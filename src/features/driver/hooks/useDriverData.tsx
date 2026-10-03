@@ -7,11 +7,18 @@ import {
   useState,
   type ReactNode,
 } from 'react';
+import * as Linking from 'expo-linking';
 import type { Booking, ParkingLot } from '../mock';
+import { buildReturnUrl } from '../reservationLinks';
 import {
   cancelReservation as cancelReservationRequest,
   createReservation as createReservationRequest,
+  getReservation,
   listReservations,
+  previewCancel as previewCancelRequest,
+  retryReservationPayment,
+  type CancelPreview,
+  type CreatedReservation,
 } from '../services/reservations';
 import {
   createVehicle,
@@ -39,14 +46,23 @@ type DriverDataContextValue = {
   refreshVehicles: () => Promise<void>;
   /** Categorías reservables; si falla la carga, quedan las de respaldo. */
   vehicleCategories: ReservableCategoryOption[];
-  /** Crea la reserva en el backend; lanza ApiError si falla. */
+  /**
+   * Crea la reserva (`pending_payment`) en el backend y devuelve el checkout;
+   * lanza ApiError si falla.
+   */
   createReservation: (input: {
     id: string;
     parking: ParkingLot;
     vehicle: DriverVehicle;
     entryAt: string;
     exitAt: string;
-  }) => Promise<Booking>;
+  }) => Promise<CreatedReservation>;
+  /** Relee UNA reserva del backend y la deja en la lista; lanza ApiError. */
+  reloadBooking: (bookingId: string) => Promise<Booking>;
+  /** Pide de nuevo el checkout de una `pending_payment`; lanza ApiError. */
+  retryPayment: (bookingId: string) => Promise<CreatedReservation>;
+  /** Cuánto se devolvería si se cancelara ahora; lanza ApiError. */
+  previewCancel: (bookingId: string) => Promise<CancelPreview>;
   /** Cancela en el backend; lanza ApiError si falla. */
   cancelReservation: (bookingId: string) => Promise<Booking>;
   /** Alta o edición en el backend; lanza ApiError si falla. */
@@ -142,20 +158,45 @@ export function DriverDataProvider({
       entryAt: string;
       exitAt: string;
     }) => {
-      const booking = await createReservationRequest(
+      const created = await createReservationRequest(
         {
           id: input.id,
           parkingId: input.parking.id,
           vehiclePlate: input.vehicle.plate,
           entryAt: input.entryAt,
           exitAt: input.exitAt,
+          // Expo Go: exp://…, build: parkit://…, web: http://localhost:8081/…
+          returnUrl: buildReturnUrl(input.id, Linking.createURL),
         },
         accessToken,
       );
+      upsertBooking(created.booking);
+      return created;
+    },
+    [accessToken, upsertBooking],
+  );
+
+  const reloadBooking = useCallback(
+    async (bookingId: string) => {
+      const booking = await getReservation(bookingId, accessToken);
       upsertBooking(booking);
       return booking;
     },
     [accessToken, upsertBooking],
+  );
+
+  const retryPayment = useCallback(
+    async (bookingId: string) => {
+      const created = await retryReservationPayment(bookingId, accessToken);
+      upsertBooking(created.booking);
+      return created;
+    },
+    [accessToken, upsertBooking],
+  );
+
+  const previewCancel = useCallback(
+    (bookingId: string) => previewCancelRequest(bookingId, accessToken),
+    [accessToken],
   );
 
   const cancelReservation = useCallback(
@@ -212,6 +253,9 @@ export function DriverDataProvider({
       refreshVehicles,
       vehicleCategories,
       createReservation,
+      reloadBooking,
+      retryPayment,
+      previewCancel,
       cancelReservation,
       saveVehicle,
       removeVehicle,
@@ -226,6 +270,9 @@ export function DriverDataProvider({
       refreshVehicles,
       vehicleCategories,
       createReservation,
+      reloadBooking,
+      retryPayment,
+      previewCancel,
       cancelReservation,
       saveVehicle,
       removeVehicle,
