@@ -79,7 +79,7 @@ OPENAPI_URL=http://localhost:3001/api-json make sync-types
    sudo apt install adb
    ```
 
-   Eso deja el SDK en `/usr/lib/android-sdk`. `make install` y `make dev` autodetectan esa ruta (también `~/Android/Sdk`, `~/Android/sdk`, `/opt/android-sdk`) y exportan `ANDROID_HOME` para la sesión de Expo — no hace falta tocar tu shell. Si querés persistirlo igual:
+   Eso deja el SDK en `/usr/lib/android-sdk`. `make install` y `make dev` autodetectan esa ruta (también `~/Android/Sdk`, `~/Android/sdk`, `~/Library/Android/sdk` en macOS y `/opt/android-sdk`) y exportan `ANDROID_HOME` para la sesión de Expo — no hace falta tocar tu shell. Si querés persistirlo igual:
 
    ```bash
    echo 'export ANDROID_HOME=/usr/lib/android-sdk' >> ~/.bashrc
@@ -112,6 +112,17 @@ make dev
 ```
 
 Vas a ver `→ ANDROID_HOME=… (autodetectado)` seguido del banner de Expo. Apretá **`a`** en la terminal y Expo va a instalar/abrir la app en el celular.
+
+### Entornos: local o producción
+
+| Comando              | Apunta a                             | Para qué                                                                       |
+| -------------------- | ------------------------------------ | ------------------------------------------------------------------------------ |
+| `make dev-local-usb` | backend y Supabase **locales**       | Desarrollo diario con emulador o celular por USB (configura los `adb reverse`) |
+| `make dev`           | backend y Supabase **locales**       | Igual, sin `--localhost` (red LAN)                                             |
+| `make dev-prod`      | backend y Supabase de **producción** | Probar contra datos reales, en modo desarrollo                                 |
+| `make prod`          | **producción**                       | Bundle minificado, como lo ve el usuario                                       |
+
+Usá estos comandos y no `bun run dev` directo: Expo carga `.env.local` con prioridad sobre `.env`, así que copiar `.env.production` a `.env` no alcanza. Cada target exporta primero las variables de su archivo (las del proceso les ganan a todos los `.env*`) y limpia la caché de Metro (`--clear`), para que no quede un bundle con las URLs del otro entorno. Al cambiar de entorno se cierra la sesión: son dos Supabase distintos.
 
 ### Troubleshooting
 

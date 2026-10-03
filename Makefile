@@ -8,15 +8,24 @@ RESET := \033[0m
 ENV_LOCAL := .env.local
 ENV_PROD  := .env.production
 
-.PHONY: help install dev dev-local-usb prod build lint typecheck test format \
+.PHONY: help install dev dev-local-usb dev-prod prod build lint typecheck test format \
         env-check env-use-local env-use-prod \
         sync-types clean _detect-android-sdk
+
+# Expo carga `.env.local` CON PRIORIDAD sobre `.env`, así que copiar
+# `.env.production` a `.env` no alcanza para apuntar a producción: los valores
+# locales ganan. Las variables ya exportadas en el proceso sí les ganan a todos
+# los archivos `.env*`, así que cada target que levanta Expo exporta primero el
+# archivo de su entorno. `--clear` evita que Metro reuse un bundle armado con
+# las URLs del otro entorno.
+LOAD_ENV_LOCAL := set -a; . ./$(ENV_LOCAL); set +a;
+LOAD_ENV_PROD  := set -a; . ./$(ENV_PROD); set +a;
 
 # Bash snippet shared by install/dev: resuelve ANDROID_HOME en $$android_home
 # (respeta el del entorno; si está vacío, prueba rutas comunes con platform-tools/adb).
 DETECT_ANDROID_SDK := android_home="$${ANDROID_HOME:-}"; \
 	if [ -z "$$android_home" ]; then \
-		for candidate in /usr/lib/android-sdk "$$HOME/Android/Sdk" "$$HOME/Android/sdk" /opt/android-sdk; do \
+		for candidate in /usr/lib/android-sdk "$$HOME/Android/Sdk" "$$HOME/Android/sdk" "$$HOME/Library/Android/sdk" /opt/android-sdk; do \
 			if [ -x "$$candidate/platform-tools/adb" ]; then \
 				android_home="$$candidate"; \
 				break; \
@@ -64,20 +73,20 @@ env-use-prod: ## Activar entorno produccion (copia .env.production → .env)
 
 ##@ Desarrollo
 dev: install env-use-local ## Levantar app apuntando al backend LOCAL (autodetecta ANDROID_HOME)
-	@$(DETECT_ANDROID_SDK); \
+	@$(LOAD_ENV_LOCAL) $(DETECT_ANDROID_SDK); \
 	if [ -z "$$android_home" ]; then \
 		echo "⚠ No se encontró el Android SDK; instalá adb (sudo apt install adb) o seteá ANDROID_HOME"; \
-		bun run dev; \
+		bun run dev -- --clear; \
 	else \
 		if [ -z "$${ANDROID_HOME:-}" ]; then echo "→ ANDROID_HOME=$$android_home (autodetectado)"; fi; \
-		ANDROID_HOME="$$android_home" bun run dev; \
+		ANDROID_HOME="$$android_home" bun run dev -- --clear; \
 	fi
 
 dev-local-usb: install env-use-local ## Dev USB local: adb reverse + Expo --localhost
-	@$(DETECT_ANDROID_SDK); \
+	@$(LOAD_ENV_LOCAL) $(DETECT_ANDROID_SDK); \
 	if [ -z "$$android_home" ]; then \
 		echo "⚠ No se encontró el Android SDK; instalá adb (sudo apt install adb) o seteá ANDROID_HOME"; \
-		bun run dev -- --localhost; \
+		bun run dev -- --localhost --clear; \
 	else \
 		if [ -z "$${ANDROID_HOME:-}" ]; then echo "→ ANDROID_HOME=$$android_home (autodetectado)"; fi; \
 		adb_bin="$$android_home/platform-tools/adb"; \
@@ -89,16 +98,29 @@ dev-local-usb: install env-use-local ## Dev USB local: adb reverse + Expo --loca
 		else \
 			echo "⚠ No hay un dispositivo Android USB autorizado. Activá depuración USB y aceptá el permiso."; \
 		fi; \
-		ANDROID_HOME="$$android_home" bun run dev -- --localhost; \
+		ANDROID_HOME="$$android_home" bun run dev -- --localhost --clear; \
+	fi
+
+dev-prod: install env-use-prod ## Dev contra PRODUCCIÓN (datos reales): Expo --localhost + adb reverse de Metro
+	@$(LOAD_ENV_PROD) $(DETECT_ANDROID_SDK); \
+	echo "⚠ Apuntando a PRODUCCIÓN: $${EXPO_PUBLIC_API_URL}. Lo que hagas son datos reales."; \
+	if [ -z "$$android_home" ]; then \
+		bun run dev -- --localhost --clear; \
+	else \
+		adb_bin="$$android_home/platform-tools/adb"; \
+		if "$$adb_bin" get-state >/dev/null 2>&1; then \
+			"$$adb_bin" reverse tcp:8081 tcp:8081 >/dev/null 2>&1 || true; \
+		fi; \
+		ANDROID_HOME="$$android_home" bun run dev -- --localhost --clear; \
 	fi
 
 prod: env-use-prod ## Levantar Expo en modo prod (--no-dev --minify) con link/QR
-	@$(DETECT_ANDROID_SDK); \
+	@$(LOAD_ENV_PROD) $(DETECT_ANDROID_SDK); \
 	if [ -z "$$android_home" ]; then \
-		bunx expo start --no-dev --minify; \
+		bunx expo start --no-dev --minify --clear; \
 	else \
 		if [ -z "$${ANDROID_HOME:-}" ]; then echo "→ ANDROID_HOME=$$android_home (autodetectado)"; fi; \
-		ANDROID_HOME="$$android_home" bunx expo start --no-dev --minify; \
+		ANDROID_HOME="$$android_home" bunx expo start --no-dev --minify --clear; \
 	fi
 
 ##@ Calidad
