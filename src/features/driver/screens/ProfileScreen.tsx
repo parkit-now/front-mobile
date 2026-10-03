@@ -5,22 +5,43 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useToast } from '../../../lib/notifications/ToastProvider';
 import { signOut } from '../../../lib/supabase/session';
 import { getErrorMessage } from '../../auth/errors';
-import { DriverIcon } from '../components/DriverIcon';
+import { DriverIcon, vehicleIconName } from '../components/DriverIcon';
+import { VehicleFormModal } from '../components/VehicleFormModal';
+import { useDriverData } from '../hooks/useDriverData';
 import {
   driverColors,
   driverLayout,
   driverRadius,
   driverSpacing,
 } from '../theme';
+import {
+  describeVehicle,
+  formatPlate,
+  hasActiveReservation,
+  type DriverVehicle,
+} from '../vehicles';
 
 type Props = {
   session: Session;
 };
 
+// null = cerrado; 'new' = alta; un vehículo = edición.
+type VehicleFormState = 'new' | DriverVehicle | null;
+
 export function ProfileScreen({ session }: Props) {
   const insets = useSafeAreaInsets();
   const { showToast } = useToast();
   const [pendingSignOut, setPendingSignOut] = useState(false);
+  const {
+    bookings,
+    vehicles,
+    addVehicle,
+    updateVehicle,
+    removeVehicle,
+    makePrimaryVehicle,
+  } = useDriverData();
+  const [vehicleForm, setVehicleForm] = useState<VehicleFormState>(null);
+  const editingVehicle = vehicleForm === 'new' ? null : vehicleForm;
 
   async function handleSignOut() {
     setPendingSignOut(true);
@@ -42,9 +63,7 @@ export function ProfileScreen({ session }: Props) {
     >
       <View>
         <Text style={styles.title}>Perfil</Text>
-        <Text style={styles.copy}>
-          Gestioná tu cuenta y vehículo principal.
-        </Text>
+        <Text style={styles.copy}>Gestioná tu cuenta y tus vehículos.</Text>
       </View>
 
       <View style={styles.card}>
@@ -54,15 +73,69 @@ export function ProfileScreen({ session }: Props) {
         </Text>
       </View>
 
-      <View style={styles.card}>
-        <Text style={styles.label}>Vehículo principal</Text>
-        <View style={styles.vehicleRow}>
-          <DriverIcon name="car" size={26} color={driverColors.brand} />
-          <View>
-            <Text style={styles.value}>Auto</Text>
-            <Text style={styles.hint}>Patente ABC 123</Text>
-          </View>
+      <View style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Mis vehículos</Text>
+          <Pressable
+            style={({ pressed }) => [
+              styles.addButton,
+              pressed && styles.pressed,
+            ]}
+            onPress={() => {
+              setVehicleForm('new');
+            }}
+            accessibilityRole="button"
+            accessibilityLabel="Agregar vehículo"
+          >
+            <DriverIcon name="plus" size={16} color={driverColors.brand} />
+            <Text style={styles.addText}>Agregar</Text>
+          </Pressable>
         </View>
+
+        {vehicles.length === 0 ? (
+          <View style={styles.card}>
+            <Text style={styles.value}>Todavía no agregaste vehículos</Text>
+            <Text style={styles.hint}>
+              Necesitás al menos uno para reservar una cochera.
+            </Text>
+          </View>
+        ) : (
+          vehicles.map((vehicle) => (
+            <Pressable
+              key={vehicle.id}
+              style={({ pressed }) => [
+                styles.card,
+                styles.vehicleRow,
+                vehicle.isPrimary && styles.vehicleRowPrimary,
+                pressed && styles.pressed,
+              ]}
+              onPress={() => {
+                setVehicleForm(vehicle);
+              }}
+              accessibilityRole="button"
+              accessibilityLabel={`${formatPlate(vehicle.plate)}, ${describeVehicle(vehicle)}${vehicle.isPrimary ? ', vehículo principal' : ''}. Tocar para editar`}
+            >
+              <View style={styles.vehicleIcon}>
+                <DriverIcon
+                  name={vehicleIconName(vehicle.kind)}
+                  size={24}
+                  color={driverColors.brand}
+                />
+              </View>
+              <View style={styles.vehicleCopy}>
+                <Text style={styles.plate}>{formatPlate(vehicle.plate)}</Text>
+                <Text style={styles.hint} numberOfLines={1}>
+                  {describeVehicle(vehicle)}
+                </Text>
+              </View>
+              {vehicle.isPrimary ? (
+                <View style={styles.primaryBadge}>
+                  <Text style={styles.primaryBadgeText}>Principal</Text>
+                </View>
+              ) : null}
+            </Pressable>
+          ))
+        )}
       </View>
 
       <Pressable
@@ -82,12 +155,47 @@ export function ProfileScreen({ session }: Props) {
           {pendingSignOut ? 'Cerrando...' : 'Cerrar sesión'}
         </Text>
       </Pressable>
+
+      {vehicleForm !== null ? (
+        <VehicleFormModal
+          vehicle={editingVehicle}
+          vehicles={vehicles}
+          lockedByReservation={
+            editingVehicle !== null &&
+            hasActiveReservation(editingVehicle, bookings)
+          }
+          onCancel={() => {
+            setVehicleForm(null);
+          }}
+          onSave={(draft, makePrimary) => {
+            if (editingVehicle) {
+              updateVehicle(editingVehicle.id, draft);
+              if (makePrimary) makePrimaryVehicle(editingVehicle.id);
+            } else {
+              addVehicle(draft, makePrimary);
+            }
+            setVehicleForm(null);
+            showToast({
+              message: editingVehicle
+                ? 'Vehículo actualizado.'
+                : 'Vehículo agregado.',
+              kind: 'success',
+            });
+          }}
+          onDelete={(vehicle) => {
+            removeVehicle(vehicle.id);
+            setVehicleForm(null);
+            showToast({ message: 'Vehículo eliminado.', kind: 'success' });
+          }}
+        />
+      ) : null}
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   content: {
+    flexGrow: 1,
     width: '100%',
     maxWidth: driverLayout.maxContentWidth,
     alignSelf: 'center',
@@ -131,22 +239,85 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: driverColors.textMuted,
   },
+  section: {
+    gap: driverSpacing.xs,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  sectionTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: driverColors.textSecondary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  addButton: {
+    minHeight: 44,
+    paddingHorizontal: driverSpacing.xs,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  addText: {
+    color: driverColors.brand,
+    fontSize: 14,
+    fontWeight: '700',
+  },
   vehicleRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: driverSpacing.sm,
   },
+  vehicleRowPrimary: {
+    // Borde más grueso sin correr el contenido respecto de las otras filas.
+    padding: driverSpacing.md - 1,
+    borderColor: driverColors.brand,
+    borderWidth: 2,
+  },
+  vehicleIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: driverRadius.control,
+    backgroundColor: driverColors.brandSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  vehicleCopy: {
+    flex: 1,
+    minWidth: 0,
+  },
+  plate: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: driverColors.text,
+    letterSpacing: 1,
+  },
+  primaryBadge: {
+    paddingHorizontal: driverSpacing.xs,
+    paddingVertical: 5,
+    borderRadius: driverRadius.chip,
+    backgroundColor: driverColors.brand,
+  },
+  primaryBadgeText: {
+    color: driverColors.surface,
+    fontSize: 12,
+    fontWeight: '700',
+  },
   signOutButton: {
+    marginTop: 'auto',
     minHeight: 48,
     borderRadius: driverRadius.control,
     borderWidth: 1,
-    borderColor: driverColors.border,
-    backgroundColor: driverColors.surface,
+    borderColor: driverColors.danger,
+    backgroundColor: driverColors.dangerSurface,
     alignItems: 'center',
     justifyContent: 'center',
   },
   signOutText: {
-    color: driverColors.text,
+    color: driverColors.danger,
     fontSize: 15,
     fontWeight: '600',
   },
