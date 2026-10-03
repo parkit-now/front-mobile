@@ -181,3 +181,55 @@ export function vehicleIconName(category: VehicleCategory): DriverIconName {
       return 'car';
   }
 }
+
+// ─── Vehículos aceptados por un estacionamiento ─────────────────────────────
+
+const PLURAL_LABELS: Record<VehicleCategory, string> = {
+  car: 'autos',
+  suv: 'SUV',
+  pickup: 'pickups',
+  van: 'utilitarios',
+  motorcycle: 'motos',
+  bicycle: 'bicis',
+  truck: 'camiones',
+  other: 'otros vehículos',
+};
+
+/** Los vehículos del conductor que el estacionamiento acepta para reservar. */
+export function acceptedVehicles(
+  vehicles: DriverVehicle[],
+  accepted: readonly string[],
+): DriverVehicle[] {
+  return vehicles.filter((vehicle) => accepted.includes(vehicle.category));
+}
+
+/**
+ * Aviso cuando el conductor tiene vehículos pero ninguno sirve para reservar
+ * ahí ("Este estacionamiento no toma reservas para motos"). `null` si alguno
+ * sirve o si no cargó ninguno (ese caso ya tiene su propio texto).
+ */
+export function unacceptedVehicleNotice(
+  vehicles: DriverVehicle[],
+  accepted: readonly string[],
+): string | null {
+  if (vehicles.length === 0) return null;
+  if (acceptedVehicles(vehicles, accepted).length > 0) return null;
+  const kinds = [
+    ...new Set(vehicles.map((vehicle) => PLURAL_LABELS[vehicle.category])),
+  ];
+  const list =
+    kinds.length > 1
+      ? `${kinds.slice(0, -1).join(', ')} ni ${kinds[kinds.length - 1]}`
+      : kinds[0];
+  return `Este estacionamiento no toma reservas para ${list}.`;
+}
+
+/** "Autos y SUV": lo que acepta el estacionamiento, para el detalle. */
+export function acceptedCategoriesLabel(
+  accepted: readonly string[],
+  categories: VehicleCategoryOption[] = [],
+): string {
+  return accepted
+    .map((code) => categoryLabel(code as VehicleCategory, categories))
+    .join(' · ');
+}

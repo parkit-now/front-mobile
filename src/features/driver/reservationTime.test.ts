@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   dayLabel,
   dayOfIso,
+  effectiveReservationSchedules,
   entryTimeOptions,
   exitDateTimeOptions,
   monthGrid,
@@ -10,6 +11,7 @@ import {
   shiftMonth,
   timeOfIso,
 } from './reservationTime';
+import type { ParkingSchedule } from './mock';
 
 const schedules = [
   { day: 'sunday' as const, openMinute: 8 * 60, closeMinute: 12 * 60 },
@@ -78,5 +80,62 @@ describe('calendario', () => {
     expect(dayLabel('2026-10-03')).toMatch(/s[aá]b.*3.*oct/);
     expect(dayOfIso('2026-10-04T00:30:00-03:00')).toBe('2026-10-04');
     expect(timeOfIso('2026-10-04T00:30:00-03:00')).toBe('00:30');
+  });
+});
+
+describe('effectiveReservationSchedules', () => {
+  const day = (
+    d: ParkingSchedule['day'],
+    openMinute: number,
+    closeMinute: number,
+  ): ParkingSchedule => ({ day: d, openMinute, closeMinute });
+
+  it('sin horario propio rige el de apertura', () => {
+    const opening = [day('monday', 480, 1320)];
+    expect(effectiveReservationSchedules(opening, [])).toEqual(opening);
+  });
+
+  it('es la intersección con el horario de reservas', () => {
+    expect(
+      effectiveReservationSchedules(
+        [day('monday', 480, 1320), day('tuesday', 480, 1320)],
+        [day('monday', 600, 1500), day('tuesday', 0, 420)],
+      ),
+    ).toEqual([day('monday', 600, 1320)]);
+  });
+
+  it('parte el día cuando hay varios rangos', () => {
+    expect(
+      effectiveReservationSchedules(
+        [day('friday', 0, 1440)],
+        [day('friday', 480, 780), day('friday', 1020, 1260)],
+      ),
+    ).toEqual([day('friday', 480, 780), day('friday', 1020, 1260)]);
+  });
+
+  it('sin apertura cargada rige el horario de reservas', () => {
+    const hours = [day('monday', 600, 900)];
+    expect(effectiveReservationSchedules([], hours)).toEqual(hours);
+  });
+
+  it('el selector de ingreso sólo ofrece horas dentro de las dos', () => {
+    const schedules = effectiveReservationSchedules(
+      [day('monday', 0, 1440)],
+      [day('monday', 600, 720)],
+    );
+    // Lunes 2099-01-05, lejos del "ahora" para no filtrar por hora actual.
+    const monday = {
+      key: '2099-01-05',
+      label: 'lun',
+      shortLabel: 'lun',
+      day: 'monday' as const,
+    };
+    const options = entryTimeOptions(monday, schedules, new Date('2098-01-01'));
+    expect(options.map((option) => option.label)).toEqual([
+      '10:00',
+      '10:30',
+      '11:00',
+      '11:30',
+    ]);
   });
 });

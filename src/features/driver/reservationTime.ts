@@ -247,3 +247,33 @@ export function timeOfIso(iso: string): string {
 export function dayOfIso(iso: string): string {
   return iso.slice(0, 10);
 }
+
+// ─── Horario de reservas ────────────────────────────────────────────────────
+
+/**
+ * Rangos en los que se puede reservar: la intersección del horario de apertura
+ * con el horario de reservas del dueño (`reservationHours`). El backend exige
+ * las dos cosas (RESERVATION_OUTSIDE_OPENING_HOURS y
+ * RESERVATION_OUTSIDE_RESERVATION_HOURS), así que el selector sólo ofrece lo
+ * que cae dentro de ambos. Con `reservationHours` vacío (no informado) vale el
+ * horario de apertura.
+ */
+export function effectiveReservationSchedules(
+  opening: ParkingSchedule[],
+  reservationHours: ParkingSchedule[],
+): ParkingSchedule[] {
+  if (reservationHours.length === 0) return opening;
+  // Sin horario de apertura cargado el backend no lo valida: rige el de reservas.
+  if (opening.length === 0) return reservationHours;
+  return opening.flatMap((open) =>
+    reservationHours
+      .filter((hours) => hours.day === open.day)
+      .flatMap((hours) => {
+        const openMinute = Math.max(open.openMinute, hours.openMinute);
+        const closeMinute = Math.min(open.closeMinute, hours.closeMinute);
+        return closeMinute > openMinute
+          ? [{ day: open.day, openMinute, closeMinute }]
+          : [];
+      }),
+  );
+}

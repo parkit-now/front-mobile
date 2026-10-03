@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import type { Booking } from './mock';
+import { makeBooking } from './testFixtures';
 import {
+  acceptedCategoriesLabel,
+  acceptedVehicles,
   categoryLabel,
   describeVehicle,
   formatPlate,
@@ -9,6 +12,7 @@ import {
   isValidPlate,
   normalizePlate,
   pickReservationVehicle,
+  unacceptedVehicleNotice,
   validateVehicle,
   type DriverVehicle,
   type VehicleDraft,
@@ -117,23 +121,13 @@ describe('describeVehicle', () => {
 });
 
 describe('hasActiveReservation', () => {
-  const booking = (
-    vehiclePlate: string,
-    status: Booking['status'],
-  ): Booking => ({
-    id: `b-${vehiclePlate}-${status}`,
-    parkingName: 'Estacionamiento Once',
-    address: 'Bartolome Mitre 2500',
-    entryAt: '2026-09-28T13:00:00.000Z',
-    entry: { dateLabel: 'lun, 28 sept', timeLabel: '10:00' },
-    exit: { dateLabel: 'lun, 28 sept', timeLabel: '12:00' },
-    status,
-    ticketCode: 'PKT-0001',
-    vehiclePlate,
-    priceLabel: '$9.000',
-    cancellable: status === 'active',
-    coordinate: { latitude: -34.6086, longitude: -58.4019 },
-  });
+  const booking = (vehiclePlate: string, status: Booking['status']): Booking =>
+    makeBooking({
+      id: `b-${vehiclePlate}-${status}`,
+      vehiclePlate,
+      status,
+      cancellable: status === 'active',
+    });
   const BOOKINGS = [
     booking('AB123CD', 'active'),
     booking('A123BCD', 'completed'),
@@ -160,5 +154,44 @@ describe('isReservableCategory', () => {
     expect(isReservableCategory('van')).toBe(true);
     expect(isReservableCategory('truck')).toBe(false);
     expect(isReservableCategory('suv_pickup')).toBe(false);
+  });
+});
+
+describe('vehículos aceptados por el estacionamiento', () => {
+  const SUV: DriverVehicle = {
+    ...AUTO,
+    id: 'suv',
+    plate: 'ZZ999ZZ',
+    category: 'suv',
+  };
+
+  it('filtra por las categorías que toma el estacionamiento', () => {
+    expect(acceptedVehicles([AUTO, MOTO, SUV], ['car', 'suv'])).toEqual([
+      AUTO,
+      SUV,
+    ]);
+    expect(acceptedVehicles([AUTO, MOTO], ['motorcycle'])).toEqual([MOTO]);
+    expect(acceptedVehicles([AUTO], [])).toEqual([]);
+  });
+
+  it('avisa cuando ningún vehículo del conductor sirve', () => {
+    expect(unacceptedVehicleNotice([MOTO], ['car', 'suv'])).toBe(
+      'Este estacionamiento no toma reservas para motos.',
+    );
+    expect(unacceptedVehicleNotice([MOTO, SUV], ['car'])).toBe(
+      'Este estacionamiento no toma reservas para motos ni SUV.',
+    );
+  });
+
+  it('no avisa si alguno sirve o si no cargó vehículos', () => {
+    expect(unacceptedVehicleNotice([AUTO, MOTO], ['car'])).toBeNull();
+    expect(unacceptedVehicleNotice([], ['car'])).toBeNull();
+  });
+
+  it('lista lo que acepta con las etiquetas de la plataforma', () => {
+    expect(acceptedCategoriesLabel(['car', 'suv'])).toBe('Auto · SUV');
+    expect(
+      acceptedCategoriesLabel(['van'], [{ code: 'van', label: 'Utilitario' }]),
+    ).toBe('Utilitario');
   });
 });
