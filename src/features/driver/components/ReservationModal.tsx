@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Modal,
@@ -34,11 +34,21 @@ import {
   type DriverVehicle,
 } from '../vehicles';
 import { DriverIcon, vehicleIconName } from './DriverIcon';
-import { CalendarMonth, MomentField, TimeWheel } from './ReservationDateTime';
+import { FloatingLayerHost, type FloatingLayerHandle } from './FloatingLayer';
+import {
+  CalendarMonth,
+  MomentField,
+  TimeWheel,
+  type MomentPart,
+} from './ReservationDateTime';
+
+// Filas de la rueda de horas dentro del panel flotante.
+const WHEEL_ROWS = 5;
 
 const DEFAULT_STAY_SLOTS = 4;
 
-type Expanded = 'entry' | 'exit' | null;
+// Desplegable abierto: el día o la hora del ingreso o del egreso.
+type OpenPicker = `${'entry' | 'exit'}-${MomentPart}` | null;
 
 function unique<T>(values: T[]): T[] {
   return [...new Set(values)];
@@ -127,7 +137,11 @@ export function ReservationModal({
     [schedules, selectedDate, selectedEntry],
   );
   const [exitAt, setExitAt] = useState<string>();
-  const [expanded, setExpanded] = useState<Expanded>(null);
+  const [openPicker, setOpenPicker] = useState<OpenPicker>(null);
+  const closePicker = useCallback(() => {
+    setOpenPicker(null);
+  }, []);
+  const floating = useRef<FloatingLayerHandle>(null);
 
   // Calendario de ingreso: los días de la ventana de reserva con algún horario.
   const entryDateKeys = useMemo(
@@ -234,245 +248,295 @@ export function ReservationModal({
   const canConfirm = Boolean(selectedVehicle && quote) && !confirming;
 
   return (
-    <Modal visible transparent animationType="fade" onRequestClose={onCancel}>
-      <View style={styles.backdrop}>
-        <View style={styles.dialog} accessibilityViewIsModal>
-          <ScrollView
-            style={styles.scroll}
-            contentContainerStyle={styles.scrollContent}
-            showsVerticalScrollIndicator={false}
-          >
-            <View style={styles.icon}>
-              <DriverIcon
-                name="calendar"
-                size={28}
-                color={driverColors.brand}
-              />
-            </View>
-            <Text style={styles.title}>Confirmar reserva</Text>
-            <Text style={styles.parking}>{parking.name}</Text>
-            <Text style={styles.detail}>{parking.openUntil}</Text>
+    <Modal
+      visible
+      transparent
+      animationType="fade"
+      onRequestClose={() => {
+        // El atrás de Android primero cierra el desplegable abierto.
+        if (floating.current?.dismiss()) return;
+        onCancel();
+      }}
+    >
+      <FloatingLayerHost ref={floating}>
+        <View style={styles.backdrop}>
+          <View style={styles.dialog} accessibilityViewIsModal>
+            <ScrollView
+              style={styles.scroll}
+              contentContainerStyle={styles.scrollContent}
+              showsVerticalScrollIndicator={false}
+            >
+              <View style={styles.icon}>
+                <DriverIcon
+                  name="calendar"
+                  size={28}
+                  color={driverColors.brand}
+                />
+              </View>
+              <Text style={styles.title}>Confirmar reserva</Text>
+              <Text style={styles.parking}>{parking.name}</Text>
+              <Text style={styles.detail}>{parking.openUntil}</Text>
 
-            <View style={styles.moments}>
-              <MomentField
-                label="Ingreso"
-                dateText={selectedDate ? dayLabel(selectedDate.key) : '—'}
-                timeText={entryAt ? timeOfIso(entryAt) : '—'}
-                expanded={expanded === 'entry'}
-                disabled={entryDateKeys.size === 0}
-                onToggle={() => {
-                  setExpanded((current) =>
-                    current === 'entry' ? null : 'entry',
-                  );
-                }}
-              >
-                <CalendarMonth
-                  monthKey={entryMonth}
-                  enabledKeys={entryDateKeys}
-                  selectedKey={selectedDate?.key}
-                  onSelect={setSelectedDateKey}
-                  onPrev={monthStep(entryMonths, entryMonth, -1, setEntryMonth)}
-                  onNext={monthStep(entryMonths, entryMonth, 1, setEntryMonth)}
+              <View style={styles.moments}>
+                <MomentField
+                  label="Ingreso"
+                  testID="reservation-entry"
+                  dateText={selectedDate ? dayLabel(selectedDate.key) : '—'}
+                  timeText={entryAt ? timeOfIso(entryAt) : '—'}
+                  openPart={partOf(openPicker, 'entry')}
+                  disabled={entryDateKeys.size === 0}
+                  onOpen={(part) => {
+                    setOpenPicker(`entry-${part}`);
+                  }}
+                  onClose={closePicker}
+                  datePanel={
+                    <CalendarMonth
+                      monthKey={entryMonth}
+                      enabledKeys={entryDateKeys}
+                      selectedKey={selectedDate?.key}
+                      onSelect={(dayKey) => {
+                        setSelectedDateKey(dayKey);
+                        closePicker();
+                      }}
+                      onPrev={monthStep(
+                        entryMonths,
+                        entryMonth,
+                        -1,
+                        setEntryMonth,
+                      )}
+                      onNext={monthStep(
+                        entryMonths,
+                        entryMonth,
+                        1,
+                        setEntryMonth,
+                      )}
+                    />
+                  }
+                  timePanel={
+                    <TimeWheel
+                      options={entryWheel}
+                      selectedKey={entryAt}
+                      onSelect={setEntryAt}
+                      onPick={closePicker}
+                      visibleItems={WHEEL_ROWS}
+                      accessibilityLabel="Hora de ingreso"
+                    />
+                  }
                 />
-                <TimeWheel
-                  options={entryWheel}
-                  selectedKey={entryAt}
-                  onSelect={setEntryAt}
-                  accessibilityLabel="Hora de ingreso"
+                <MomentField
+                  label="Egreso"
+                  testID="reservation-exit"
+                  dateText={exitDayKey ? dayLabel(exitDayKey) : '—'}
+                  timeText={exitAt ? timeOfIso(exitAt) : '—'}
+                  openPart={partOf(openPicker, 'exit')}
+                  disabled={exits.length === 0}
+                  onOpen={(part) => {
+                    setOpenPicker(`exit-${part}`);
+                  }}
+                  onClose={closePicker}
+                  datePanel={
+                    <CalendarMonth
+                      monthKey={shownExitMonth}
+                      enabledKeys={exitDateKeys}
+                      selectedKey={exitDayKey}
+                      onSelect={(dayKey) => {
+                        selectExitDay(dayKey);
+                        closePicker();
+                      }}
+                      onPrev={monthStep(
+                        exitMonths,
+                        shownExitMonth,
+                        -1,
+                        setExitMonth,
+                      )}
+                      onNext={monthStep(
+                        exitMonths,
+                        shownExitMonth,
+                        1,
+                        setExitMonth,
+                      )}
+                    />
+                  }
+                  timePanel={
+                    <TimeWheel
+                      options={exitWheel}
+                      selectedKey={exitAt}
+                      onSelect={setExitAt}
+                      onPick={closePicker}
+                      visibleItems={WHEEL_ROWS}
+                      accessibilityLabel="Hora de egreso"
+                    />
+                  }
                 />
-              </MomentField>
-              <MomentField
-                label="Egreso"
-                dateText={exitDayKey ? dayLabel(exitDayKey) : '—'}
-                timeText={exitAt ? timeOfIso(exitAt) : '—'}
-                expanded={expanded === 'exit'}
-                disabled={exits.length === 0}
-                onToggle={() => {
-                  setExpanded((current) =>
-                    current === 'exit' ? null : 'exit',
-                  );
-                }}
-              >
-                <CalendarMonth
-                  monthKey={shownExitMonth}
-                  enabledKeys={exitDateKeys}
-                  selectedKey={exitDayKey}
-                  onSelect={selectExitDay}
-                  onPrev={monthStep(
-                    exitMonths,
-                    shownExitMonth,
-                    -1,
-                    setExitMonth,
-                  )}
-                  onNext={monthStep(
-                    exitMonths,
-                    shownExitMonth,
-                    1,
-                    setExitMonth,
-                  )}
-                />
-                <TimeWheel
-                  options={exitWheel}
-                  selectedKey={exitAt}
-                  onSelect={setExitAt}
-                  accessibilityLabel="Hora de egreso"
-                />
-              </MomentField>
-            </View>
+              </View>
 
-            <View style={styles.vehicles}>
-              <Text style={styles.vehiclesTitle}>Vas a reservar con</Text>
-              {vehicles.length === 0 || eligibleVehicles.length === 0 ? (
-                <View style={styles.emptyVehicles}>
-                  <Text style={styles.emptyText}>
-                    {vehicleNotice ?? 'Agregá un vehículo para poder reservar.'}
+              <View style={styles.vehicles}>
+                <Text style={styles.vehiclesTitle}>Vas a reservar con</Text>
+                {vehicles.length === 0 || eligibleVehicles.length === 0 ? (
+                  <View style={styles.emptyVehicles}>
+                    <Text style={styles.emptyText}>
+                      {vehicleNotice ??
+                        'Agregá un vehículo para poder reservar.'}
+                    </Text>
+                  </View>
+                ) : (
+                  eligibleVehicles.map((vehicle) => {
+                    const selected = vehicle.id === selectedId;
+                    return (
+                      <Pressable
+                        key={vehicle.id}
+                        style={({ pressed }) => [
+                          styles.vehicle,
+                          selected && styles.vehicleSelected,
+                          pressed && styles.pressed,
+                        ]}
+                        onPress={() => {
+                          setSelectedId(vehicle.id);
+                        }}
+                        accessibilityRole="radio"
+                        accessibilityState={{ selected }}
+                        accessibilityLabel={`${formatPlate(vehicle.plate)}, ${describeVehicle(vehicle, vehicleCategories)}`}
+                      >
+                        <DriverIcon
+                          name={vehicleIconName(vehicle.category)}
+                          size={20}
+                          color={driverColors.brand}
+                        />
+                        <View style={styles.vehicleCopy}>
+                          <Text style={styles.plate}>
+                            {formatPlate(vehicle.plate)}
+                            {vehicle.isPrimary ? (
+                              <Text style={styles.primaryTag}>
+                                {' '}
+                                · Principal
+                              </Text>
+                            ) : null}
+                          </Text>
+                          <Text style={styles.vehicleMeta} numberOfLines={1}>
+                            {describeVehicle(vehicle, vehicleCategories)}
+                          </Text>
+                        </View>
+                        <View
+                          style={[styles.radio, selected && styles.radioOn]}
+                        />
+                      </Pressable>
+                    );
+                  })
+                )}
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.manageButton,
+                    pressed && styles.pressed,
+                  ]}
+                  onPress={onManageVehicles}
+                  accessibilityRole="button"
+                >
+                  <Text style={styles.manageText}>
+                    {vehicles.length === 0
+                      ? 'Agregar vehículo en Perfil'
+                      : 'Gestionar vehículos'}
+                  </Text>
+                </Pressable>
+              </View>
+
+              <View style={styles.quoteBox}>
+                {quotePending ? (
+                  <ActivityIndicator color={driverColors.brand} />
+                ) : quote ? (
+                  <>
+                    <Text style={styles.quoteLabel}>Total estimado</Text>
+                    <Text style={styles.quoteTotal}>
+                      ${quote.totalArs.toLocaleString('es-AR')}
+                    </Text>
+                    <Text style={styles.quoteDetail}>
+                      Tarifa de reservas · $
+                      {quote.rate.hourPriceArs.toLocaleString('es-AR')} por hora
+                    </Text>
+                  </>
+                ) : (
+                  <Text style={styles.quoteError}>
+                    {quoteError ??
+                      (schedules.length === 0
+                        ? 'Este estacionamiento todavía no informó sus horarios.'
+                        : 'Elegí ingreso y egreso para cotizar.')}
+                  </Text>
+                )}
+              </View>
+
+              {entryAt && parking.reservationRules ? (
+                <View style={styles.policy}>
+                  <Text style={styles.policyText}>
+                    {policyText(entryAt, parking.reservationRules)}
+                  </Text>
+                  {parking.reservationRules.acceptanceMode === 'manual' ? (
+                    <Text style={styles.policyText}>
+                      El estacionamiento tiene que aceptar tu reserva. Si no lo
+                      hace a tiempo, te devolvemos todo.
+                    </Text>
+                  ) : null}
+                  <Text style={styles.policyText}>
+                    Si te pasás del egreso, el excedente se paga en la caja.
                   </Text>
                 </View>
-              ) : (
-                eligibleVehicles.map((vehicle) => {
-                  const selected = vehicle.id === selectedId;
-                  return (
-                    <Pressable
-                      key={vehicle.id}
-                      style={({ pressed }) => [
-                        styles.vehicle,
-                        selected && styles.vehicleSelected,
-                        pressed && styles.pressed,
-                      ]}
-                      onPress={() => {
-                        setSelectedId(vehicle.id);
-                      }}
-                      accessibilityRole="radio"
-                      accessibilityState={{ selected }}
-                      accessibilityLabel={`${formatPlate(vehicle.plate)}, ${describeVehicle(vehicle, vehicleCategories)}`}
-                    >
-                      <DriverIcon
-                        name={vehicleIconName(vehicle.category)}
-                        size={20}
-                        color={driverColors.brand}
-                      />
-                      <View style={styles.vehicleCopy}>
-                        <Text style={styles.plate}>
-                          {formatPlate(vehicle.plate)}
-                          {vehicle.isPrimary ? (
-                            <Text style={styles.primaryTag}> · Principal</Text>
-                          ) : null}
-                        </Text>
-                        <Text style={styles.vehicleMeta} numberOfLines={1}>
-                          {describeVehicle(vehicle, vehicleCategories)}
-                        </Text>
-                      </View>
-                      <View
-                        style={[styles.radio, selected && styles.radioOn]}
-                      />
-                    </Pressable>
-                  );
-                })
-              )}
+              ) : null}
+            </ScrollView>
+
+            <View style={styles.actions}>
               <Pressable
                 style={({ pressed }) => [
-                  styles.manageButton,
+                  styles.secondaryButton,
                   pressed && styles.pressed,
                 ]}
-                onPress={onManageVehicles}
+                onPress={onCancel}
                 accessibilityRole="button"
               >
-                <Text style={styles.manageText}>
-                  {vehicles.length === 0
-                    ? 'Agregar vehículo en Perfil'
-                    : 'Gestionar vehículos'}
+                <Text style={styles.secondaryText}>Cancelar</Text>
+              </Pressable>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.primaryButton,
+                  !canConfirm && styles.primaryButtonDisabled,
+                  pressed && styles.pressed,
+                ]}
+                onPress={() => {
+                  if (!selectedVehicle || !quote || confirming) return;
+                  setConfirming(true);
+                  void onConfirm({
+                    reservationId,
+                    parking,
+                    vehicle: selectedVehicle,
+                    quote,
+                  }).finally(() => {
+                    setConfirming(false);
+                  });
+                }}
+                accessibilityRole="button"
+                accessibilityState={{ disabled: !canConfirm, busy: confirming }}
+                disabled={!canConfirm}
+              >
+                <Text style={styles.primaryText} numberOfLines={1}>
+                  {confirming
+                    ? 'Reservando…'
+                    : selectedVehicle && quote
+                      ? `Reservar y pagar ${formatArs(quote.totalArs)}`
+                      : 'Reservar y pagar'}
                 </Text>
               </Pressable>
             </View>
-
-            <View style={styles.quoteBox}>
-              {quotePending ? (
-                <ActivityIndicator color={driverColors.brand} />
-              ) : quote ? (
-                <>
-                  <Text style={styles.quoteLabel}>Total estimado</Text>
-                  <Text style={styles.quoteTotal}>
-                    ${quote.totalArs.toLocaleString('es-AR')}
-                  </Text>
-                  <Text style={styles.quoteDetail}>
-                    Tarifa de reservas · $
-                    {quote.rate.hourPriceArs.toLocaleString('es-AR')} por hora
-                  </Text>
-                </>
-              ) : (
-                <Text style={styles.quoteError}>
-                  {quoteError ??
-                    (schedules.length === 0
-                      ? 'Este estacionamiento todavía no informó sus horarios.'
-                      : 'Elegí ingreso y egreso para cotizar.')}
-                </Text>
-              )}
-            </View>
-
-            {entryAt && parking.reservationRules ? (
-              <View style={styles.policy}>
-                <Text style={styles.policyText}>
-                  {policyText(entryAt, parking.reservationRules)}
-                </Text>
-                {parking.reservationRules.acceptanceMode === 'manual' ? (
-                  <Text style={styles.policyText}>
-                    El estacionamiento tiene que aceptar tu reserva. Si no lo
-                    hace a tiempo, te devolvemos todo.
-                  </Text>
-                ) : null}
-                <Text style={styles.policyText}>
-                  Si te pasás del egreso, el excedente se paga en la caja.
-                </Text>
-              </View>
-            ) : null}
-          </ScrollView>
-
-          <View style={styles.actions}>
-            <Pressable
-              style={({ pressed }) => [
-                styles.secondaryButton,
-                pressed && styles.pressed,
-              ]}
-              onPress={onCancel}
-              accessibilityRole="button"
-            >
-              <Text style={styles.secondaryText}>Cancelar</Text>
-            </Pressable>
-            <Pressable
-              style={({ pressed }) => [
-                styles.primaryButton,
-                !canConfirm && styles.primaryButtonDisabled,
-                pressed && styles.pressed,
-              ]}
-              onPress={() => {
-                if (!selectedVehicle || !quote || confirming) return;
-                setConfirming(true);
-                void onConfirm({
-                  reservationId,
-                  parking,
-                  vehicle: selectedVehicle,
-                  quote,
-                }).finally(() => {
-                  setConfirming(false);
-                });
-              }}
-              accessibilityRole="button"
-              accessibilityState={{ disabled: !canConfirm, busy: confirming }}
-              disabled={!canConfirm}
-            >
-              <Text style={styles.primaryText} numberOfLines={1}>
-                {confirming
-                  ? 'Reservando…'
-                  : selectedVehicle && quote
-                    ? `Reservar y pagar ${formatArs(quote.totalArs)}`
-                    : 'Reservar y pagar'}
-              </Text>
-            </Pressable>
           </View>
         </View>
-      </View>
+      </FloatingLayerHost>
     </Modal>
   );
+}
+
+function partOf(
+  picker: OpenPicker,
+  moment: 'entry' | 'exit',
+): MomentPart | null {
+  if (picker === `${moment}-date`) return 'date';
+  if (picker === `${moment}-time`) return 'time';
+  return null;
 }
 
 /** Flecha de mes del calendario: sólo si hay otro mes con días elegibles. */

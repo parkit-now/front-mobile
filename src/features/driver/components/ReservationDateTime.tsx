@@ -1,5 +1,6 @@
 import { useEffect, useRef, type ReactNode } from 'react';
 import {
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -11,59 +12,146 @@ import {
 import { monthGrid, monthTitle } from '../reservationTime';
 import { driverColors, driverRadius, driverSpacing } from '../theme';
 import { DriverIcon } from './DriverIcon';
+import { Popover } from './FloatingLayer';
+import { Chevron } from './FloatingSelect';
 
-// Piezas del selector de ingreso / egreso del modal de reserva: un campo
-// desplegable, un calendario mensual y una rueda de horas. Todo en JS (sin
-// date pickers nativos) para respetar las reglas de la reserva: sólo días y
-// horas dentro del horario de apertura y de los próximos 7 días.
+// Piezas del selector de ingreso / egreso del modal de reserva: un campo con
+// dos desplegables (día y hora), un calendario mensual y una rueda de horas.
+// Todo en JS (sin date pickers nativos) para respetar las reglas de la
+// reserva: sólo días y horas dentro del horario de apertura y de los próximos
+// 7 días. Los paneles flotan sobre el modal (ver FloatingLayer): abrirlos no
+// cambia el alto del campo ni mueve lo de abajo.
 
 const WEEKDAYS = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];
+
+export type MomentPart = 'date' | 'time';
+
+/** Ancho mínimo del calendario: 7 días de 40 px tocables. */
+const CALENDAR_MIN_WIDTH = 280;
+const TIME_PANEL_WIDTH = 168;
 
 export function MomentField({
   label,
   dateText,
   timeText,
-  expanded,
+  openPart,
   disabled = false,
-  onToggle,
-  children,
+  onOpen,
+  onClose,
+  datePanel,
+  timePanel,
+  testID,
 }: {
   label: string;
   dateText: string;
   timeText: string;
-  expanded: boolean;
+  /** Qué desplegable está abierto (o ninguno). */
+  openPart: MomentPart | null;
   disabled?: boolean;
-  onToggle: () => void;
-  children: ReactNode;
+  onOpen: (part: MomentPart) => void;
+  onClose: () => void;
+  /** Calendario: se dibuja en un panel flotante debajo (o arriba) del campo. */
+  datePanel: ReactNode;
+  /** Rueda de horas: panel angosto alineado con la hora. */
+  timePanel: ReactNode;
+  testID?: string;
 }) {
+  const anchorRef = useRef<View>(null);
+  const lower = label.toLocaleLowerCase('es-AR');
+  const dateOpen = openPart === 'date';
+  const timeOpen = openPart === 'time';
+
   return (
-    <View style={[styles.field, expanded && styles.fieldExpanded]}>
+    <View
+      ref={anchorRef}
+      collapsable={false}
+      style={[styles.field, openPart && styles.fieldOpen]}
+      testID={testID}
+    >
       <Pressable
-        style={({ pressed }) => [styles.fieldHeader, pressed && styles.pressed]}
-        onPress={onToggle}
+        style={({ pressed }) => [styles.fieldDate, pressed && styles.pressed]}
+        onPress={() => {
+          if (dateOpen) onClose();
+          else onOpen('date');
+        }}
         disabled={disabled}
-        accessibilityRole="button"
-        accessibilityState={{ expanded, disabled }}
-        accessibilityLabel={`${label}: ${dateText}, ${timeText}. Tocar para cambiar`}
+        role="combobox"
+        aria-expanded={dateOpen}
+        aria-disabled={disabled}
+        accessibilityLabel={`Día de ${lower}: ${dateText}`}
+        accessibilityHint="Abre el calendario"
+        testID={testID ? `${testID}-date` : undefined}
       >
-        <View style={styles.fieldCopy}>
-          <Text style={styles.fieldLabel}>{label}</Text>
-          <Text style={[styles.fieldValue, disabled && styles.textDisabled]}>
+        <Text style={styles.fieldLabel}>{label}</Text>
+        <View style={styles.fieldValueRow}>
+          <Text
+            style={[
+              styles.fieldValue,
+              dateOpen && styles.fieldValueOpen,
+              disabled && styles.textDisabled,
+            ]}
+            numberOfLines={1}
+          >
             {dateText}
           </Text>
-        </View>
-        <View style={styles.fieldTime}>
-          <DriverIcon
-            name="clock"
+          <Chevron
+            open={dateOpen}
             size={16}
-            color={disabled ? driverColors.disabled : driverColors.brand}
+            color={disabled ? driverColors.disabled : driverColors.textMuted}
           />
-          <Text style={[styles.fieldTimeText, disabled && styles.textDisabled]}>
-            {timeText}
-          </Text>
         </View>
       </Pressable>
-      {expanded ? <View style={styles.fieldBody}>{children}</View> : null}
+      <Pressable
+        style={({ pressed }) => [
+          styles.fieldTime,
+          timeOpen && styles.fieldTimeOpen,
+          pressed && styles.pressed,
+        ]}
+        onPress={() => {
+          if (timeOpen) onClose();
+          else onOpen('time');
+        }}
+        disabled={disabled}
+        role="combobox"
+        aria-expanded={timeOpen}
+        aria-disabled={disabled}
+        accessibilityLabel={`Hora de ${lower}: ${timeText}`}
+        accessibilityHint="Abre la rueda de horas"
+        testID={testID ? `${testID}-time` : undefined}
+      >
+        <DriverIcon
+          name="clock"
+          size={16}
+          color={disabled ? driverColors.disabled : driverColors.brand}
+        />
+        <Text style={[styles.fieldTimeText, disabled && styles.textDisabled]}>
+          {timeText}
+        </Text>
+      </Pressable>
+
+      <Popover
+        open={dateOpen}
+        onClose={onClose}
+        anchorRef={anchorRef}
+        minWidth={CALENDAR_MIN_WIDTH}
+        maxHeight={420}
+        accessibilityLabel={`Calendario de ${lower}`}
+        testID={testID ? `${testID}-date-panel` : undefined}
+      >
+        <View style={styles.panelBody}>{datePanel}</View>
+      </Popover>
+      <Popover
+        open={timeOpen}
+        onClose={onClose}
+        anchorRef={anchorRef}
+        width={TIME_PANEL_WIDTH}
+        align="end"
+        maxHeight={320}
+        accessibilityLabel={`Horas de ${lower}`}
+        testID={testID ? `${testID}-time-panel` : undefined}
+      >
+        <View style={styles.panelBody}>{timePanel}</View>
+      </Popover>
     </View>
   );
 }
@@ -110,7 +198,8 @@ export function CalendarMonth({
                 onPress={() => onSelect(cell.key)}
                 disabled={!enabled}
                 accessibilityRole="button"
-                accessibilityState={{ selected, disabled: !enabled }}
+                aria-selected={selected}
+                aria-disabled={!enabled}
                 accessibilityLabel={`${cell.day}`}
               >
                 <View
@@ -170,25 +259,30 @@ function MonthArrow({
 }
 
 const ITEM_HEIGHT = 44;
-const VISIBLE_ITEMS = 3;
-const PADDING_ITEMS = Math.floor(VISIBLE_ITEMS / 2);
 
 /**
  * Rueda de horas: la opción del centro es la elegida. Se puede arrastrar
- * (frena en la más cercana) o tocar una hora.
+ * (frena en la más cercana) o tocar una hora; tocar además llama a `onPick`
+ * (el panel flotante se cierra con una elección explícita).
  */
 export function TimeWheel({
   options,
   selectedKey,
   onSelect,
+  onPick,
+  visibleItems = 3,
   accessibilityLabel,
 }: {
   options: Array<{ key: string; label: string }>;
   selectedKey: string | undefined;
   onSelect: (key: string) => void;
+  onPick?: (key: string) => void;
+  /** Filas visibles (impar: la del medio es la elegida). */
+  visibleItems?: number;
   accessibilityLabel: string;
 }) {
   const scrollRef = useRef<ScrollView>(null);
+  const paddingItems = Math.floor(visibleItems / 2);
   const selectedIndex = Math.max(
     0,
     options.findIndex((option) => option.key === selectedKey),
@@ -215,6 +309,24 @@ export function TimeWheel({
     }
   }
 
+  // En web (rueda del mouse, trackpad) no llegan los eventos de fin de
+  // arrastre ni de inercia: se fija la hora cuando el scroll se detiene.
+  const idleTimer = useRef<ReturnType<typeof setTimeout>>();
+  useEffect(
+    () => () => {
+      clearTimeout(idleTimer.current);
+    },
+    [],
+  );
+  function handleScroll(event: NativeSyntheticEvent<NativeScrollEvent>) {
+    if (Platform.OS !== 'web') return;
+    const offsetY = event.nativeEvent.contentOffset.y;
+    clearTimeout(idleTimer.current);
+    idleTimer.current = setTimeout(() => {
+      settle(offsetY);
+    }, 140);
+  }
+
   function handleEndDrag(event: NativeSyntheticEvent<NativeScrollEvent>) {
     // Sin inercia no llega onMomentumScrollEnd: se fija acá.
     if (Math.abs(event.nativeEvent.velocity?.y ?? 0) < 0.05) {
@@ -232,18 +344,23 @@ export function TimeWheel({
 
   return (
     <View
-      style={styles.wheel}
+      style={[styles.wheel, { height: ITEM_HEIGHT * visibleItems }]}
       accessibilityLabel={accessibilityLabel}
       accessibilityRole="adjustable"
     >
-      <View pointerEvents="none" style={styles.wheelHighlight} />
+      <View
+        style={[
+          styles.wheelHighlight,
+          { top: ITEM_HEIGHT * paddingItems, pointerEvents: 'none' },
+        ]}
+      />
       <ScrollView
         ref={scrollRef}
         nestedScrollEnabled
         showsVerticalScrollIndicator={false}
         snapToInterval={ITEM_HEIGHT}
         decelerationRate="fast"
-        contentContainerStyle={styles.wheelContent}
+        contentContainerStyle={{ paddingVertical: ITEM_HEIGHT * paddingItems }}
         onLayout={() => {
           scrollRef.current?.scrollTo({
             y: selectedIndex * ITEM_HEIGHT,
@@ -254,6 +371,8 @@ export function TimeWheel({
           settle(event.nativeEvent.contentOffset.y);
         }}
         onScrollEndDrag={handleEndDrag}
+        onScroll={handleScroll}
+        scrollEventThrottle={32}
       >
         {options.map((option, index) => {
           const selected = index === selectedIndex;
@@ -261,9 +380,12 @@ export function TimeWheel({
             <Pressable
               key={option.key}
               style={styles.wheelItem}
-              onPress={() => onSelect(option.key)}
+              onPress={() => {
+                if (option.key !== selectedKey) onSelect(option.key);
+                onPick?.(option.key);
+              }}
               accessibilityRole="button"
-              accessibilityState={{ selected }}
+              aria-selected={selected}
             >
               <Text
                 style={[styles.wheelText, selected && styles.wheelTextSelected]}
@@ -280,22 +402,24 @@ export function TimeWheel({
 
 const styles = StyleSheet.create({
   field: {
+    height: 64,
+    paddingLeft: driverSpacing.sm,
+    paddingRight: driverSpacing.xs,
     borderWidth: 1,
     borderColor: driverColors.border,
     borderRadius: driverRadius.control,
     backgroundColor: driverColors.surface,
-    overflow: 'hidden',
-  },
-  fieldExpanded: { borderColor: driverColors.brand },
-  fieldHeader: {
-    minHeight: 64,
-    paddingHorizontal: driverSpacing.sm,
-    paddingVertical: driverSpacing.xs,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: driverSpacing.sm,
+    gap: driverSpacing.xs,
   },
-  fieldCopy: { flex: 1, minWidth: 0 },
+  fieldOpen: { borderColor: driverColors.brand },
+  fieldDate: {
+    flex: 1,
+    minWidth: 0,
+    alignSelf: 'stretch',
+    justifyContent: 'center',
+  },
   fieldLabel: {
     fontSize: 12,
     fontWeight: '700',
@@ -303,12 +427,19 @@ const styles = StyleSheet.create({
     color: driverColors.textMuted,
     textTransform: 'uppercase',
   },
-  fieldValue: {
+  fieldValueRow: {
     marginTop: 2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  fieldValue: {
+    flexShrink: 1,
     fontSize: 16,
     fontWeight: '700',
     color: driverColors.text,
   },
+  fieldValueOpen: { color: driverColors.brand },
   fieldTime: {
     minHeight: 40,
     paddingHorizontal: driverSpacing.sm,
@@ -320,21 +451,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
   },
+  fieldTimeOpen: { borderColor: driverColors.brand },
   fieldTimeText: {
     fontSize: 16,
     fontWeight: '700',
     color: driverColors.brand,
     fontVariant: ['tabular-nums'],
   },
-  fieldBody: {
-    paddingHorizontal: driverSpacing.sm,
-    paddingBottom: driverSpacing.sm,
-    gap: driverSpacing.sm,
-    borderTopWidth: 1,
-    borderTopColor: driverColors.border,
-  },
+  panelBody: { padding: driverSpacing.xs },
   monthHeader: {
-    marginTop: driverSpacing.xs,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -384,21 +509,18 @@ const styles = StyleSheet.create({
   dayTextSelected: { color: driverColors.surface, fontWeight: '700' },
   textDisabled: { color: driverColors.disabled },
   wheel: {
-    height: ITEM_HEIGHT * VISIBLE_ITEMS,
     justifyContent: 'center',
   },
   wheelHighlight: {
     position: 'absolute',
     left: 0,
     right: 0,
-    top: ITEM_HEIGHT * PADDING_ITEMS,
     height: ITEM_HEIGHT,
     borderRadius: driverRadius.chip,
     backgroundColor: driverColors.brandSoft,
     borderWidth: 1,
     borderColor: driverColors.brand,
   },
-  wheelContent: { paddingVertical: ITEM_HEIGHT * PADDING_ITEMS },
   wheelItem: {
     height: ITEM_HEIGHT,
     alignItems: 'center',
