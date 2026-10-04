@@ -12,8 +12,9 @@ import logo from '../../../../images/logo.jpeg';
 import { useToast } from '../../../lib/notifications/ToastProvider';
 import { DriverIcon } from '../components/DriverIcon';
 import { LocationIssueModal } from '../components/LocationIssueModal';
-import { RECENT_DESTINATIONS, type SearchDestination } from '../discovery';
+import type { SearchDestination } from '../discovery';
 import { useCurrentLocation } from '../hooks/useCurrentLocation';
+import { useRecentDestinations } from '../hooks/useRecentDestinations';
 import type { DiscoveryStackParamList } from '../navigation';
 import {
   driverColors,
@@ -28,8 +29,10 @@ export function DiscoveryHomeScreen({ navigation }: Props) {
   const insets = useSafeAreaInsets();
   const { showToast } = useToast();
   const currentLocation = useCurrentLocation();
+  const { recents, remember } = useRecentDestinations();
 
   function openMap(destination: SearchDestination) {
+    remember(destination);
     navigation.navigate('MapResults', { destination });
   }
 
@@ -118,40 +121,42 @@ export function DiscoveryHomeScreen({ navigation }: Props) {
           </Pressable>
         </View>
 
-        <View style={styles.recentSection}>
-          <Text style={styles.sectionLabel}>DESTINOS RECIENTES</Text>
-          <View style={styles.recentList}>
-            {RECENT_DESTINATIONS.map((destination, index) => (
-              <Pressable
-                key={destination.id}
-                style={({ pressed }) => [
-                  styles.recentRow,
-                  index < RECENT_DESTINATIONS.length - 1 && styles.recentBorder,
-                  pressed && styles.pressed,
-                ]}
-                onPress={() => {
-                  openMap(destination);
-                }}
-                accessibilityRole="button"
-                accessibilityLabel={`${destination.name}, ${destination.address}`}
-              >
-                <View style={styles.recentIcon}>
-                  <DriverIcon
-                    name="clock"
-                    size={18}
-                    color={driverColors.brand}
-                  />
-                </View>
-                <View style={styles.recentCopy}>
-                  <Text style={styles.recentName}>{destination.name}</Text>
-                  <Text style={styles.recentAddress} numberOfLines={1}>
-                    {destination.address}
-                  </Text>
-                </View>
-              </Pressable>
-            ))}
+        {recents.length > 0 ? (
+          <View style={styles.recentSection}>
+            <Text style={styles.sectionLabel}>DESTINOS RECIENTES</Text>
+            <View style={styles.recentList}>
+              {recents.map((destination, index) => (
+                <Pressable
+                  key={destination.id}
+                  style={({ pressed }) => [
+                    styles.recentRow,
+                    index < recents.length - 1 && styles.recentBorder,
+                    pressed && styles.pressed,
+                  ]}
+                  onPress={() => {
+                    openMap(destination);
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${destination.name}, ${destination.address}`}
+                >
+                  <View style={styles.recentIcon}>
+                    <DriverIcon
+                      name="clock"
+                      size={18}
+                      color={driverColors.brand}
+                    />
+                  </View>
+                  <View style={styles.recentCopy}>
+                    <Text style={styles.recentName}>{destination.name}</Text>
+                    <Text style={styles.recentAddress} numberOfLines={1}>
+                      {destination.address}
+                    </Text>
+                  </View>
+                </Pressable>
+              ))}
+            </View>
           </View>
-        </View>
+        ) : null}
 
         <Text style={styles.networkCopy}>
           Mostramos sólo cocheras operadas por Parkit.

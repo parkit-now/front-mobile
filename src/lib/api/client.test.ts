@@ -51,3 +51,36 @@ describe('apiRequest ante un 401', () => {
     expect(handler).not.toHaveBeenCalled();
   });
 });
+
+describe('apiRequest con timeout', () => {
+  beforeEach(() => {
+    process.env.EXPO_PUBLIC_API_URL = 'http://api.test';
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  it('lanza ApiTimeoutError con mensaje en español si no hay respuesta', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        (_url: string, init: RequestInit) =>
+          new Promise((_resolve, reject) => {
+            init.signal?.addEventListener('abort', () => {
+              reject(new DOMException('aborted', 'AbortError'));
+            });
+          }),
+      ),
+    );
+    const result = apiRequest({ method: 'POST', path: '/x', timeoutMs: 50 });
+    const assertion = expect(result).rejects.toMatchObject({
+      name: 'ApiTimeoutError',
+      message: 'La conexión tardó demasiado. Probá de nuevo.',
+    });
+    await vi.advanceTimersByTimeAsync(60);
+    await assertion;
+  });
+});

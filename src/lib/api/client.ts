@@ -20,6 +20,20 @@ export class ApiError extends Error {
   }
 }
 
+export const TIMEOUT_MESSAGE = 'La conexión tardó demasiado. Probá de nuevo.';
+export const DEFAULT_TIMEOUT_MS = 20_000;
+
+/** La llamada no respondió dentro del tiempo permitido (se abortó el fetch). */
+export class ApiTimeoutError extends Error {
+  readonly timeoutMs: number;
+
+  constructor(timeoutMs: number) {
+    super(TIMEOUT_MESSAGE);
+    this.name = 'ApiTimeoutError';
+    this.timeoutMs = timeoutMs;
+  }
+}
+
 function readBaseUrl(): string {
   const raw: unknown = process.env.EXPO_PUBLIC_API_URL;
   if (typeof raw !== 'string' || raw.length === 0) {
@@ -74,6 +88,8 @@ export type RequestOptions = {
   path: string;
   body?: unknown;
   bearer?: string;
+  /** Milisegundos antes de abortar la llamada. Por defecto 20 s. */
+  timeoutMs?: number;
 };
 
 export async function apiRequest<TResponse>(
@@ -91,25 +107,42 @@ export async function apiRequest<TResponse>(
     headers.Authorization = `Bearer ${options.bearer}`;
   }
 
-  const response = await fetch(`${baseUrl}${options.path}`, {
-    method: options.method,
-    headers,
-    body: options.body === undefined ? undefined : JSON.stringify(options.body),
-  });
+  const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  const controller = new AbortController();
+  let timedOut = false;
+  const timer = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, timeoutMs);
 
-  if (response.status === 204) {
-    return undefined as TResponse;
-  }
+  try {
+    const response = await fetch(`${baseUrl}${options.path}`, {
+      method: options.method,
+      headers,
+      body:
+        options.body === undefined ? undefined : JSON.stringify(options.body),
+      signal: controller.signal,
+    });
 
-  if (!response.ok) {
-    if (response.status === 401 && options.bearer) {
-      unauthorizedHandler?.();
+    if (response.status === 204) {
+      return undefined as TResponse;
     }
-    const problem = await parseProblem(response);
-    const message =
-      problem?.detail ?? `Request failed with status ${response.status}`;
-    throw new ApiError(response.status, message, problem);
-  }
 
-  return (await response.json()) as TResponse;
+    if (!response.ok) {
+      if (response.status === 401 && options.bearer) {
+        unauthorizedHandler?.();
+      }
+      const problem = await parseProblem(response);
+      const message =
+        problem?.detail ?? `Request failed with status ${response.status}`;
+      throw new ApiError(response.status, message, problem);
+    }
+
+    return (await response.json()) as TResponse;
+  } catch (error) {
+    if (timedOut) throw new ApiTimeoutError(timeoutMs);
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
 }

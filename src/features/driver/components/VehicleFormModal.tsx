@@ -61,11 +61,22 @@ export function VehicleFormModal({
   const [makePrimary, setMakePrimary] = useState(primaryLocked);
   const [errors, setErrors] = useState<VehicleFieldErrors>({});
   const [saving, setSaving] = useState(false);
+  const [kindOpen, setKindOpen] = useState(false);
+
+  const selectedOption =
+    categories.find(
+      (option) => option.code === (category ?? categories[0]?.code),
+    ) ?? null;
+  const selectedCode = selectedOption?.code ?? category;
 
   function handleSave() {
+    if (!selectedCode) {
+      setErrors({ category: 'Elegí el tipo de vehículo.' });
+      return;
+    }
     const draft: VehicleDraft = {
       plate,
-      category: category ?? categories[0].code,
+      category: selectedCode,
       brand: brand.trim(),
       model: model.trim(),
     };
@@ -146,48 +157,81 @@ export function VehicleFormModal({
 
             <View style={styles.field}>
               <Text style={styles.label}>Tipo</Text>
-              <View style={styles.kinds} accessibilityRole="radiogroup">
-                {categories.map((option) => {
-                  const selected =
-                    option.code === (category ?? categories[0]?.code);
-                  return (
-                    <Pressable
-                      key={option.code}
-                      style={({ pressed }) => [
-                        styles.kind,
-                        selected && styles.kindSelected,
-                        lockedByReservation && !selected && styles.kindLocked,
-                        pressed && styles.pressed,
-                      ]}
-                      onPress={() => {
-                        setCategory(option.code);
-                      }}
-                      disabled={lockedByReservation}
-                      accessibilityRole="radio"
-                      accessibilityState={{
-                        selected,
-                        disabled: lockedByReservation,
-                      }}
-                    >
-                      <DriverIcon
-                        name={vehicleIconName(option.code)}
-                        size={18}
-                        color={
-                          selected ? driverColors.surface : driverColors.brand
-                        }
-                      />
-                      <Text
-                        style={[
-                          styles.kindText,
-                          selected && styles.kindTextSelected,
-                        ]}
-                      >
-                        {option.label}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
+              <View style={[styles.select, kindOpen && styles.selectOpen]}>
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.selectHeader,
+                    lockedByReservation && styles.kindLocked,
+                    pressed && styles.pressed,
+                  ]}
+                  onPress={() => {
+                    setKindOpen((open) => !open);
+                  }}
+                  disabled={lockedByReservation}
+                  accessibilityRole="button"
+                  accessibilityState={{
+                    expanded: kindOpen,
+                    disabled: lockedByReservation,
+                  }}
+                  accessibilityLabel={`Tipo: ${selectedOption?.label ?? 'sin elegir'}. Tocar para cambiar`}
+                >
+                  {selectedOption ? (
+                    <DriverIcon
+                      name={vehicleIconName(selectedOption.code)}
+                      size={20}
+                      color={driverColors.brand}
+                    />
+                  ) : null}
+                  <Text style={styles.selectValue}>
+                    {selectedOption?.label ?? 'Elegí un tipo'}
+                  </Text>
+                  <View style={kindOpen ? styles.chevronOpen : undefined}>
+                    <DriverIcon
+                      name="chevron-down"
+                      size={20}
+                      color={driverColors.textSecondary}
+                    />
+                  </View>
+                </Pressable>
+                {kindOpen ? (
+                  <View style={styles.options} accessibilityRole="radiogroup">
+                    {categories.map((option) => {
+                      const selected = option.code === selectedOption?.code;
+                      return (
+                        <Pressable
+                          key={option.code}
+                          style={({ pressed }) => [
+                            styles.option,
+                            selected && styles.optionSelected,
+                            pressed && styles.pressed,
+                          ]}
+                          onPress={() => {
+                            setCategory(option.code);
+                            setKindOpen(false);
+                            if (errors.category) setErrors({});
+                          }}
+                          accessibilityRole="radio"
+                          accessibilityState={{ selected }}
+                          accessibilityLabel={option.label}
+                        >
+                          <DriverIcon
+                            name={vehicleIconName(option.code)}
+                            size={20}
+                            color={driverColors.brand}
+                          />
+                          <Text style={styles.optionText}>{option.label}</Text>
+                          <View
+                            style={[styles.radio, selected && styles.radioOn]}
+                          />
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                ) : null}
               </View>
+              {errors.category ? (
+                <Text style={styles.errorText}>{errors.category}</Text>
+              ) : null}
             </View>
 
             <View style={styles.row}>
@@ -362,32 +406,63 @@ const styles = StyleSheet.create({
     color: driverColors.danger,
     fontSize: 13,
   },
-  kinds: {
-    flexDirection: 'row',
-    gap: driverSpacing.xs,
-  },
-  kind: {
-    flex: 1,
-    minHeight: 44,
+  select: {
     borderRadius: driverRadius.control,
     borderWidth: 1,
     borderColor: driverColors.border,
+    backgroundColor: driverColors.surface,
+    overflow: 'hidden',
+  },
+  selectOpen: {
+    borderColor: driverColors.brand,
+  },
+  selectHeader: {
+    minHeight: 48,
+    paddingHorizontal: driverSpacing.sm,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
+    gap: driverSpacing.sm,
   },
-  kindSelected: {
-    borderColor: driverColors.brand,
-    backgroundColor: driverColors.brand,
-  },
-  kindText: {
+  selectValue: {
+    flex: 1,
+    minWidth: 0,
     color: driverColors.text,
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '600',
   },
-  kindTextSelected: {
-    color: driverColors.surface,
+  chevronOpen: {
+    transform: [{ rotate: '180deg' }],
+  },
+  options: {
+    borderTopWidth: 1,
+    borderTopColor: driverColors.border,
+  },
+  option: {
+    minHeight: 48,
+    paddingHorizontal: driverSpacing.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: driverSpacing.sm,
+  },
+  optionSelected: {
+    backgroundColor: driverColors.brandSoft,
+  },
+  optionText: {
+    flex: 1,
+    minWidth: 0,
+    color: driverColors.text,
+    fontSize: 15,
+  },
+  radio: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: driverColors.border,
+  },
+  radioOn: {
+    borderColor: driverColors.brand,
+    borderWidth: 6,
   },
   row: {
     flexDirection: 'row',

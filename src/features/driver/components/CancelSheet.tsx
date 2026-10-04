@@ -1,13 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Modal,
   Pressable,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { translateApiError } from '../../../lib/api/translate';
 import { useDriverData } from '../hooks/useDriverData';
 import type { Booking } from '../mock';
@@ -16,6 +14,7 @@ import {
   type CancelPreviewCopy,
 } from '../reservationStatus';
 import { driverColors, driverRadius, driverSpacing } from '../theme';
+import { OverlaySheet } from './OverlaySheet';
 import { toneColors } from './StatusPill';
 
 type Props = {
@@ -35,12 +34,20 @@ type State =
  * (GET …/cancel-preview) y sólo después deja confirmar (POST …/cancel).
  */
 export function CancelSheet({ booking, onClose, onCancelled }: Props) {
-  const insets = useSafeAreaInsets();
   const { previewCancel, cancelReservation } = useDriverData();
   const [state, setState] = useState<State>({ kind: 'loading' });
   const [cancelling, setCancelling] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [retryKey, setRetryKey] = useState(0);
+  // La hoja se puede cerrar con el pedido en vuelo: el resultado se ignora sin
+  // tocar estado de un componente desmontado.
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -68,136 +75,96 @@ export function CancelSheet({ booking, onClose, onCancelled }: Props) {
     setCancelling(true);
     setError(null);
     try {
-      onCancelled(await cancelReservation(booking.id));
+      const cancelled = await cancelReservation(booking.id);
+      // Aunque la hoja ya se haya cerrado, el padre tiene que enterarse.
+      onCancelled(cancelled);
     } catch (cause) {
-      setError(
-        translateApiError(cause, { endpoint: 'driver.cancelReservation' }),
-      );
+      if (mounted.current) {
+        setError(
+          translateApiError(cause, { endpoint: 'driver.cancelReservation' }),
+        );
+      }
     } finally {
-      setCancelling(false);
+      if (mounted.current) setCancelling(false);
     }
   }
 
   return (
-    <Modal visible transparent animationType="slide" onRequestClose={onClose}>
-      <View style={styles.backdrop}>
-        <Pressable
-          style={styles.dim}
-          onPress={onClose}
-          accessibilityLabel="Cerrar"
-        />
-        <View
-          style={[
-            styles.sheet,
-            { paddingBottom: Math.max(insets.bottom, driverSpacing.md) },
-          ]}
-          accessibilityViewIsModal
-        >
-          <View style={styles.grab} />
-          <Text style={styles.title}>¿Cancelar la reserva?</Text>
-          <Text style={styles.parking}>
-            {booking.parkingName} · {booking.entry.dateLabel},{' '}
-            {booking.entry.timeLabel}
-          </Text>
+    <OverlaySheet title="¿Cancelar la reserva?" onClose={onClose}>
+      <Text style={styles.parking}>
+        {booking.parkingName} · {booking.entry.dateLabel},{' '}
+        {booking.entry.timeLabel}
+      </Text>
 
-          {state.kind === 'loading' ? (
-            <View style={styles.box}>
-              <ActivityIndicator color={driverColors.brand} />
-              <Text style={styles.muted}>Calculando tu reembolso…</Text>
-            </View>
-          ) : state.kind === 'error' ? (
-            <View style={styles.box}>
-              <Text style={styles.errorText}>{state.message}</Text>
-              <Pressable
-                onPress={() => {
-                  setRetryKey((key) => key + 1);
-                }}
-                accessibilityRole="button"
-              >
-                <Text style={styles.link}>Reintentar</Text>
-              </Pressable>
-            </View>
-          ) : (
-            <>
-              {state.copy.intro ? (
-                <Text style={styles.intro}>{state.copy.intro}</Text>
-              ) : null}
-              <View style={styles.refundBox}>
-                <Text style={styles.refundLabel}>Reembolso</Text>
-                <Text
-                  style={[
-                    styles.refundValue,
-                    { color: toneColors[state.copy.tone].text },
-                  ]}
-                  accessibilityRole="text"
-                >
-                  {state.copy.refund}
-                </Text>
-              </View>
-            </>
-          )}
-
-          {error ? <Text style={styles.errorText}>{error}</Text> : null}
-
-          {state.kind === 'ready' && state.copy.canConfirm ? (
-            <Pressable
-              style={({ pressed }) => [
-                styles.destructive,
-                (cancelling || pressed) && styles.pressed,
-              ]}
-              onPress={() => {
-                void confirm();
-              }}
-              disabled={cancelling}
-              accessibilityRole="button"
-              accessibilityState={{ busy: cancelling, disabled: cancelling }}
-            >
-              <Text style={styles.destructiveText}>
-                {cancelling ? 'Cancelando…' : 'Sí, cancelar'}
-              </Text>
-            </Pressable>
-          ) : null}
+      {state.kind === 'loading' ? (
+        <View style={styles.box}>
+          <ActivityIndicator color={driverColors.brand} />
+          <Text style={styles.muted}>Calculando tu reembolso…</Text>
+        </View>
+      ) : state.kind === 'error' ? (
+        <View style={styles.box}>
+          <Text style={styles.errorText}>{state.message}</Text>
           <Pressable
-            style={({ pressed }) => [
-              styles.secondary,
-              pressed && styles.pressed,
-            ]}
-            onPress={onClose}
-            disabled={cancelling}
+            onPress={() => {
+              setRetryKey((key) => key + 1);
+            }}
             accessibilityRole="button"
           >
-            <Text style={styles.secondaryText}>Volver</Text>
+            <Text style={styles.link}>Reintentar</Text>
           </Pressable>
         </View>
-      </View>
-    </Modal>
+      ) : (
+        <>
+          {state.copy.intro ? (
+            <Text style={styles.intro}>{state.copy.intro}</Text>
+          ) : null}
+          <View style={styles.refundBox}>
+            <Text style={styles.refundLabel}>Reembolso</Text>
+            <Text
+              style={[
+                styles.refundValue,
+                { color: toneColors[state.copy.tone].text },
+              ]}
+              accessibilityRole="text"
+            >
+              {state.copy.refund}
+            </Text>
+          </View>
+        </>
+      )}
+
+      {error ? <Text style={styles.errorText}>{error}</Text> : null}
+
+      {state.kind === 'ready' && state.copy.canConfirm ? (
+        <Pressable
+          style={({ pressed }) => [
+            styles.destructive,
+            (cancelling || pressed) && styles.pressed,
+          ]}
+          onPress={() => {
+            void confirm();
+          }}
+          disabled={cancelling}
+          accessibilityRole="button"
+          accessibilityState={{ busy: cancelling, disabled: cancelling }}
+        >
+          <Text style={styles.destructiveText}>
+            {cancelling ? 'Cancelando…' : 'Sí, cancelar'}
+          </Text>
+        </Pressable>
+      ) : null}
+      <Pressable
+        style={({ pressed }) => [styles.secondary, pressed && styles.pressed]}
+        onPress={onClose}
+        accessibilityRole="button"
+      >
+        <Text style={styles.secondaryText}>Volver</Text>
+      </Pressable>
+    </OverlaySheet>
   );
 }
 
 const styles = StyleSheet.create({
-  backdrop: { flex: 1, justifyContent: 'flex-end' },
-  dim: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: driverColors.overlay,
-  },
-  sheet: {
-    width: '100%',
-    maxWidth: 560,
-    alignSelf: 'center',
-    padding: driverSpacing.md,
-    gap: driverSpacing.sm,
-    borderTopLeftRadius: driverRadius.card,
-    borderTopRightRadius: driverRadius.card,
-    backgroundColor: driverColors.surface,
-  },
-  grab: {
-    alignSelf: 'center',
-    width: 40,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: driverColors.border,
-  },
-  title: { fontSize: 20, fontWeight: '700', color: driverColors.text },
   parking: { fontSize: 14, color: driverColors.textSecondary },
   intro: { fontSize: 14, lineHeight: 20, color: driverColors.textSecondary },
   box: {

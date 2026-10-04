@@ -87,7 +87,8 @@ const EMPTY: Record<ReservationBucket, { title: string; copy: string }> = {
 export function ReservationsScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<NavigationProp<DriverRootParamList>>();
-  const { bookings, bookingsStatus, refreshBookings } = useDriverData();
+  const { bookings, bookingsStatus, refreshBookings, applyBooking } =
+    useDriverData();
   const { showToast } = useToast();
   const reduced = useReducedMotion();
   const [refreshing, setRefreshing] = useState(false);
@@ -300,9 +301,14 @@ export function ReservationsScreen() {
           onClose={() => {
             setCancelTarget(null);
           }}
-          onCancelled={() => {
+          onCancelled={(cancelled) => {
+            // Primero se cierra la hoja; la lista cambia en el frame siguiente
+            // para que sus animaciones no corran con la hoja desmontándose.
             setCancelTarget(null);
-            showToast({ message: 'Reserva cancelada.', kind: 'success' });
+            requestAnimationFrame(() => {
+              applyBooking(cancelled);
+              showToast({ message: 'Reserva cancelada.', kind: 'success' });
+            });
           }}
         />
       ) : null}

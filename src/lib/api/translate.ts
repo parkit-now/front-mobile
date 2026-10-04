@@ -1,4 +1,4 @@
-import { ApiError } from './client';
+import { ApiError, ApiTimeoutError, TIMEOUT_MESSAGE } from './client';
 
 /**
  * Traduce errores del backend a mensajes en español.
@@ -194,6 +194,8 @@ export function translateApiError(
     if (byStatus) return byStatus;
     return GENERIC_MESSAGE;
   }
+
+  if (error instanceof ApiTimeoutError) return TIMEOUT_MESSAGE;
 
   // fetch() falla con TypeError cuando no hay red.
   if (error instanceof TypeError) {

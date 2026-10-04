@@ -4,12 +4,14 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react';
 import * as Linking from 'expo-linking';
 import type { Booking, ParkingLot } from '../mock';
 import { buildReturnUrl } from '../reservationLinks';
+import { createStaleResponseGuard } from '../staleResponseGuard';
 import {
   cancelReservation as cancelReservationRequest,
   createReservation as createReservationRequest,
@@ -63,8 +65,15 @@ type DriverDataContextValue = {
   retryPayment: (bookingId: string) => Promise<CreatedReservation>;
   /** Cuánto se devolvería si se cancelara ahora; lanza ApiError. */
   previewCancel: (bookingId: string) => Promise<CancelPreview>;
-  /** Cancela en el backend; lanza ApiError si falla. */
+  /**
+   * Cancela en el backend y devuelve la reserva cancelada; lanza ApiError si
+   * falla. NO toca la lista: quien llama cierra su hoja y después aplica el
+   * resultado con `applyBooking`, para que las animaciones de la lista no
+   * corran con la hoja todavía desmontándose.
+   */
   cancelReservation: (bookingId: string) => Promise<Booking>;
+  /** Deja `booking` en la lista (reemplaza o agrega). */
+  applyBooking: (booking: Booking) => void;
   /** Alta o edición en el backend; lanza ApiError si falla. */
   saveVehicle: (input: {
     vehicle: DriverVehicle | null;
@@ -111,17 +120,22 @@ export function DriverDataProvider({
     };
   }, [accessToken]);
 
+  // Lecturas viejas no pisan una cancelación local (ver staleResponseGuard).
+  const guard = useRef(createStaleResponseGuard()).current;
+
   const refreshBookings = useCallback(async () => {
     setBookingsStatus((current) =>
       current === 'success' ? current : 'loading',
     );
     try {
-      setBookings(await listReservations(accessToken));
+      const rows = await listReservations(accessToken);
+      if (guard.hasPendingWrites()) return;
+      setBookings(rows);
       setBookingsStatus('success');
     } catch {
       setBookingsStatus('error');
     }
-  }, [accessToken]);
+  }, [accessToken, guard]);
 
   useEffect(() => {
     void refreshBookings();
@@ -178,11 +192,12 @@ export function DriverDataProvider({
 
   const reloadBooking = useCallback(
     async (bookingId: string) => {
+      const ticket = guard.beginRead(bookingId);
       const booking = await getReservation(bookingId, accessToken);
-      upsertBooking(booking);
+      if (guard.canApply(bookingId, ticket)) upsertBooking(booking);
       return booking;
     },
-    [accessToken, upsertBooking],
+    [accessToken, upsertBooking, guard],
   );
 
   const retryPayment = useCallback(
@@ -201,14 +216,23 @@ export function DriverDataProvider({
 
   const cancelReservation = useCallback(
     async (bookingId: string) => {
-      const booking = await cancelReservationRequest(bookingId, accessToken);
-      setBookings((current) =>
-        current.map((item) => (item.id === booking.id ? booking : item)),
-      );
-      return booking;
+      guard.beginWrite(bookingId);
+      try {
+        return await cancelReservationRequest(bookingId, accessToken);
+      } finally {
+        guard.endWrite(bookingId);
+      }
     },
-    [accessToken],
+    [accessToken, guard],
   );
+
+  const applyBooking = useCallback((booking: Booking) => {
+    setBookings((current) =>
+      current.some((item) => item.id === booking.id)
+        ? current.map((item) => (item.id === booking.id ? booking : item))
+        : [booking, ...current],
+    );
+  }, []);
 
   // Después de escribir se relee la lista: el backend decide el principal
   // (el primero lo es siempre; borrar el principal promueve a otro).
@@ -257,6 +281,7 @@ export function DriverDataProvider({
       retryPayment,
       previewCancel,
       cancelReservation,
+      applyBooking,
       saveVehicle,
       removeVehicle,
     }),
@@ -274,6 +299,7 @@ export function DriverDataProvider({
       retryPayment,
       previewCancel,
       cancelReservation,
+      applyBooking,
       saveVehicle,
       removeVehicle,
     ],
