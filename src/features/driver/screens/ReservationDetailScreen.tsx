@@ -1,3 +1,4 @@
+import { useIsFocused } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import * as Linking from 'expo-linking';
 import * as WebBrowser from 'expo-web-browser';
@@ -16,19 +17,23 @@ import {
   Text,
   View,
 } from 'react-native';
+import { useReducedMotion } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { translateApiError } from '../../../lib/api/translate';
 import { useToast } from '../../../lib/notifications/ToastProvider';
 import { CancelSheet } from '../components/CancelSheet';
 import { DriverIcon } from '../components/DriverIcon';
+import { ReservationOutcome } from '../components/reservation-motion';
 import { StatusPill, toneColors } from '../components/StatusPill';
+import { useApprovalPolling } from '../hooks/useApprovalPolling';
 import { useDriverData } from '../hooks/useDriverData';
+import { useOutcomeMotion } from '../hooks/useOutcomeMotion';
 import type { Booking } from '../mock';
 import type { DriverRootParamList } from '../navigation';
 import { pollReservation } from '../pollReservation';
 import { buildReturnUrl } from '../reservationLinks';
+import { outcomeStage } from '../reservationMotion';
 import {
-  clockLabel,
   formatArs,
   formatCountdown,
   holdRemainingSeconds,
@@ -85,6 +90,12 @@ export function ReservationDetailScreen({ navigation, route }: Props) {
   const now = useNow(ticking);
   const livePhase = booking ? reservationPhase(booking, now) : null;
 
+  // Pantalla "en movimiento": qué etapa se ve y qué coreografía le toca.
+  const focused = useIsFocused();
+  const reduced = useReducedMotion();
+  const stage = outcomeStage(livePhase, confirming);
+  const motion = useOutcomeMotion(reservationId, stage, focused);
+
   const load = useCallback(async () => {
     setLoadError(null);
     try {
@@ -99,6 +110,12 @@ export function ReservationDetailScreen({ navigation, route }: Props) {
   useEffect(() => {
     void load();
   }, [load]);
+
+  // Esperando al estacionamiento: se consulta con calma mientras se mira.
+  useApprovalPolling({
+    enabled: focused && stage === 'pending',
+    poll: () => reloadBooking(reservationId),
+  });
 
   // Cuando la retención vence en pantalla, el backend ya la marcó `expired`.
   useEffect(() => {
@@ -232,6 +249,33 @@ export function ReservationDetailScreen({ navigation, route }: Props) {
               Mercado Pago ya nos avisó. Esto tarda unos segundos.
             </Text>
           </View>
+        ) : booking &&
+          livePhase &&
+          (stage === 'pending' ||
+            stage === 'confirmed' ||
+            stage === 'rejected') ? (
+          <ReservationOutcome
+            booking={booking}
+            stage={stage}
+            phase={livePhase}
+            motion={motion}
+            focused={focused}
+            reduced={reduced}
+            background={driverColors.background}
+            onMyReservations={() => {
+              navigation.navigate('Tabs', { screen: 'Reservations' });
+            }}
+            onSearch={searchAnother}
+            onDirections={() => {
+              void directions(booking);
+            }}
+            onCancel={() => {
+              setCancelOpen(true);
+            }}
+            onDeadlineReached={() => {
+              void load();
+            }}
+          />
         ) : !booking || !livePhase ? (
           loadError ? (
             <View style={styles.center}>
@@ -269,9 +313,6 @@ export function ReservationDetailScreen({ navigation, route }: Props) {
             onCancel={() => {
               setCancelOpen(true);
             }}
-            onDirections={() => {
-              void directions(booking);
-            }}
             onSearch={searchAnother}
             onMyReservations={() => {
               navigation.navigate('Tabs', { screen: 'Reservations' });
@@ -305,7 +346,6 @@ type BodyProps = {
   onPay: () => void;
   onRefresh: () => void;
   onCancel: () => void;
-  onDirections: () => void;
   onSearch: () => void;
   onMyReservations: () => void;
 };
@@ -319,7 +359,6 @@ function PhaseBody({
   onPay,
   onRefresh,
   onCancel,
-  onDirections,
   onSearch,
   onMyReservations,
 }: BodyProps) {
@@ -400,96 +439,6 @@ function PhaseBody({
         </>
       );
     }
-    case 'awaiting_approval':
-      return (
-        <>
-          <Banner
-            tone="warn"
-            icon="⧗"
-            title="Pago aprobado"
-            copy={`${booking.parkingName} tiene que aceptar tu reserva.${
-              booking.approvalDeadlineAt
-                ? ` Responde antes de las ${clockLabel(new Date(booking.approvalDeadlineAt))}.`
-                : ''
-            } Si no la acepta, te devolvemos todo.`}
-          />
-          <SummaryCard
-            booking={booking}
-            badge={<StatusPill {...badge} />}
-            totalLabel="Pagado"
-          />
-          <Text style={styles.small}>{policy}</Text>
-          <SecondaryButton
-            label="Ver mis reservas"
-            onPress={onMyReservations}
-          />
-          {booking.cancellable ? (
-            <GhostButton
-              label="Cancelar (reembolso total)"
-              onPress={onCancel}
-            />
-          ) : null}
-        </>
-      );
-    case 'confirmed':
-    case 'in_progress':
-      return (
-        <>
-          <View style={[styles.card, styles.centerCard]}>
-            <View
-              style={[
-                styles.bigIcon,
-                { backgroundColor: toneColors.ok.surface },
-              ]}
-            >
-              <Text style={[styles.bigIconText, { color: toneColors.ok.text }]}>
-                ✓
-              </Text>
-            </View>
-            <Text style={styles.heading}>
-              {phase === 'in_progress'
-                ? 'Estás estacionado'
-                : '¡Listo! Tenés tu lugar'}
-            </Text>
-            <Text style={styles.small}>Código de reserva</Text>
-            <Text style={styles.code} selectable>
-              {booking.ticketCode}
-            </Text>
-          </View>
-          <SummaryCard
-            booking={booking}
-            badge={<StatusPill {...badge} />}
-            totalLabel="Pagado"
-          />
-          <Text style={styles.small}>{policy}</Text>
-          <SecondaryButton label="Cómo llegar" onPress={onDirections} />
-          <SecondaryButton
-            label="Ver mis reservas"
-            onPress={onMyReservations}
-          />
-          {booking.cancellable ? (
-            <GhostButton label="Cancelar reserva" onPress={onCancel} />
-          ) : null}
-        </>
-      );
-    case 'rejected':
-      return (
-        <>
-          <Banner
-            tone="err"
-            icon="↺"
-            title="No pudimos confirmar tu reserva"
-            copy={
-              reason ?? `${booking.parkingName} no pudo aceptar tu reserva.`
-            }
-          />
-          <RefundCard booking={booking} refundLabel={refund?.label} />
-          <PrimaryButton
-            label="Buscar otro estacionamiento"
-            onPress={onSearch}
-          />
-        </>
-      );
     case 'expired':
       return (
         <>
@@ -584,28 +533,6 @@ function SummaryCard({
       />
       <Row label="Vehículo" value={formatPlate(booking.vehiclePlate)} />
       <Row label={totalLabel} value={formatArs(booking.totalArs)} />
-    </View>
-  );
-}
-
-function RefundCard({
-  booking,
-  refundLabel,
-}: {
-  booking: Booking;
-  refundLabel: string | undefined;
-}) {
-  return (
-    <View style={styles.card}>
-      <Row
-        label="Te devolvemos"
-        value={formatArs(booking.refundedAmountArs ?? booking.totalArs)}
-        valueColor={toneColors.ok.text}
-      />
-      {refundLabel ? <Row label="Estado" value={refundLabel} /> : null}
-      <Text style={styles.small}>
-        Con tarjeta puede tardar hasta 10 días hábiles en verse en el resumen.
-      </Text>
     </View>
   );
 }
@@ -720,7 +647,7 @@ function GhostButton({
 }
 
 const styles = StyleSheet.create({
-  page: { flex: 1, backgroundColor: driverColors.surface },
+  page: { flex: 1, backgroundColor: driverColors.background },
   content: {
     width: '100%',
     maxWidth: driverLayout.maxContentWidth,

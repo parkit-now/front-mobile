@@ -205,3 +205,38 @@ export function springFor(durationMs: number, zeta: number): SpringParams {
     mass: 1,
   };
 }
+
+// ─── Una sola vez por etapa ─────────────────────────────────────────────────
+
+export type MotionState = {
+  /** Última etapa que se vio en esta pantalla. */
+  stage: OutcomeStage | null;
+  kind: MotionKind;
+  /** Cambia con cada etapa nueva: los componentes arrancan su coreografía. */
+  key: number;
+};
+
+export const INITIAL_MOTION: MotionState = {
+  stage: null,
+  kind: 'still',
+  key: 0,
+};
+
+/**
+ * Avanza el estado de la animación cuando cambia la etapa. Sólo anima si la
+ * pantalla está enfocada y si esa etapa no se animó antes para esta reserva
+ * (`alreadyAnimated`): un re-render, volver a enfocar o volver a abrir la
+ * pantalla nunca repite el festejo.
+ */
+export function advanceMotion(
+  state: MotionState,
+  next: OutcomeStage | null,
+  options: { focused: boolean; alreadyAnimated: boolean },
+): MotionState {
+  if (next === state.stage) return state;
+  const kind =
+    options.focused && !options.alreadyAnimated
+      ? decideMotion(state.stage, next)
+      : 'still';
+  return { stage: next, kind, key: state.key + 1 };
+}

@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
+  advanceMotion,
   approvalCountdown,
+  INITIAL_MOTION,
   approvalPollDelay,
   approvalProgress,
   approvalRemainingMs,
@@ -224,5 +226,62 @@ describe('springFor', () => {
     expect(springFor(460, 0.7).stiffness).toBeGreaterThan(
       springFor(700, 0.7).stiffness,
     );
+  });
+});
+
+describe('advanceMotion', () => {
+  const visible = { focused: true, alreadyAnimated: false };
+
+  it('misma etapa: no cambia nada (re-render)', () => {
+    const state = {
+      stage: 'confirmed' as const,
+      kind: 'still' as const,
+      key: 3,
+    };
+    expect(advanceMotion(state, 'confirmed', visible)).toBe(state);
+  });
+
+  it('del pago a confirmada: festeja y cambia la clave', () => {
+    const paying = advanceMotion(INITIAL_MOTION, 'paying', visible);
+    expect(paying).toEqual({ stage: 'paying', kind: 'still', key: 1 });
+    expect(advanceMotion(paying, 'confirmed', visible)).toEqual({
+      stage: 'confirmed',
+      kind: 'celebrate',
+      key: 2,
+    });
+  });
+
+  it('abrir una reserva ya confirmada: quieta', () => {
+    expect(advanceMotion(INITIAL_MOTION, 'confirmed', visible).kind).toBe(
+      'still',
+    );
+  });
+
+  it('sin foco no se anima', () => {
+    const pending = {
+      stage: 'pending' as const,
+      kind: 'still' as const,
+      key: 1,
+    };
+    expect(
+      advanceMotion(pending, 'confirmed', {
+        focused: false,
+        alreadyAnimated: false,
+      }).kind,
+    ).toBe('still');
+  });
+
+  it('una etapa ya festejada para esta reserva no se repite', () => {
+    const pending = {
+      stage: 'pending' as const,
+      kind: 'still' as const,
+      key: 1,
+    };
+    expect(
+      advanceMotion(pending, 'confirmed', {
+        focused: true,
+        alreadyAnimated: true,
+      }).kind,
+    ).toBe('still');
   });
 });
