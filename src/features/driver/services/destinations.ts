@@ -1,21 +1,32 @@
-import { searchDestinations, type SearchDestination } from '../discovery';
+import type { SearchDestination } from '../discovery';
+import type { ParkingLot } from '../mock';
 import { searchGeorefAddresses } from './georef';
+import { searchParkingsByName } from './driver';
+
+export type DestinationSuggestions = {
+  addresses: SearchDestination[];
+  parkings: ParkingLot[];
+};
 
 /**
- * Sugerencias de destino: primero los lugares conocidos (Obelisco, Hospital
- * Italiano…, que Georef no tiene), después direcciones y esquinas reales de
- * CABA. Si Georef falla pero hay lugares, se muestran igual; si no hay nada
- * que mostrar, el error sube para que la pantalla ofrezca reintentar.
+ * Busca estacionamientos por nombre y direcciones (Georef) en paralelo. Si una
+ * de las dos falla se muestra igual lo de la otra; sólo si fallan las dos el
+ * error sube para que la pantalla ofrezca reintentar.
  */
 export async function searchDestinationSuggestions(
   query: string,
-): Promise<SearchDestination[]> {
-  const places = searchDestinations(query);
-  try {
-    const addresses = await searchGeorefAddresses(query);
-    return [...places, ...addresses];
-  } catch (error) {
-    if (places.length > 0) return places;
-    throw error;
+  bearer: string,
+  coords?: { latitude: number; longitude: number },
+): Promise<DestinationSuggestions> {
+  const [addresses, parkings] = await Promise.allSettled([
+    searchGeorefAddresses(query),
+    searchParkingsByName(query.trim(), bearer, coords),
+  ]);
+  if (addresses.status === 'rejected' && parkings.status === 'rejected') {
+    throw addresses.reason;
   }
+  return {
+    addresses: addresses.status === 'fulfilled' ? addresses.value : [],
+    parkings: parkings.status === 'fulfilled' ? parkings.value : [],
+  };
 }

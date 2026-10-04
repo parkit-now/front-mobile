@@ -74,7 +74,8 @@ function useNow(active: boolean): Date {
 export function ReservationDetailScreen({ navigation, route }: Props) {
   const insets = useSafeAreaInsets();
   const { showToast } = useToast();
-  const { bookings, reloadBooking, retryPayment } = useDriverData();
+  const { bookings, reloadBooking, retryPayment, applyBooking } =
+    useDriverData();
   const { reservationId, returnedAt } = route.params;
   const booking = bookings.find((item) => item.id === reservationId) ?? null;
 
@@ -113,7 +114,8 @@ export function ReservationDetailScreen({ navigation, route }: Props) {
 
   // Esperando al estacionamiento: se consulta con calma mientras se mira.
   useApprovalPolling({
-    enabled: focused && stage === 'pending',
+    // Pausado mientras la hoja de cancelación está abierta.
+    enabled: focused && stage === 'pending' && !cancelOpen,
     poll: () => reloadBooking(reservationId),
   });
 
@@ -327,9 +329,14 @@ export function ReservationDetailScreen({ navigation, route }: Props) {
           onClose={() => {
             setCancelOpen(false);
           }}
-          onCancelled={() => {
+          onCancelled={(cancelled) => {
+            // Primero se cierra la hoja; el cambio de estado (y su animación)
+            // va en el frame siguiente.
             setCancelOpen(false);
-            showToast({ message: 'Reserva cancelada.', kind: 'success' });
+            requestAnimationFrame(() => {
+              applyBooking(cancelled);
+              showToast({ message: 'Reserva cancelada.', kind: 'success' });
+            });
           }}
         />
       ) : null}

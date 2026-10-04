@@ -114,6 +114,8 @@ export function previewCancel(
   });
 }
 
+export const CANCEL_TIMEOUT_MS = 45_000;
+
 export async function cancelReservation(
   reservationId: string,
   bearer: string,
@@ -122,6 +124,8 @@ export async function cancelReservation(
     method: 'POST',
     path: `/driver/reservations/${reservationId}/cancel`,
     bearer,
+    // El reembolso en Mercado Pago puede tardar.
+    timeoutMs: CANCEL_TIMEOUT_MS,
   });
   return toBooking(row);
 }

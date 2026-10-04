@@ -12,7 +12,10 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { DriverIcon } from '../components/DriverIcon';
 import { LocationIssueModal } from '../components/LocationIssueModal';
-import { RECENT_DESTINATIONS, type SearchDestination } from '../discovery';
+import type { SearchDestination } from '../discovery';
+import type { ParkingLot } from '../mock';
+import { useDriverData } from '../hooks/useDriverData';
+import { useRecentDestinations } from '../hooks/useRecentDestinations';
 import { useCurrentLocation } from '../hooks/useCurrentLocation';
 import { useDestinationSearch } from '../hooks/useDestinationSearch';
 import type { DiscoveryStackParamList } from '../navigation';
@@ -27,17 +30,30 @@ export function DestinationSearchScreen({ navigation }: Props) {
   const insets = useSafeAreaInsets();
   const [query, setQuery] = useState('');
   const currentLocation = useCurrentLocation();
-  const search = useDestinationSearch(query);
+  const { accessToken } = useDriverData();
+  const { recents, remember } = useRecentDestinations();
+  const search = useDestinationSearch(query, accessToken);
   const hasQuery = query.trim().length >= 3;
   const hasError = search.status === 'error';
-  const visibleDestinations = hasError
-    ? RECENT_DESTINATIONS
-    : hasQuery
-      ? search.results
-      : RECENT_DESTINATIONS;
+  const showingResults = hasQuery && !hasError;
+  const visibleDestinations = showingResults ? search.results : recents;
+  const visibleParkings = showingResults ? search.parkings : [];
+
+  function selectParking(parking: ParkingLot) {
+    Keyboard.dismiss();
+    remember({
+      id: `parking-${parking.id}`,
+      name: parking.name,
+      address: parking.address,
+      kind: 'place',
+      coordinate: parking.coordinate,
+    });
+    navigation.navigate('ParkingDetails', { parking });
+  }
 
   function selectDestination(destination: SearchDestination) {
     Keyboard.dismiss();
+    remember(destination);
     navigation.replace('MapResults', { destination });
   }
 
@@ -68,7 +84,7 @@ export function DestinationSearchScreen({ navigation }: Props) {
               value={query}
               onChangeText={setQuery}
               style={styles.input}
-              placeholder="Dirección, lugar o esquina"
+              placeholder="Estacionamiento, dirección o esquina"
               placeholderTextColor={driverColors.textMuted}
               returnKeyType="search"
               autoCapitalize="words"
@@ -92,7 +108,7 @@ export function DestinationSearchScreen({ navigation }: Props) {
         {search.status === 'loading' ? (
           <View style={styles.statusRow}>
             <View style={styles.loadingDot} />
-            <Text style={styles.statusText}>Buscando direcciones…</Text>
+            <Text style={styles.statusText}>Buscando…</Text>
           </View>
         ) : (
           <FlatList
@@ -151,7 +167,45 @@ export function DestinationSearchScreen({ navigation }: Props) {
                     </Text>
                   </Pressable>
                 )}
-                {!hasQuery || hasError ? (
+                {visibleParkings.length > 0 ? (
+                  <>
+                    <Text style={styles.listLabel}>ESTACIONAMIENTOS</Text>
+                    {visibleParkings.map((parking) => (
+                      <Pressable
+                        key={parking.id}
+                        style={({ pressed }) => [
+                          styles.resultRow,
+                          pressed && styles.pressed,
+                        ]}
+                        onPress={() => {
+                          selectParking(parking);
+                        }}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Estacionamiento ${parking.name}, ${parking.address}`}
+                      >
+                        <View style={styles.rowIcon}>
+                          <DriverIcon
+                            name="car"
+                            size={18}
+                            color={driverColors.brand}
+                          />
+                        </View>
+                        <View style={styles.resultCopy}>
+                          <Text style={styles.resultName}>{parking.name}</Text>
+                          <Text style={styles.resultAddress} numberOfLines={1}>
+                            {parking.distance
+                              ? `${parking.address} · ${parking.distance}`
+                              : parking.address}
+                          </Text>
+                        </View>
+                      </Pressable>
+                    ))}
+                  </>
+                ) : null}
+                {showingResults && visibleDestinations.length > 0 ? (
+                  <Text style={styles.listLabel}>DIRECCIONES</Text>
+                ) : null}
+                {!showingResults && recents.length > 0 ? (
                   <Text style={styles.listLabel}>DESTINOS RECIENTES</Text>
                 ) : null}
               </>
@@ -170,7 +224,7 @@ export function DestinationSearchScreen({ navigation }: Props) {
               >
                 <View style={styles.rowIcon}>
                   <DriverIcon
-                    name={hasQuery && !hasError ? 'pin' : 'clock'}
+                    name={showingResults ? 'pin' : 'clock'}
                     size={18}
                     color={driverColors.brand}
                   />
@@ -184,7 +238,7 @@ export function DestinationSearchScreen({ navigation }: Props) {
               </Pressable>
             )}
             ListEmptyComponent={
-              hasQuery ? (
+              showingResults && visibleParkings.length === 0 ? (
                 <View style={styles.emptyState}>
                   <DriverIcon
                     name="search"
@@ -195,8 +249,8 @@ export function DestinationSearchScreen({ navigation }: Props) {
                     Sin resultados para “{query.trim()}”
                   </Text>
                   <Text style={styles.emptyCopy}>
-                    Probá con el nombre de la calle y la altura, o con un lugar
-                    conocido de CABA.
+                    Probá con el nombre de la calle y la altura, o con el nombre
+                    de un estacionamiento.
                   </Text>
                   <Pressable
                     style={({ pressed }) => [

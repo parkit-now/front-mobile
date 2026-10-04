@@ -4,6 +4,7 @@ import type { ParkingLot, ParkingSchedule } from '../mock';
 
 type NearbyDto = components['schemas']['DriverNearbyParkingDto'];
 type DetailDto = components['schemas']['DriverParkingDetailDto'];
+type SearchDto = components['schemas']['DriverParkingSearchResultDto'];
 type CreateQuoteDto = components['schemas']['CreateQuoteDto'];
 export type DriverQuote = components['schemas']['QuoteDto'];
 
@@ -22,6 +23,33 @@ export async function fetchNearbyParkings(
     bearer,
   });
   return rows.map(mapParking);
+}
+
+/**
+ * Busca estacionamientos por nombre (GET /driver/parkings/search). Devuelve la
+ * misma forma que el listado cercano. `coords` es opcional: con ella el backend
+ * calcula la distancia.
+ */
+export async function searchParkingsByName(
+  q: string,
+  bearer: string,
+  coords?: { latitude: number; longitude: number },
+): Promise<ParkingLot[]> {
+  const query = new URLSearchParams({ q });
+  if (coords) {
+    query.set('latitude', String(coords.latitude));
+    query.set('longitude', String(coords.longitude));
+  }
+  const rows = await apiRequest<SearchDto[]>({
+    method: 'GET',
+    path: `/driver/parkings/search?${query.toString()}`,
+    bearer,
+  });
+  // Sin distancia (sin ubicación o playa sin coordenadas) no se muestra.
+  return rows.map((row) => ({
+    ...mapParking(row),
+    ...(row.distanceMeters === null ? { distance: '' } : {}),
+  }));
 }
 
 export async function fetchParkingDetail(
@@ -53,9 +81,12 @@ export function fetchParkingQuote(
   });
 }
 
-function mapParking(row: NearbyDto | DetailDto): ParkingLot {
+function mapParking(row: NearbyDto | DetailDto | SearchDto): ParkingLot {
   const hourlyPriceArs = row.reservationHourPriceArs ?? 0;
-  const distanceMeters = 'distanceMeters' in row ? row.distanceMeters : 0;
+  const distanceMeters =
+    'distanceMeters' in row && typeof row.distanceMeters === 'number'
+      ? row.distanceMeters
+      : 0;
   const schedules: ParkingSchedule[] = 'schedules' in row ? row.schedules : [];
 
   return {
