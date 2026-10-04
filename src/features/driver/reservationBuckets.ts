@@ -86,20 +86,92 @@ export function bucketReservations(
   for (const booking of bookings) {
     out[reservationBucket(booking, now)].push(booking);
   }
-  const soonest = (a: Booking, b: Booking) =>
-    a.entryAt.localeCompare(b.entryAt);
-  const latest = (a: Booking, b: Booking) => b.entryAt.localeCompare(a.entryAt);
-  out.pending.sort(soonest);
-  // En curso primero: es la que está usando ahora.
-  out.confirmed.sort((a, b) => {
-    const live =
-      Number(b.lifecycle === 'checked_in') -
-      Number(a.lifecycle === 'checked_in');
-    return live !== 0 ? live : soonest(a, b);
-  });
-  out.completed.sort(latest);
-  out.cancelled.sort(latest);
+  for (const bucket of BUCKETS) sortBucket(bucket, out[bucket]);
   return out;
+}
+
+const soonest = (a: Booking, b: Booking) => a.entryAt.localeCompare(b.entryAt);
+const latest = (a: Booking, b: Booking) => b.entryAt.localeCompare(a.entryAt);
+
+/** Ordena en el lugar: las que vienen primero arriba; el historial, al revés. */
+export function sortBucket(bucket: ReservationBucket, list: Booking[]): void {
+  switch (bucket) {
+    case 'pending':
+      list.sort(soonest);
+      return;
+    case 'confirmed':
+      // En curso primero: es la que está usando ahora.
+      list.sort((a, b) => {
+        const live =
+          Number(b.lifecycle === 'checked_in') -
+          Number(a.lifecycle === 'checked_in');
+        return live !== 0 ? live : soonest(a, b);
+      });
+      return;
+    case 'completed':
+    case 'cancelled':
+      list.sort(latest);
+  }
+}
+
+/**
+ * Deja cada reserva de `lingering` en la pestaña donde estaba (ya con su
+ * estado nuevo) un momento antes de que se vaya: primero cambia donde está,
+ * después se va. Nunca desaparece sin explicación.
+ */
+export function withLingering(
+  buckets: BucketedReservations,
+  lingering: Readonly<Record<string, ReservationBucket>>,
+): BucketedReservations {
+  const ids = Object.keys(lingering);
+  if (ids.length === 0) return buckets;
+  const out: BucketedReservations = {
+    pending: [],
+    confirmed: [],
+    completed: [],
+    cancelled: [],
+  };
+  const moved: Booking[] = [];
+  for (const bucket of BUCKETS) {
+    for (const booking of buckets[bucket]) {
+      const stay = lingering[booking.id];
+      if (stay && stay !== bucket) moved.push(booking);
+      else out[bucket].push(booking);
+    }
+  }
+  for (const booking of moved) out[lingering[booking.id]].push(booking);
+  for (const bucket of BUCKETS) sortBucket(bucket, out[bucket]);
+  return out;
+}
+
+/** Reservas que cambiaron de pestaña desde la última vez. */
+export function bucketMoves(
+  previous: ReadonlyMap<string, ReservationBucket>,
+  buckets: BucketedReservations,
+): Array<{ id: string; from: ReservationBucket; to: ReservationBucket }> {
+  const moves: Array<{
+    id: string;
+    from: ReservationBucket;
+    to: ReservationBucket;
+  }> = [];
+  for (const bucket of BUCKETS) {
+    for (const booking of buckets[bucket]) {
+      const from = previous.get(booking.id);
+      if (from && from !== bucket)
+        moves.push({ id: booking.id, from, to: bucket });
+    }
+  }
+  return moves;
+}
+
+export function bucketIndex(
+  buckets: BucketedReservations,
+): Map<string, ReservationBucket> {
+  const index = new Map<string, ReservationBucket>();
+  for (const bucket of BUCKETS) {
+    for (const booking of buckets[bucket]) index.set(booking.id, bucket);
+  }
+  return index;
 }
 
 export function bucketCounts(

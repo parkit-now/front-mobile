@@ -2,11 +2,14 @@ import { describe, expect, it } from 'vitest';
 import type { Booking } from './mock';
 import {
   bucketCounts,
+  bucketIndex,
+  bucketMoves,
   bucketReservations,
   defaultBucket,
   reservationBucket,
   reservationCardView,
   tabDirection,
+  withLingering,
 } from './reservationBuckets';
 import { makeBooking } from './testFixtures';
 
@@ -357,5 +360,66 @@ describe('reservationCardView', () => {
       'Devuelto $4.500',
     ]);
     expect(view.note).toEqual({ icon: 'info', text: 'No respondió a tiempo' });
+  });
+});
+
+describe('cambio de pestaña después de actualizar', () => {
+  const before = bucketReservations(
+    [
+      makeBooking({
+        id: 'once',
+        lifecycle: 'pending_approval',
+        entryAt: '2026-10-03T23:30:00Z',
+      }),
+      makeBooking({
+        id: 'palermo',
+        lifecycle: 'pending_approval',
+        entryAt: '2026-10-04T14:00:00Z',
+      }),
+      makeBooking({
+        id: 'micro',
+        lifecycle: 'confirmed',
+        entryAt: '2026-10-03T22:00:00Z',
+      }),
+    ],
+    NOW,
+  );
+  const after = bucketReservations(
+    [
+      makeBooking({
+        id: 'once',
+        lifecycle: 'confirmed',
+        entryAt: '2026-10-03T23:30:00Z',
+      }),
+      makeBooking({
+        id: 'palermo',
+        lifecycle: 'pending_approval',
+        entryAt: '2026-10-04T14:00:00Z',
+      }),
+      makeBooking({
+        id: 'micro',
+        lifecycle: 'confirmed',
+        entryAt: '2026-10-03T22:00:00Z',
+      }),
+    ],
+    NOW,
+  );
+
+  it('detecta qué reserva cambió de pestaña', () => {
+    expect(bucketMoves(bucketIndex(before), after)).toEqual([
+      { id: 'once', from: 'pending', to: 'confirmed' },
+    ]);
+    expect(bucketMoves(new Map(), after)).toEqual([]);
+  });
+
+  it('la deja un momento donde estaba, ya cambiada y en su orden', () => {
+    const shown = withLingering(after, { once: 'pending' });
+    expect(shown.pending.map((b) => b.id)).toEqual(['once', 'palermo']);
+    expect(shown.pending[0].lifecycle).toBe('confirmed');
+    expect(shown.confirmed.map((b) => b.id)).toEqual(['micro']);
+  });
+
+  it('sin nada pendiente de irse, no cambia nada', () => {
+    expect(withLingering(after, {})).toBe(after);
   });
 });
