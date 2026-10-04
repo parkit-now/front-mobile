@@ -345,14 +345,13 @@ export function SuccessBadge({
     // Sólo con cada coreografía nueva.
   }, [runKey]);
 
-  // El anillo ámbar baja con el tiempo real, una vez por segundo.
+  // El anillo ámbar baja con el tiempo real.
   useEffect(() => {
     if (stage !== 'pending') return;
+    // Un paso por segundo, sin interpolar: 1/900 de vuelta no se ve y así el
+    // SVG se redibuja una vez por segundo y no en cada frame.
     const tick = () => {
-      arc.value = withTiming(progressNow(), {
-        duration: 1000,
-        easing: EASE.linear,
-      });
+      arc.value = progressNow();
     };
     let interval: ReturnType<typeof setInterval> | undefined;
     const startIn =

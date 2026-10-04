@@ -19,7 +19,6 @@ export const EASE = {
   reverse: Easing.bezier(0.5, 0, 0.75, 0),
   draw: Easing.bezier(0.55, 0, 0.25, 1),
   pulse: Easing.bezier(0.2, 0.7, 0.3, 1),
-  breathe: Easing.inOut(Easing.ease),
   linear: Easing.linear,
 };
 

@@ -1,13 +1,16 @@
-import { useEffect } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { useEffect, useRef } from 'react';
+import {
+  Animated as NativeAnimated,
+  Easing,
+  Platform,
+  StyleSheet,
+  View,
+} from 'react-native';
 import Animated, {
   cancelAnimation,
-  ReduceMotion,
-  useAnimatedProps,
   useAnimatedStyle,
   useSharedValue,
   withDelay,
-  withRepeat,
   withSpring,
   withTiming,
 } from 'react-native-reanimated';
@@ -35,18 +38,30 @@ const SLOT_D =
 /** Afuera, frenado en la línea del lugar. */
 const WAIT_X = 45;
 const GONE_X = 92;
+/** Opacidad del borde ámbar mientras espera, y el piso de la respiración. */
 const WAIT_OPACITY = 0.6;
-/** 0,22 / 0,6: el piso de la respiración del borde. */
-const BREATH_LOW = 0.22 / WAIT_OPACITY;
+const BREATH_LOW = 0.22;
 
-const AnimatedPath = Animated.createAnimatedComponent(Path);
+function SlotOutline({ color }: { color: string }) {
+  return (
+    <Svg width={56} height={34} viewBox="0 0 56 34">
+      <Path
+        d={SLOT_D}
+        fill="none"
+        stroke={color}
+        strokeWidth={1.6}
+        strokeLinecap="round"
+      />
+    </Svg>
+  );
+}
 
 function finalCar(stage: SlotStage) {
   switch (stage) {
     case 'confirmed':
       return { x: 0, opacity: 1, on: 1, wait: 0 };
     case 'pending':
-      return { x: WAIT_X, opacity: 1, on: 0, wait: WAIT_OPACITY };
+      return { x: WAIT_X, opacity: 1, on: 0, wait: 1 };
     case 'rejected':
       return { x: GONE_X, opacity: 0, on: 0, wait: 0 };
   }
@@ -76,7 +91,6 @@ export function ParkingSlotCar({
   const carOpacity = useSharedValue(start.opacity);
   const slotOn = useSharedValue(start.on);
   const waitBase = useSharedValue(start.wait);
-  const breath = useSharedValue(1);
 
   useEffect(() => {
     const end = finalCar(stage);
@@ -117,7 +131,7 @@ export function ParkingSlotCar({
         );
         waitBase.value = withDelay(
           at(T.payToPending.slotWait),
-          withTiming(WAIT_OPACITY, { duration: 400 }),
+          withTiming(1, { duration: 400 }),
         );
         break;
       case 'accept':
@@ -155,25 +169,35 @@ export function ParkingSlotCar({
 
   // Única animación en loop: el borde ámbar respira mientras espera. Se corta
   // al cambiar de estado o al salir de la pantalla, y no arranca con
-  // "Reducir movimiento" (ReduceMotion.System).
+  // "Reducir movimiento". Va con el driver nativo de Animated sobre la
+  // opacidad de una vista con textura propia: el SVG se dibuja una sola vez.
+  // Con Reanimated sobre `strokeOpacity` el SVG se volvía a rasterizar en cada
+  // frame durante toda la espera (en un Galaxy A51, 46 fps contra 50 fps y
+  // p90 de 44 ms contra 38 ms). La capa de arriba queda en opacidad 1
+  // mientras respira, así no se suman dos fundidos.
+  const breath = useRef(new NativeAnimated.Value(WAIT_OPACITY)).current;
   useEffect(() => {
-    cancelAnimation(breath);
-    breath.value = 1;
+    breath.stopAnimation();
+    breath.setValue(WAIT_OPACITY);
     if (stage !== 'pending' || !focused || reduced) return;
     const startAt =
       kind === 'payToPending' ? LEAD_MS + T.payToPending.breathe : 0;
-    breath.value = withDelay(
-      startAt,
-      withRepeat(
-        withTiming(BREATH_LOW, { duration: 1200, easing: EASE.breathe }),
-        -1,
-        true,
-        undefined,
-        ReduceMotion.System,
+    const half = (toValue: number) =>
+      NativeAnimated.timing(breath, {
+        toValue,
+        duration: 1200,
+        easing: Easing.inOut(Easing.ease),
+        useNativeDriver: Platform.OS !== 'web',
+      });
+    const loop = NativeAnimated.sequence([
+      NativeAnimated.delay(startAt),
+      NativeAnimated.loop(
+        NativeAnimated.sequence([half(BREATH_LOW), half(WAIT_OPACITY)]),
       ),
-    );
+    ]);
+    loop.start();
     return () => {
-      cancelAnimation(breath);
+      loop.stop();
     };
   }, [stage, focused, reduced, runKey]);
 
@@ -181,10 +205,8 @@ export function ParkingSlotCar({
     opacity: carOpacity.value,
     transform: [{ translateX: carX.value }],
   }));
-  const waitProps = useAnimatedProps(() => ({
-    strokeOpacity: waitBase.value * breath.value,
-  }));
-  const onProps = useAnimatedProps(() => ({ strokeOpacity: slotOn.value }));
+  const waitStyle = useAnimatedStyle(() => ({ opacity: waitBase.value }));
+  const onStyle = useAnimatedStyle(() => ({ opacity: slotOn.value }));
 
   return (
     <View
@@ -200,23 +222,23 @@ export function ParkingSlotCar({
           strokeWidth={1.6}
           strokeLinecap="round"
         />
-        <AnimatedPath
-          d={SLOT_D}
-          fill="none"
-          stroke={amberColors.strong}
-          strokeWidth={1.6}
-          strokeLinecap="round"
-          animatedProps={waitProps}
-        />
-        <AnimatedPath
-          d={SLOT_D}
-          fill="none"
-          stroke={driverColors.brand}
-          strokeWidth={1.6}
-          strokeLinecap="round"
-          animatedProps={onProps}
-        />
       </Svg>
+      {/* Bordes de color en capas propias: animar la opacidad de la vista no
+          redibuja el SVG (la respiración corre en cada frame). */}
+      <Animated.View style={[styles.svg, waitStyle]}>
+        <NativeAnimated.View
+          style={{ opacity: breath }}
+          renderToHardwareTextureAndroid
+        >
+          <SlotOutline color={amberColors.strong} />
+        </NativeAnimated.View>
+      </Animated.View>
+      <Animated.View
+        style={[styles.svg, onStyle]}
+        renderToHardwareTextureAndroid
+      >
+        <SlotOutline color={driverColors.brand} />
+      </Animated.View>
       <Animated.View style={[styles.car, carStyle]}>
         <CarTopView width={34} height={19} />
       </Animated.View>
