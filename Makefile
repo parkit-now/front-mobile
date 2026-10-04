@@ -28,11 +28,11 @@ DETECT_ANDROID_SDK := android_home="$${ANDROID_HOME:-}"; \
 # Expo lee por su cuenta .env.local y .env.<modo> y les da más prioridad que a .env,
 # así que ignoraría `make env-use-prod`. Cargamos solo el .env activo en el proceso y
 # apagamos la lectura automática de Expo: el entorno es el que está en .env, como en
-# el resto de los repos.
-USE_ACTIVE_ENV := if [ ! -f .env ]; then \
+# el resto de los repos. Sin .env (por ejemplo en CI) se usan las variables del proceso.
+USE_ACTIVE_ENV := if [ -f .env ]; then set -a; . ./.env; set +a; fi; export EXPO_NO_DOTENV=1
+REQUIRE_ACTIVE_ENV := if [ ! -f .env ]; then \
 		echo "✗ Falta .env activo. Corré: make env-use-local  ó  make env-use-prod"; exit 1; \
-	fi; \
-	set -a; . ./.env; set +a; export EXPO_NO_DOTENV=1
+	fi
 
 help: ## Mostrar comandos disponibles
 	@printf "\n$(CYAN)Parkit mobile$(RESET)\n\n"
@@ -112,7 +112,7 @@ prod: env-use-prod ## Levantar Expo en modo prod (--no-dev --minify) con link/QR
 	fi
 
 apk: ## APK release (JS embebido) con el .env activo, instalado en el celu por USB
-	@$(USE_ACTIVE_ENV); $(DETECT_ANDROID_SDK); \
+	@$(REQUIRE_ACTIVE_ENV); $(USE_ACTIVE_ENV); $(DETECT_ANDROID_SDK); \
 	if [ -z "$$android_home" ]; then echo "✗ Falta el Android SDK (seteá ANDROID_HOME)"; exit 1; fi; \
 	echo "→ API: $${EXPO_PUBLIC_API_URL:-<sin definir>}"; \
 	rm -rf android/app/build/generated/assets/createBundleReleaseJsAndAssets; \
