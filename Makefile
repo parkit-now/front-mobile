@@ -8,21 +8,31 @@ RESET := \033[0m
 ENV_LOCAL := .env.local
 ENV_PROD  := .env.production
 
-.PHONY: help install dev dev-local-usb prod build lint typecheck test format \
+.PHONY: help install dev dev-local-usb prod apk build lint typecheck test format \
         env-check env-use-local env-use-prod \
         sync-types clean _detect-android-sdk
 
 # Bash snippet shared by install/dev: resuelve ANDROID_HOME en $$android_home
 # (respeta el del entorno; si está vacío, prueba rutas comunes con platform-tools/adb).
+# Prefiere un SDK completo (con platforms/) porque /usr/lib/android-sdk suele traer solo adb.
 DETECT_ANDROID_SDK := android_home="$${ANDROID_HOME:-}"; \
 	if [ -z "$$android_home" ]; then \
-		for candidate in /usr/lib/android-sdk "$$HOME/Android/Sdk" "$$HOME/Android/sdk" /opt/android-sdk; do \
+		for candidate in "$$HOME/Android/Sdk" "$$HOME/Android/sdk" /opt/android-sdk /usr/lib/android-sdk; do \
 			if [ -x "$$candidate/platform-tools/adb" ]; then \
 				android_home="$$candidate"; \
 				break; \
 			fi; \
 		done; \
 	fi
+
+# Expo lee por su cuenta .env.local y .env.<modo> y les da más prioridad que a .env,
+# así que ignoraría `make env-use-prod`. Cargamos solo el .env activo en el proceso y
+# apagamos la lectura automática de Expo: el entorno es el que está en .env, como en
+# el resto de los repos.
+USE_ACTIVE_ENV := if [ ! -f .env ]; then \
+		echo "✗ Falta .env activo. Corré: make env-use-local  ó  make env-use-prod"; exit 1; \
+	fi; \
+	set -a; . ./.env; set +a; export EXPO_NO_DOTENV=1
 
 help: ## Mostrar comandos disponibles
 	@printf "\n$(CYAN)Parkit mobile$(RESET)\n\n"
@@ -64,7 +74,7 @@ env-use-prod: ## Activar entorno produccion (copia .env.production → .env)
 
 ##@ Desarrollo
 dev: install env-use-local ## Levantar app apuntando al backend LOCAL (autodetecta ANDROID_HOME)
-	@$(DETECT_ANDROID_SDK); \
+	@$(USE_ACTIVE_ENV); $(DETECT_ANDROID_SDK); \
 	if [ -z "$$android_home" ]; then \
 		echo "⚠ No se encontró el Android SDK; instalá adb (sudo apt install adb) o seteá ANDROID_HOME"; \
 		bun run dev; \
@@ -74,7 +84,7 @@ dev: install env-use-local ## Levantar app apuntando al backend LOCAL (autodetec
 	fi
 
 dev-local-usb: install env-use-local ## Dev USB local: adb reverse + Expo --localhost
-	@$(DETECT_ANDROID_SDK); \
+	@$(USE_ACTIVE_ENV); $(DETECT_ANDROID_SDK); \
 	if [ -z "$$android_home" ]; then \
 		echo "⚠ No se encontró el Android SDK; instalá adb (sudo apt install adb) o seteá ANDROID_HOME"; \
 		bun run dev -- --localhost; \
@@ -93,7 +103,7 @@ dev-local-usb: install env-use-local ## Dev USB local: adb reverse + Expo --loca
 	fi
 
 prod: env-use-prod ## Levantar Expo en modo prod (--no-dev --minify) con link/QR
-	@$(DETECT_ANDROID_SDK); \
+	@$(USE_ACTIVE_ENV); $(DETECT_ANDROID_SDK); \
 	if [ -z "$$android_home" ]; then \
 		bunx expo start --no-dev --minify; \
 	else \
@@ -101,9 +111,19 @@ prod: env-use-prod ## Levantar Expo en modo prod (--no-dev --minify) con link/QR
 		ANDROID_HOME="$$android_home" bunx expo start --no-dev --minify; \
 	fi
 
+apk: ## APK release (JS embebido) con el .env activo, instalado en el celu por USB
+	@$(USE_ACTIVE_ENV); $(DETECT_ANDROID_SDK); \
+	if [ -z "$$android_home" ]; then echo "✗ Falta el Android SDK (seteá ANDROID_HOME)"; exit 1; fi; \
+	echo "→ API: $${EXPO_PUBLIC_API_URL:-<sin definir>}"; \
+	rm -rf android/app/build/generated/assets/createBundleReleaseJsAndAssets; \
+	if [ -x android/gradlew ]; then (cd android && ./gradlew --stop >/dev/null 2>&1 || true); fi; \
+	ANDROID_HOME="$$android_home" PATH="$$android_home/platform-tools:$$PATH" \
+		bunx expo run:android --variant release --no-bundler
+	@echo "✓ APK en android/app/build/outputs/apk/release/app-release.apk"
+
 ##@ Calidad
 build: ## Build con el .env actual (sin tocar el entorno activo)
-	@bun run build
+	@$(USE_ACTIVE_ENV); bun run build
 
 lint: ## Ejecutar ESLint
 	@bun run lint
