@@ -31,7 +31,10 @@ type Props = {
 /**
  * Cruce de contenidos (título, aviso, talón, etiqueta): el viejo se va hacia
  * arriba en 180 ms y el nuevo entra desde abajo con resorte, 90 ms después.
- * Es el `swap()` del prototipo, con el contenido saliente superpuesto.
+ * Es el `swap()` del prototipo, con el contenido saliente superpuesto. Como en
+ * el prototipo (las variantes apiladas en la misma celda), el lugar no se
+ * achica: si el contenido nuevo es más bajo, lo de abajo no salta ni se le
+ * monta encima al viejo mientras se va.
  */
 export function Swap({
   swapKey,
@@ -50,11 +53,14 @@ export function Swap({
     key: string;
     node: ReactNode;
   } | null>(null);
+  const measured = useRef(0);
+  const [heldHeight, setHeldHeight] = useState(0);
 
   // Cambio de clave: se guarda lo último que se vio del contenido anterior.
   if (shownKey !== swapKey) {
     setShownKey(swapKey);
     setOutgoing(animate ? latest.current : null);
+    if (animate) setHeldHeight(Math.max(heldHeight, measured.current));
   }
 
   useEffect(() => {
@@ -75,7 +81,12 @@ export function Swap({
   }, [outgoing, delay]);
 
   return (
-    <View style={style}>
+    <View
+      style={[style, heldHeight > 0 ? { minHeight: heldHeight } : null]}
+      onLayout={(event) => {
+        measured.current = event.nativeEvent.layout.height;
+      }}
+    >
       <SwapIn
         key={swapKey}
         animate={outgoing !== null && outgoing.key !== swapKey}
