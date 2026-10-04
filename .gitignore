@@ -28,3 +28,7 @@ dist-electron/
 .vscode/*
 !.vscode/settings.json
 !.vscode/extensions.json
+
+# Carpetas nativas generadas por expo prebuild / expo run
+/android/
+/ios/
