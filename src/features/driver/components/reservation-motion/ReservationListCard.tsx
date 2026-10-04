@@ -70,7 +70,7 @@ export function ReservationListCard({
   }));
 
   const showDirections = view.bucket === 'confirmed';
-  const showActions = showDirections || booking.cancellable;
+  const showActions = showDirections || view.canCancel;
 
   return (
     <Animated.View style={[styles.card, cardStyle]}>
@@ -157,7 +157,7 @@ export function ReservationListCard({
           ) : (
             <View />
           )}
-          {booking.cancellable ? (
+          {view.canCancel ? (
             <Pressable
               style={({ pressed }) => [
                 styles.action,

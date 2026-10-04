@@ -213,6 +213,7 @@ describe('reservationCardView', () => {
       countdownTo: LATER,
     });
     expect(view.payAction).toBe('pay');
+    expect(view.canCancel).toBe(true);
   });
 
   it('pago rechazado con el lugar guardado: reintentar', () => {
@@ -231,6 +232,9 @@ describe('reservationCardView', () => {
     expect(labels(pendingPaymentDead)).toEqual(['Venció sin pago']);
     expect(view.note).toEqual({ icon: 'info', text: 'No se te cobró nada' });
     expect(view.payAction).toBeNull();
+    // El backend todavía la deja cancelar, pero ya está en Canceladas.
+    expect(pendingPaymentDead.cancellable).toBe(true);
+    expect(view.canCancel).toBe(false);
   });
 
   it('expirada por el backend: igual que la que venció sin pago', () => {
@@ -250,6 +254,24 @@ describe('reservationCardView', () => {
     expect(view.glyph).toBe('in');
     expect(view.chips).toEqual([{ label: 'Confirmada', tone: 'blue' }]);
     expect(view.note).toEqual({ icon: 'pin', text: 'Bartolome Mitre 2500' });
+    expect(view.canCancel).toBe(true);
+  });
+
+  it('sin "Cancelar reserva" si el backend no la deja cancelar', () => {
+    const view = reservationCardView(
+      makeBooking({ lifecycle: 'confirmed', cancellable: false }),
+      NOW,
+    );
+    expect(view.canCancel).toBe(false);
+  });
+
+  it('completada con el egreso vencido: no se cancela desde la tarjeta', () => {
+    const view = reservationCardView(
+      makeBooking({ lifecycle: 'confirmed', status: 'completed' }),
+      NOW,
+    );
+    expect(view.bucket).toBe('completed');
+    expect(view.canCancel).toBe(false);
   });
 
   it('en curso: punto vivo y hora de salida', () => {

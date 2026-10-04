@@ -234,6 +234,12 @@ export type ReservationCardView = {
   note: CardNote | null;
   /** Botón "Pagar" / "Reintentar" en la tarjeta. */
   payAction: 'pay' | 'retry' | null;
+  /**
+   * "Cancelar reserva" sólo en Pendientes y Confirmadas: una que falta pagar
+   * con la retención vencida sigue cancelable en el backend hasta que el
+   * barrido la marca vencida, pero ya está en Canceladas como "Venció sin pago".
+   */
+  canCancel: boolean;
 };
 
 const TONE_TO_CHIP: Record<Tone, ChipTone> = {
@@ -372,6 +378,8 @@ export function reservationCardView(
           : phase === 'payment_rejected'
             ? 'retry'
             : null,
+    canCancel:
+      booking.cancellable && (bucket === 'pending' || bucket === 'confirmed'),
   };
 }
 
