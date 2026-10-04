@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import {
   Alert,
   KeyboardAvoidingView,
@@ -23,7 +23,9 @@ import {
   type VehicleDraft,
   type VehicleFieldErrors,
 } from '../vehicles';
-import { DriverIcon, vehicleIconName } from './DriverIcon';
+import { vehicleIconName } from './DriverIcon';
+import { FloatingLayerHost, type FloatingLayerHandle } from './FloatingLayer';
+import { FloatingSelect } from './FloatingSelect';
 
 type Props = {
   // null = alta de un vehículo nuevo.
@@ -61,7 +63,7 @@ export function VehicleFormModal({
   const [makePrimary, setMakePrimary] = useState(primaryLocked);
   const [errors, setErrors] = useState<VehicleFieldErrors>({});
   const [saving, setSaving] = useState(false);
-  const [kindOpen, setKindOpen] = useState(false);
+  const floating = useRef<FloatingLayerHandle>(null);
 
   const selectedOption =
     categories.find(
@@ -110,227 +112,183 @@ export function VehicleFormModal({
   }
 
   return (
-    <Modal visible transparent animationType="fade" onRequestClose={onCancel}>
-      <KeyboardAvoidingView
-        style={styles.backdrop}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      >
-        <View style={styles.dialog} accessibilityViewIsModal>
-          <ScrollView
-            contentContainerStyle={styles.content}
-            keyboardShouldPersistTaps="handled"
-          >
-            <Text style={styles.title}>
-              {isNew ? 'Agregar vehículo' : 'Editar vehículo'}
-            </Text>
+    <Modal
+      visible
+      transparent
+      animationType="fade"
+      onRequestClose={() => {
+        // El atrás de Android primero cierra el desplegable abierto.
+        if (floating.current?.dismiss()) return;
+        onCancel();
+      }}
+    >
+      <FloatingLayerHost ref={floating}>
+        <KeyboardAvoidingView
+          style={styles.backdrop}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
+          <View style={styles.dialog} accessibilityViewIsModal>
+            <ScrollView
+              contentContainerStyle={styles.content}
+              keyboardShouldPersistTaps="handled"
+            >
+              <Text style={styles.title}>
+                {isNew ? 'Agregar vehículo' : 'Editar vehículo'}
+              </Text>
 
-            <View style={styles.field}>
-              <Text style={styles.label}>Patente</Text>
-              <TextInput
-                style={[
-                  styles.input,
-                  errors.plate && styles.inputError,
-                  lockedByReservation && styles.inputLocked,
-                ]}
-                editable={!lockedByReservation}
-                value={plate}
-                onChangeText={(value) => {
-                  setPlate(value.toUpperCase());
-                  if (errors.plate) setErrors({});
-                }}
-                placeholder="AB 123 CD"
-                placeholderTextColor={driverColors.disabled}
-                autoCapitalize="characters"
-                autoCorrect={false}
-                maxLength={10}
-                accessibilityLabel="Patente"
-              />
-              {errors.plate ? (
-                <Text style={styles.errorText}>{errors.plate}</Text>
-              ) : isNew ? (
-                <Text style={styles.fieldHint}>
-                  Es la patente que lee la cámara al entrar. Revisá que esté
-                  bien.
-                </Text>
-              ) : null}
-            </View>
+              <View style={styles.field}>
+                <Text style={styles.label}>Patente</Text>
+                <TextInput
+                  style={[
+                    styles.input,
+                    errors.plate && styles.inputError,
+                    lockedByReservation && styles.inputLocked,
+                  ]}
+                  editable={!lockedByReservation}
+                  value={plate}
+                  onChangeText={(value) => {
+                    setPlate(value.toUpperCase());
+                    if (errors.plate) setErrors({});
+                  }}
+                  placeholder="AB 123 CD"
+                  placeholderTextColor={driverColors.disabled}
+                  autoCapitalize="characters"
+                  autoCorrect={false}
+                  maxLength={10}
+                  accessibilityLabel="Patente"
+                />
+                {errors.plate ? (
+                  <Text style={styles.errorText}>{errors.plate}</Text>
+                ) : isNew ? (
+                  <Text style={styles.fieldHint}>
+                    Es la patente que lee la cámara al entrar. Revisá que esté
+                    bien.
+                  </Text>
+                ) : null}
+              </View>
 
-            <View style={styles.field}>
-              <Text style={styles.label}>Tipo</Text>
-              <View style={[styles.select, kindOpen && styles.selectOpen]}>
+              <View style={styles.field}>
+                <Text style={styles.label}>Tipo</Text>
+                <FloatingSelect
+                  label="Tipo"
+                  value={selectedOption?.code ?? null}
+                  options={categories.map((option) => ({
+                    value: option.code,
+                    label: option.label,
+                    icon: vehicleIconName(option.code),
+                  }))}
+                  onChange={(code) => {
+                    setCategory(code);
+                    if (errors.category) setErrors({});
+                  }}
+                  placeholder="Elegí un tipo"
+                  disabled={lockedByReservation}
+                  invalid={Boolean(errors.category)}
+                  testID="vehicle-kind"
+                />
+                {errors.category ? (
+                  <Text style={styles.errorText}>{errors.category}</Text>
+                ) : null}
+              </View>
+
+              <View style={styles.row}>
+                <View style={[styles.field, styles.rowField]}>
+                  <Text style={styles.label}>Marca (opcional)</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={brand}
+                    onChangeText={setBrand}
+                    placeholder="Toyota"
+                    placeholderTextColor={driverColors.disabled}
+                    accessibilityLabel="Marca"
+                  />
+                </View>
+                <View style={[styles.field, styles.rowField]}>
+                  <Text style={styles.label}>Modelo (opcional)</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={model}
+                    onChangeText={setModel}
+                    placeholder="Etios"
+                    placeholderTextColor={driverColors.disabled}
+                    accessibilityLabel="Modelo"
+                  />
+                </View>
+              </View>
+
+              <View style={styles.primaryRow}>
+                <View style={styles.primaryCopy}>
+                  <Text style={styles.primaryTitle}>Vehículo principal</Text>
+                  <Text style={styles.primaryHint}>
+                    {primaryLocked && !isNew
+                      ? 'Para cambiarlo, marcá otro vehículo como principal.'
+                      : 'Se elige por defecto al reservar.'}
+                  </Text>
+                </View>
+                <Switch
+                  value={makePrimary}
+                  onValueChange={setMakePrimary}
+                  disabled={primaryLocked}
+                  trackColor={{ true: driverColors.brand }}
+                  accessibilityLabel="Vehículo principal"
+                />
+              </View>
+
+              <View style={styles.actions}>
                 <Pressable
                   style={({ pressed }) => [
-                    styles.selectHeader,
-                    lockedByReservation && styles.kindLocked,
+                    styles.secondaryButton,
+                    pressed && styles.pressed,
+                  ]}
+                  onPress={onCancel}
+                  accessibilityRole="button"
+                >
+                  <Text style={styles.secondaryText}>Cancelar</Text>
+                </Pressable>
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.primaryButton,
+                    saving && styles.buttonDisabled,
+                    pressed && styles.pressed,
+                  ]}
+                  onPress={handleSave}
+                  disabled={saving}
+                  accessibilityRole="button"
+                  accessibilityState={{ disabled: saving, busy: saving }}
+                >
+                  <Text style={styles.primaryText}>
+                    {saving ? 'Guardando...' : 'Guardar'}
+                  </Text>
+                </Pressable>
+              </View>
+
+              {lockedByReservation ? (
+                <View style={styles.lockNotice}>
+                  <Text style={styles.lockNoticeText}>
+                    Este vehículo tiene una reserva activa: hasta que termine no
+                    podés cambiar la patente ni el tipo, ni eliminarlo.
+                  </Text>
+                </View>
+              ) : vehicle ? (
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.deleteButton,
                     pressed && styles.pressed,
                   ]}
                   onPress={() => {
-                    setKindOpen((open) => !open);
+                    confirmDelete(vehicle);
                   }}
-                  disabled={lockedByReservation}
+                  disabled={saving}
                   accessibilityRole="button"
-                  accessibilityState={{
-                    expanded: kindOpen,
-                    disabled: lockedByReservation,
-                  }}
-                  accessibilityLabel={`Tipo: ${selectedOption?.label ?? 'sin elegir'}. Tocar para cambiar`}
+                  accessibilityState={{ disabled: saving }}
                 >
-                  {selectedOption ? (
-                    <DriverIcon
-                      name={vehicleIconName(selectedOption.code)}
-                      size={20}
-                      color={driverColors.brand}
-                    />
-                  ) : null}
-                  <Text style={styles.selectValue}>
-                    {selectedOption?.label ?? 'Elegí un tipo'}
-                  </Text>
-                  <View style={kindOpen ? styles.chevronOpen : undefined}>
-                    <DriverIcon
-                      name="chevron-down"
-                      size={20}
-                      color={driverColors.textSecondary}
-                    />
-                  </View>
+                  <Text style={styles.deleteText}>Eliminar vehículo</Text>
                 </Pressable>
-                {kindOpen ? (
-                  <View style={styles.options} accessibilityRole="radiogroup">
-                    {categories.map((option) => {
-                      const selected = option.code === selectedOption?.code;
-                      return (
-                        <Pressable
-                          key={option.code}
-                          style={({ pressed }) => [
-                            styles.option,
-                            selected && styles.optionSelected,
-                            pressed && styles.pressed,
-                          ]}
-                          onPress={() => {
-                            setCategory(option.code);
-                            setKindOpen(false);
-                            if (errors.category) setErrors({});
-                          }}
-                          accessibilityRole="radio"
-                          accessibilityState={{ selected }}
-                          accessibilityLabel={option.label}
-                        >
-                          <DriverIcon
-                            name={vehicleIconName(option.code)}
-                            size={20}
-                            color={driverColors.brand}
-                          />
-                          <Text style={styles.optionText}>{option.label}</Text>
-                          <View
-                            style={[styles.radio, selected && styles.radioOn]}
-                          />
-                        </Pressable>
-                      );
-                    })}
-                  </View>
-                ) : null}
-              </View>
-              {errors.category ? (
-                <Text style={styles.errorText}>{errors.category}</Text>
               ) : null}
-            </View>
-
-            <View style={styles.row}>
-              <View style={[styles.field, styles.rowField]}>
-                <Text style={styles.label}>Marca (opcional)</Text>
-                <TextInput
-                  style={styles.input}
-                  value={brand}
-                  onChangeText={setBrand}
-                  placeholder="Toyota"
-                  placeholderTextColor={driverColors.disabled}
-                  accessibilityLabel="Marca"
-                />
-              </View>
-              <View style={[styles.field, styles.rowField]}>
-                <Text style={styles.label}>Modelo (opcional)</Text>
-                <TextInput
-                  style={styles.input}
-                  value={model}
-                  onChangeText={setModel}
-                  placeholder="Etios"
-                  placeholderTextColor={driverColors.disabled}
-                  accessibilityLabel="Modelo"
-                />
-              </View>
-            </View>
-
-            <View style={styles.primaryRow}>
-              <View style={styles.primaryCopy}>
-                <Text style={styles.primaryTitle}>Vehículo principal</Text>
-                <Text style={styles.primaryHint}>
-                  {primaryLocked && !isNew
-                    ? 'Para cambiarlo, marcá otro vehículo como principal.'
-                    : 'Se elige por defecto al reservar.'}
-                </Text>
-              </View>
-              <Switch
-                value={makePrimary}
-                onValueChange={setMakePrimary}
-                disabled={primaryLocked}
-                trackColor={{ true: driverColors.brand }}
-                accessibilityLabel="Vehículo principal"
-              />
-            </View>
-
-            <View style={styles.actions}>
-              <Pressable
-                style={({ pressed }) => [
-                  styles.secondaryButton,
-                  pressed && styles.pressed,
-                ]}
-                onPress={onCancel}
-                accessibilityRole="button"
-              >
-                <Text style={styles.secondaryText}>Cancelar</Text>
-              </Pressable>
-              <Pressable
-                style={({ pressed }) => [
-                  styles.primaryButton,
-                  saving && styles.buttonDisabled,
-                  pressed && styles.pressed,
-                ]}
-                onPress={handleSave}
-                disabled={saving}
-                accessibilityRole="button"
-                accessibilityState={{ disabled: saving, busy: saving }}
-              >
-                <Text style={styles.primaryText}>
-                  {saving ? 'Guardando...' : 'Guardar'}
-                </Text>
-              </Pressable>
-            </View>
-
-            {lockedByReservation ? (
-              <View style={styles.lockNotice}>
-                <Text style={styles.lockNoticeText}>
-                  Este vehículo tiene una reserva activa: hasta que termine no
-                  podés cambiar la patente ni el tipo, ni eliminarlo.
-                </Text>
-              </View>
-            ) : vehicle ? (
-              <Pressable
-                style={({ pressed }) => [
-                  styles.deleteButton,
-                  pressed && styles.pressed,
-                ]}
-                onPress={() => {
-                  confirmDelete(vehicle);
-                }}
-                disabled={saving}
-                accessibilityRole="button"
-                accessibilityState={{ disabled: saving }}
-              >
-                <Text style={styles.deleteText}>Eliminar vehículo</Text>
-              </Pressable>
-            ) : null}
-          </ScrollView>
-        </View>
-      </KeyboardAvoidingView>
+            </ScrollView>
+          </View>
+        </KeyboardAvoidingView>
+      </FloatingLayerHost>
     </Modal>
   );
 }
@@ -389,9 +347,6 @@ const styles = StyleSheet.create({
     color: driverColors.textMuted,
     fontSize: 12,
   },
-  kindLocked: {
-    opacity: 0.45,
-  },
   lockNotice: {
     padding: driverSpacing.sm,
     borderRadius: driverRadius.control,
@@ -406,63 +361,8 @@ const styles = StyleSheet.create({
     color: driverColors.danger,
     fontSize: 13,
   },
-  select: {
-    borderRadius: driverRadius.control,
-    borderWidth: 1,
-    borderColor: driverColors.border,
-    backgroundColor: driverColors.surface,
-    overflow: 'hidden',
-  },
-  selectOpen: {
-    borderColor: driverColors.brand,
-  },
-  selectHeader: {
-    minHeight: 48,
-    paddingHorizontal: driverSpacing.sm,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: driverSpacing.sm,
-  },
-  selectValue: {
-    flex: 1,
-    minWidth: 0,
-    color: driverColors.text,
-    fontSize: 15,
-    fontWeight: '600',
-  },
   chevronOpen: {
     transform: [{ rotate: '180deg' }],
-  },
-  options: {
-    borderTopWidth: 1,
-    borderTopColor: driverColors.border,
-  },
-  option: {
-    minHeight: 48,
-    paddingHorizontal: driverSpacing.sm,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: driverSpacing.sm,
-  },
-  optionSelected: {
-    backgroundColor: driverColors.brandSoft,
-  },
-  optionText: {
-    flex: 1,
-    minWidth: 0,
-    color: driverColors.text,
-    fontSize: 15,
-  },
-  radio: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    borderWidth: 2,
-    borderColor: driverColors.border,
-  },
-  radioOn: {
-    borderColor: driverColors.brand,
-    borderWidth: 6,
   },
   row: {
     flexDirection: 'row',

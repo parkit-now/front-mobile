@@ -18,6 +18,7 @@ export type DriverIconName =
   | 'directions'
   | 'back'
   | 'chevron-down'
+  | 'check'
   | 'clock'
   | 'current-location'
   | 'close';
@@ -165,6 +166,9 @@ export function DriverIcon({
         <Path d="M19 12H5M11 18l-6-6 6-6" {...common} />
       ) : null}
       {name === 'chevron-down' ? <Path d="M6 9l6 6 6-6" {...common} /> : null}
+      {name === 'check' ? (
+        <Path d="M5 12.5l4.5 4.5L19 7.5" {...common} />
+      ) : null}
       {name === 'clock' ? (
         <>
           <Circle cx="12" cy="12" r="9" {...common} />
