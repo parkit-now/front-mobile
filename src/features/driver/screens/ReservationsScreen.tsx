@@ -129,16 +129,36 @@ export function ReservationsScreen() {
     }
   }, [tab, bookingsStatus, buckets]);
 
-  // Una reserva cambió de estado después de actualizar: primero cambia en su
-  // tarjeta y después se va a su pestaña nueva.
-  const previous = useRef<Map<string, ReservationBucket> | null>(null);
+  // Una reserva cambió de pestaña después de actualizar: primero cambia en su
+  // tarjeta y después se va a su pestaña nueva. Se resuelve en el mismo render
+  // en que llegan los datos (no en un efecto): si no, se vería un frame sin la
+  // tarjeta, con la pestaña vacía y los contadores ya cambiados.
+  const [seenBuckets, setSeenBuckets] = useState(buckets);
+  const [moved, setMoved] = useState<ReturnType<typeof bucketMoves>>([]);
+  if (seenBuckets !== buckets) {
+    setSeenBuckets(buckets);
+    const moves = bucketMoves(bucketIndex(seenBuckets), buckets);
+    if (moves.length > 0) {
+      setMoved(moves);
+      const stay = reduced
+        ? []
+        : moves.filter((move) => move.from === selected);
+      if (stay.length > 0) {
+        setMoving(true);
+        setLingering((current) => {
+          const next = { ...current };
+          for (const move of stay) next[move.id] = move.from;
+          return next;
+        });
+      }
+    }
+  }
+
+  // Se anuncia el cambio y, pasado un momento, la tarjeta se va.
+  const lingerTimers = useRef<Array<ReturnType<typeof setTimeout>>>([]);
   useEffect(() => {
-    const before = previous.current;
-    previous.current = bucketIndex(buckets);
-    if (!before) return;
-    const moves = bucketMoves(before, buckets);
-    if (moves.length === 0) return;
-    for (const move of moves) {
+    if (moved.length === 0) return;
+    for (const move of moved) {
       const booking = bookings.find((item) => item.id === move.id);
       if (booking && move.from === 'pending') {
         const view = reservationCardView(booking, now);
@@ -147,21 +167,12 @@ export function ReservationsScreen() {
         );
       }
     }
-    if (reduced) return;
-    const stay = moves.filter((move) => move.from === selected);
-    if (stay.length === 0) return;
-    setMoving(true);
-    setLingering((current) => {
-      const next = { ...current };
-      for (const move of stay) next[move.id] = move.from;
-      return next;
-    });
     // No se cancela si llega otra actualización: la tarjeta se tiene que ir.
     lingerTimers.current.push(
       setTimeout(() => {
         setLingering((current) => {
           const next = { ...current };
-          for (const move of stay) delete next[move.id];
+          for (const move of moved) delete next[move.id];
           return next;
         });
       }, CARD_LINGER_MS),
@@ -169,8 +180,7 @@ export function ReservationsScreen() {
         setMoving(false);
       }, CARD_LINGER_MS + 1200),
     );
-  }, [buckets]);
-  const lingerTimers = useRef<Array<ReturnType<typeof setTimeout>>>([]);
+  }, [moved]);
   useEffect(
     () => () => {
       lingerTimers.current.forEach(clearTimeout);
