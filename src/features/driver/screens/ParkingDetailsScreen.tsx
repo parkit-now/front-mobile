@@ -1,3 +1,4 @@
+import { useNavigation, type NavigationProp } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useCallback, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -10,7 +11,12 @@ import { ReservationModal } from '../components/ReservationModal';
 import { useDriverData } from '../hooks/useDriverData';
 import { useParkingDetail } from '../hooks/useParkingDetail';
 import type { ParkingLot } from '../mock';
-import type { DiscoveryStackParamList } from '../navigation';
+import type {
+  DiscoveryStackParamList,
+  DriverRootParamList,
+} from '../navigation';
+import { StatusPill } from '../components/StatusPill';
+import { acceptedCategoriesLabel, unacceptedVehicleNotice } from '../vehicles';
 import { weeklySchedule } from '../schedules';
 import { fetchParkingQuote } from '../services/driver';
 import {
@@ -26,7 +32,9 @@ type Props = NativeStackScreenProps<DiscoveryStackParamList, 'ParkingDetails'>;
 export function ParkingDetailsScreen({ navigation, route }: Props) {
   const insets = useSafeAreaInsets();
   const { showToast } = useToast();
-  const { accessToken, createReservation, vehicles } = useDriverData();
+  const rootNavigation = useNavigation<NavigationProp<DriverRootParamList>>();
+  const { accessToken, createReservation, vehicles, vehicleCategories } =
+    useDriverData();
   const [reservationParking, setReservationParking] =
     useState<ParkingLot | null>(null);
   const routeParking = route.params.parking;
@@ -154,6 +162,53 @@ export function ParkingDetailsScreen({ navigation, route }: Props) {
         </View>
 
         <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Reservas</Text>
+            {detail.status === 'success' ? (
+              <StatusPill
+                label={
+                  parking.acceptsReservations ? 'Reservable' : 'Sin reservas'
+                }
+                tone={parking.acceptsReservations ? 'ok' : 'muted'}
+              />
+            ) : null}
+          </View>
+          {parking.acceptsReservations ? (
+            <>
+              <Text style={styles.reservationLine}>
+                Reserva desde ${parking.hourlyPriceArs.toLocaleString('es-AR')}
+                /h
+              </Text>
+              {parking.reservationVehicleCategories.length > 0 ? (
+                <Text style={styles.reservationLine}>
+                  Reservas para:{' '}
+                  {acceptedCategoriesLabel(
+                    parking.reservationVehicleCategories,
+                    vehicleCategories,
+                  )}
+                </Text>
+              ) : null}
+              {unacceptedVehicleNotice(
+                vehicles,
+                parking.reservationVehicleCategories,
+              ) ? (
+                <Text style={styles.reservationWarning}>
+                  {unacceptedVehicleNotice(
+                    vehicles,
+                    parking.reservationVehicleCategories,
+                  )}
+                </Text>
+              ) : null}
+            </>
+          ) : (
+            <Text style={styles.reservationLine}>
+              Este estacionamiento no está tomando reservas por ahora. Podés ir
+              directo.
+            </Text>
+          )}
+        </View>
+
+        <View style={styles.section}>
           <Text style={styles.sectionTitle}>Servicios</Text>
           <View style={styles.services}>
             {parking.services.map((service) => (
@@ -217,7 +272,7 @@ export function ParkingDetailsScreen({ navigation, route }: Props) {
             quote,
           }) => {
             try {
-              await createReservation({
+              const { booking } = await createReservation({
                 id: reservationId,
                 parking: selected,
                 vehicle,
@@ -225,9 +280,9 @@ export function ParkingDetailsScreen({ navigation, route }: Props) {
                 exitAt: quote.exitAt,
               });
               setReservationParking(null);
-              showToast({
-                message: 'Reserva confirmada. Podés verla en Mis reservas.',
-                kind: 'success',
+              // "Confirmá y pagá": el pago se hace en la pantalla de la reserva.
+              rootNavigation.navigate('ReservationDetail', {
+                reservationId: booking.id,
               });
             } catch (error) {
               showToast({
@@ -306,6 +361,23 @@ const styles = StyleSheet.create({
     borderColor: driverColors.border,
     borderRadius: driverRadius.card,
     flexDirection: 'row',
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: driverSpacing.xs,
+  },
+  reservationLine: {
+    fontSize: 14,
+    lineHeight: 20,
+    color: driverColors.textSecondary,
+  },
+  reservationWarning: {
+    fontSize: 14,
+    lineHeight: 20,
+    fontWeight: '600',
+    color: driverColors.warning,
   },
   summaryValue: {
     flex: 1,

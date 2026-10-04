@@ -78,3 +78,56 @@ export const driverLayout = {
   maxContentWidth: 560,
   horizontalPadding: 18,
 } as const;
+
+// Ámbar de "esperando confirmación" (anillo, reloj, borde del lugar).
+export const amberColors = {
+  text: '#b54708',
+  strong: '#dc6803',
+  surface: '#fffaeb',
+  border: '#fedf89',
+  track: '#fdeac6',
+} as const;
+
+// Ticket de la reserva y su talón con el autito (ver components/reservation-motion).
+export const ticketColors = {
+  ink: '#0a1f44',
+  inkSoft: '#22314f',
+  meta: '#4a5a78',
+  label: '#6b7a96',
+  badgeTop: '#2a7af0',
+  badgeBottom: '#0b4fc0',
+  perforation: '#c9d6ea',
+  slotBase: '#c4d2e9',
+  stub: '#f6f9ff',
+  stubMuted: '#f4f5f7',
+  infoSurface: '#f2f4f7',
+  infoBorder: '#d0d5dd',
+  infoInk: '#475467',
+  cardDivider: '#edf1f8',
+  plateBorder: '#d5deec',
+  tabTrack: '#e3eaf6',
+  tabCount: '#dde6f5',
+  tabCountText: '#33456a',
+} as const;
+
+// Chips de estado de "Mis reservas" y del ticket.
+export const chipColors = {
+  amber: {
+    text: amberColors.text,
+    surface: amberColors.surface,
+    border: amberColors.border,
+  },
+  blue: { text: driverColors.brand, surface: '#e6effd', border: '#c3d7fa' },
+  green: {
+    text: driverColors.success,
+    surface: driverColors.successSurface,
+    border: '#abefc6',
+  },
+  slate: { text: '#475467', surface: '#f2f4f7', border: '#e4e7ec' },
+  rose: { text: driverColors.danger, surface: '#fef3f2', border: '#fecdca' },
+  refund: {
+    text: driverColors.brandStrong,
+    surface: '#eef4ff',
+    border: '#d4e2fb',
+  },
+} as const;

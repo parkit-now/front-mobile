@@ -78,6 +78,9 @@ function mapParking(row: NearbyDto | DetailDto): ParkingLot {
     schedules,
     reservationMaxDaysAhead:
       'reservationMaxDaysAhead' in row ? row.reservationMaxDaysAhead : 7,
+    reservationHours: row.reservationHours ?? [],
+    reservationVehicleCategories: row.reservationVehicleCategories ?? [],
+    reservationRules: row.reservationRules ?? null,
     coordinate: { latitude: row.latitude, longitude: row.longitude },
   };
 }

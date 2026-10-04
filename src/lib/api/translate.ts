@@ -27,6 +27,8 @@ export type EndpointKey =
   | 'driver.quote'
   | 'driver.reservations'
   | 'driver.cancelReservation'
+  | 'driver.cancelPreview'
+  | 'driver.reservationPayment'
   | 'driver.vehicles';
 
 export type TranslateContext = {
@@ -79,14 +81,40 @@ const CODE_MESSAGES: Record<string, string> = {
   RESERVATION_STAY_TOO_LONG: 'La reserva no puede superar las 24 horas.',
   RESERVATION_OUTSIDE_OPENING_HOURS:
     'El estacionamiento está cerrado en parte del horario elegido.',
-  RESERVATION_NO_CAPACITY:
-    'No quedan lugares para ese horario. Probá con otro horario o cochera.',
+  RESERVATION_OUTSIDE_RESERVATION_HOURS:
+    'Ese horario está fuera del horario en que el estacionamiento toma reservas. Elegí otro.',
+  RESERVATION_NO_CAPACITY: 'Se ocupó el último lugar, probá otra franja.',
   RESERVATION_NOT_FOUND: 'No encontramos esa reserva.',
   RESERVATION_NOT_CANCELLABLE: 'La reserva ya empezó o ya estaba cancelada.',
   RESERVATION_ID_CONFLICT: 'No pudimos crear la reserva. Intentá de nuevo.',
   RESERVATION_VEHICLE_NOT_FOUND: 'Elegí uno de tus vehículos para reservar.',
   RESERVATION_VEHICLE_CATEGORY_NOT_ACCEPTED:
     'Este estacionamiento no acepta reservas para ese tipo de vehículo.',
+  RESERVATION_HOLD_EXPIRED:
+    'Se venció el tiempo para pagar y liberamos el lugar. Hacé la reserva de nuevo.',
+  RESERVATION_CHECKOUT_UNAVAILABLE:
+    'No pudimos abrir el pago con Mercado Pago. Probá de nuevo en unos minutos.',
+  RESERVATION_CLIENT_OUTDATED:
+    'Esta versión de la app ya no puede pagar reservas. Actualizá Parkit para continuar.',
+  RESERVATION_RETURN_URL_NOT_ALLOWED:
+    'No pudimos preparar la vuelta a la app después del pago. Actualizá Parkit e intentá de nuevo.',
+  RESERVATION_ALREADY_PAID: 'Esta reserva ya está paga.',
+  RESERVATION_NOT_PAYABLE: 'Esta reserva ya no se puede pagar.',
+  // Mercado Pago (el conductor sólo los ve al pedir el checkout)
+  MP_NOT_LINKED:
+    'Este estacionamiento no puede cobrar con Mercado Pago por ahora.',
+  MP_ACCOUNT_TOKEN_EXPIRED:
+    'Este estacionamiento no puede cobrar con Mercado Pago por ahora.',
+  MP_ACCOUNT_REVOKED:
+    'Este estacionamiento no puede cobrar con Mercado Pago por ahora.',
+  MP_PREFERENCE_CREATE_FAILED:
+    'No pudimos abrir el pago con Mercado Pago. Probá de nuevo en unos minutos.',
+  MP_UNAVAILABLE:
+    'Mercado Pago no responde ahora. Probá de nuevo en unos minutos.',
+  MP_UNREACHABLE:
+    'Mercado Pago no responde ahora. Probá de nuevo en unos minutos.',
+  MP_MALFORMED_RESPONSE:
+    'Mercado Pago no responde ahora. Probá de nuevo en unos minutos.',
   DRIVER_VEHICLE_NOT_FOUND: 'No encontramos ese vehículo.',
   DRIVER_VEHICLE_PLATE_TAKEN: 'Ya tenés un vehículo con esta patente.',
   DRIVER_VEHICLE_HAS_ACTIVE_RESERVATION:

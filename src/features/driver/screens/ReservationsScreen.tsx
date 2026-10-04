@@ -1,19 +1,55 @@
-import { useMemo, useState } from 'react';
 import {
+  useFocusEffect,
+  useNavigation,
+  type NavigationProp,
+} from '@react-navigation/native';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  AccessibilityInfo,
   ActivityIndicator,
-  FlatList,
+  Platform,
   Pressable,
   RefreshControl,
+  ScrollView,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
+import Animated, {
+  FadeInLeft,
+  FadeInRight,
+  FadeOutRight,
+  LayoutAnimationConfig,
+  LinearTransition,
+  useReducedMotion,
+} from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { translateApiError } from '../../../lib/api/translate';
 import { useToast } from '../../../lib/notifications/ToastProvider';
-import { BookingCard } from '../components/BookingCard';
+import { CancelSheet } from '../components/CancelSheet';
+import {
+  ReservationListCard,
+  ReservationTabs,
+} from '../components/reservation-motion';
+import {
+  CARD_LINGER_MS,
+  CARD_STAGGER_MS,
+} from '../components/reservation-motion/timeline';
 import { useDriverData } from '../hooks/useDriverData';
-import type { Booking, BookingStatus } from '../mock';
+import type { Booking } from '../mock';
+import type { DriverRootParamList } from '../navigation';
+import {
+  BUCKET_LABELS,
+  BUCKETS,
+  bucketCounts,
+  bucketIndex,
+  bucketMoves,
+  bucketReservations,
+  defaultBucket,
+  reservationCardView,
+  tabDirection,
+  withLingering,
+  type ReservationBucket,
+} from '../reservationBuckets';
 import { openDirections } from '../services/directions';
 import {
   driverColors,
@@ -22,53 +58,148 @@ import {
   driverSpacing,
 } from '../theme';
 
-const FILTERS: Array<{ id: BookingStatus; label: string }> = [
-  { id: 'active', label: 'Activas' },
-  { id: 'completed', label: 'Completadas' },
-];
+/**
+ * Animaciones de layout (entrada, salida y reacomodo de tarjetas) sólo en el
+ * celular. En la web son animaciones CSS que vuelven a correr cada vez que la
+ * pestaña de abajo se oculta y se muestra (display: none): se verían de nuevo.
+ */
+const CARD_LAYOUT_ANIMATIONS = Platform.OS !== 'web';
+
+const EMPTY: Record<ReservationBucket, { title: string; copy: string }> = {
+  pending: {
+    title: 'No tenés reservas pendientes',
+    copy: 'Acá ves las que falta pagar o que espera aceptar el estacionamiento.',
+  },
+  confirmed: {
+    title: 'No tenés reservas confirmadas',
+    copy: 'Buscá un estacionamiento y reservá tu lugar.',
+  },
+  completed: {
+    title: 'Todavía no completaste reservas',
+    copy: 'Acá vas a ver las reservas que ya usaste.',
+  },
+  cancelled: {
+    title: 'No tenés reservas canceladas',
+    copy: 'Acá van las canceladas, rechazadas y vencidas.',
+  },
+};
 
 export function ReservationsScreen() {
   const insets = useSafeAreaInsets();
-  const { bookings, bookingsStatus, refreshBookings, cancelReservation } =
-    useDriverData();
-  const [refreshing, setRefreshing] = useState(false);
-  const [cancellingId, setCancellingId] = useState<string | null>(null);
-  const [status, setStatus] = useState<BookingStatus>('active');
+  const navigation = useNavigation<NavigationProp<DriverRootParamList>>();
+  const { bookings, bookingsStatus, refreshBookings } = useDriverData();
   const { showToast } = useToast();
-  const visibleBookings = useMemo(
-    () =>
-      bookings
-        .filter((booking) => booking.status === status)
-        // Activas: la más próxima primero. Completadas: la más reciente.
-        .sort((left, right) =>
-          status === 'active'
-            ? left.entryAt.localeCompare(right.entryAt)
-            : right.entryAt.localeCompare(left.entryAt),
-        ),
-    [bookings, status],
+  const reduced = useReducedMotion();
+  const [refreshing, setRefreshing] = useState(false);
+  const [cancelTarget, setCancelTarget] = useState<Booking | null>(null);
+  const [now, setNow] = useState(() => new Date());
+  const [tab, setTab] = useState<ReservationBucket | null>(null);
+  const [direction, setDirection] = useState<1 | -1>(1);
+  // Reservas que cambiaron de pestaña y se quedan un momento donde estaban.
+  const [lingering, setLingering] = useState<Record<string, ReservationBucket>>(
+    {},
   );
+  // Las tarjetas se reacomodan con resorte sólo mientras una se va de la
+  // pestaña: en la web, volver a mostrar la pantalla también mueve el layout y
+  // no tiene que verse como un reacomodo.
+  const [moving, setMoving] = useState(false);
+
+  // Al volver a la pestaña (por ejemplo, después de pagar o cancelar) se relee.
+  useFocusEffect(
+    useCallback(() => {
+      setNow(new Date());
+      void refreshBookings();
+    }, [refreshBookings]),
+  );
+
+  const buckets = useMemo(
+    () => bucketReservations(bookings, now),
+    [bookings, now],
+  );
+  const shown = useMemo(
+    () => withLingering(buckets, lingering),
+    [buckets, lingering],
+  );
+  const counts = bucketCounts(shown);
+  // Pendientes si hay algo esperando; si no, Confirmadas. Se elige una vez.
+  const selected = tab ?? defaultBucket(counts);
+  useEffect(() => {
+    if (tab === null && bookingsStatus === 'success') {
+      setTab(defaultBucket(bucketCounts(buckets)));
+    }
+  }, [tab, bookingsStatus, buckets]);
+
+  // Una reserva cambió de pestaña después de actualizar: primero cambia en su
+  // tarjeta y después se va a su pestaña nueva. Se resuelve en el mismo render
+  // en que llegan los datos (no en un efecto): si no, se vería un frame sin la
+  // tarjeta, con la pestaña vacía y los contadores ya cambiados.
+  const [seenBuckets, setSeenBuckets] = useState(buckets);
+  const [moved, setMoved] = useState<ReturnType<typeof bucketMoves>>([]);
+  if (seenBuckets !== buckets) {
+    setSeenBuckets(buckets);
+    const moves = bucketMoves(bucketIndex(seenBuckets), buckets);
+    if (moves.length > 0) {
+      setMoved(moves);
+      const stay = reduced
+        ? []
+        : moves.filter((move) => move.from === selected);
+      if (stay.length > 0) {
+        setMoving(true);
+        setLingering((current) => {
+          const next = { ...current };
+          for (const move of stay) next[move.id] = move.from;
+          return next;
+        });
+      }
+    }
+  }
+
+  // Se anuncia el cambio y, pasado un momento, la tarjeta se va.
+  const lingerTimers = useRef<Array<ReturnType<typeof setTimeout>>>([]);
+  useEffect(() => {
+    if (moved.length === 0) return;
+    for (const move of moved) {
+      const booking = bookings.find((item) => item.id === move.id);
+      if (booking && move.from === 'pending') {
+        const view = reservationCardView(booking, now);
+        AccessibilityInfo.announceForAccessibility(
+          `${booking.parkingName}: ${view.chips[0].label}. Pasó a ${BUCKET_LABELS[move.to]}.`,
+        );
+      }
+    }
+    // No se cancela si llega otra actualización: la tarjeta se tiene que ir.
+    lingerTimers.current.push(
+      setTimeout(() => {
+        setLingering((current) => {
+          const next = { ...current };
+          for (const move of moved) delete next[move.id];
+          return next;
+        });
+      }, CARD_LINGER_MS),
+      setTimeout(() => {
+        setMoving(false);
+      }, CARD_LINGER_MS + 1200),
+    );
+  }, [moved]);
+  useEffect(
+    () => () => {
+      lingerTimers.current.forEach(clearTimeout);
+    },
+    [],
+  );
+
+  function selectTab(next: ReservationBucket) {
+    if (next === selected) return;
+    setDirection(tabDirection(selected, next));
+    setLingering({});
+    setTab(next);
+  }
 
   async function handleRefresh() {
     setRefreshing(true);
+    setNow(new Date());
     await refreshBookings();
     setRefreshing(false);
-  }
-
-  async function handleCancel(booking: Booking) {
-    setCancellingId(booking.id);
-    try {
-      await cancelReservation(booking.id);
-      showToast({ message: 'Reserva cancelada.', kind: 'success' });
-    } catch (error) {
-      showToast({
-        message: translateApiError(error, {
-          endpoint: 'driver.cancelReservation',
-        }),
-        kind: 'error',
-      });
-    } finally {
-      setCancellingId(null);
-    }
   }
 
   async function handleDirections(booking: Booking) {
@@ -81,128 +212,205 @@ export function ReservationsScreen() {
     }
   }
 
-  return (
-    <FlatList
-      data={visibleBookings}
-      keyExtractor={(booking) => booking.id}
-      renderItem={({ item }) => (
-        <BookingCard
-          booking={item}
-          onDirections={(booking) => {
-            void handleDirections(booking);
-          }}
-          onCancel={(booking) => {
-            void handleCancel(booking);
-          }}
-          cancelling={cancellingId === item.id}
-        />
-      )}
-      ItemSeparatorComponent={ListSeparator}
-      ListHeaderComponent={
-        <View style={styles.header}>
-          <View>
-            <Text style={styles.title}>Mis reservas</Text>
-            <Text style={styles.copy}>
-              Consultá tus reservas activas y anteriores.
-            </Text>
-          </View>
+  const holdExpired = useCallback(() => {
+    // La retención venció en pantalla: pasa a Canceladas y se relee.
+    setNow(new Date());
+    void refreshBookings();
+  }, [refreshBookings]);
 
-          <View style={styles.segmented} accessibilityRole="tablist">
-            {FILTERS.map((filter) => {
-              const selected = filter.id === status;
-              return (
-                <Pressable
-                  key={filter.id}
-                  style={({ pressed }) => [
-                    styles.segment,
-                    selected && styles.segmentActive,
-                    pressed && styles.pressed,
-                  ]}
-                  onPress={() => {
-                    setStatus(filter.id);
-                  }}
-                  accessibilityRole="tab"
-                  accessibilityState={{ selected }}
-                >
-                  <Text
-                    numberOfLines={1}
-                    adjustsFontSizeToFit
-                    style={[
-                      styles.segmentText,
-                      selected && styles.segmentTextActive,
-                    ]}
-                  >
-                    {filter.label}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
+  const items = shown[selected];
+  const loaded = bookingsStatus === 'success' || bookings.length > 0;
+
+  return (
+    <>
+      <ScrollView
+        contentContainerStyle={[
+          styles.content,
+          { paddingTop: insets.top + driverSpacing.lg },
+        ]}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => {
+              void handleRefresh();
+            }}
+            tintColor={driverColors.brand}
+            colors={[driverColors.brand]}
+          />
+        }
+      >
+        <View style={styles.header}>
+          <Text style={styles.title} accessibilityRole="header">
+            Mis reservas
+          </Text>
+          <ReservationTabs
+            tabs={BUCKETS.map((key) => ({
+              key,
+              label: BUCKET_LABELS[key],
+              count: counts[key],
+            }))}
+            selected={selected}
+            onSelect={selectTab}
+            reduced={reduced}
+            background={driverColors.background}
+          />
         </View>
-      }
-      refreshControl={
-        <RefreshControl
-          refreshing={refreshing}
-          onRefresh={() => {
-            void handleRefresh();
-          }}
-          tintColor={driverColors.brand}
-          colors={[driverColors.brand]}
-        />
-      }
-      ListEmptyComponent={
-        bookingsStatus === 'loading' ? (
-          <View style={styles.emptyState}>
-            <ActivityIndicator color={driverColors.brand} />
-            <Text style={styles.emptyCopy}>Cargando tus reservas…</Text>
-          </View>
-        ) : bookingsStatus === 'error' ? (
-          <View style={styles.emptyState}>
-            <Text style={styles.emptyTitle}>
-              No pudimos cargar tus reservas
-            </Text>
-            <Pressable
-              style={({ pressed }) => [
-                styles.retryButton,
-                pressed && styles.pressed,
-              ]}
-              onPress={() => {
+
+        {!loaded ? (
+          bookingsStatus === 'error' ? (
+            <ErrorState
+              onRetry={() => {
                 void refreshBookings();
               }}
-              accessibilityRole="button"
-            >
-              <Text style={styles.retryText}>Reintentar</Text>
-            </Pressable>
-          </View>
+            />
+          ) : (
+            <View style={styles.emptyState}>
+              <ActivityIndicator color={driverColors.brand} />
+              <Text style={styles.emptyCopy}>Cargando tus reservas…</Text>
+            </View>
+          )
         ) : (
-          <View style={styles.emptyState}>
-            <Text style={styles.emptyTitle}>
-              {status === 'active'
-                ? 'No tenés reservas activas'
-                : 'Todavía no tenés reservas completadas'}
-            </Text>
-            <Text style={styles.emptyCopy}>
-              {status === 'active'
-                ? 'Buscá una cochera y reservá tu lugar.'
-                : 'Acá vas a ver las reservas que ya terminaron.'}
-            </Text>
-          </View>
-        )
-      }
-      contentContainerStyle={[
-        styles.listContent,
-        { paddingTop: insets.top + driverSpacing.lg },
-      ]}
-    />
+          // Al cambiar de pestaña la lista se monta de nuevo (el escalonado
+          // vuelve a correr) y las tarjetas viejas no hacen su salida.
+          <LayoutAnimationConfig key={selected} skipExiting>
+            <CardList
+              items={items}
+              direction={direction}
+              reduced={reduced}
+              animateLayout={moving}
+              now={now}
+              empty={EMPTY[selected]}
+              onOpen={(booking) => {
+                navigation.navigate('ReservationDetail', {
+                  reservationId: booking.id,
+                });
+              }}
+              onDirections={(booking) => {
+                void handleDirections(booking);
+              }}
+              onCancel={setCancelTarget}
+              onHoldExpired={holdExpired}
+            />
+          </LayoutAnimationConfig>
+        )}
+      </ScrollView>
+      {cancelTarget ? (
+        <CancelSheet
+          booking={cancelTarget}
+          onClose={() => {
+            setCancelTarget(null);
+          }}
+          onCancelled={() => {
+            setCancelTarget(null);
+            showToast({ message: 'Reserva cancelada.', kind: 'success' });
+          }}
+        />
+      ) : null}
+    </>
   );
 }
 
-function ListSeparator() {
-  return <View style={styles.separator} />;
+type CardListProps = {
+  items: Booking[];
+  direction: 1 | -1;
+  reduced: boolean;
+  animateLayout: boolean;
+  now: Date;
+  empty: { title: string; copy: string };
+  onOpen: (booking: Booking) => void;
+  onDirections: (booking: Booking) => void;
+  onCancel: (booking: Booking) => void;
+  onHoldExpired: () => void;
+};
+
+/**
+ * Tarjetas de una pestaña. Al montarse entran escalonadas (70 ms) desde el
+ * lado de la pestaña tocada; después, la que llega o se va de la pestaña entra
+ * o sale sola y las demás se reacomodan con resorte.
+ */
+function CardList({
+  items,
+  direction,
+  reduced,
+  animateLayout,
+  now,
+  empty,
+  onOpen,
+  onDirections,
+  onCancel,
+  onHoldExpired,
+}: CardListProps) {
+  const mounted = useRef(false);
+  useEffect(() => {
+    mounted.current = true;
+  }, []);
+  const animate = CARD_LAYOUT_ANIMATIONS && !reduced;
+
+  if (items.length === 0) {
+    return (
+      <Animated.View
+        style={styles.emptyState}
+        entering={animate ? FadeInRight.duration(220) : undefined}
+      >
+        <Text style={styles.emptyTitle}>{empty.title}</Text>
+        <Text style={styles.emptyCopy}>{empty.copy}</Text>
+      </Animated.View>
+    );
+  }
+
+  const enter = direction > 0 ? FadeInRight : FadeInLeft;
+  return (
+    <View style={styles.list}>
+      {items.map((booking, index) => (
+        <Animated.View
+          key={booking.id}
+          entering={
+            animate
+              ? enter
+                  .delay(mounted.current ? 0 : index * CARD_STAGGER_MS)
+                  .springify()
+                  .damping(18)
+              : undefined
+          }
+          exiting={animate ? FadeOutRight.duration(220) : undefined}
+          layout={
+            animate && animateLayout
+              ? LinearTransition.springify().damping(18)
+              : undefined
+          }
+        >
+          <ReservationListCard
+            booking={booking}
+            view={reservationCardView(booking, now)}
+            reduced={reduced}
+            onOpen={onOpen}
+            onDirections={onDirections}
+            onCancel={onCancel}
+            onHoldExpired={onHoldExpired}
+          />
+        </Animated.View>
+      ))}
+    </View>
+  );
+}
+
+function ErrorState({ onRetry }: { onRetry: () => void }) {
+  return (
+    <View style={styles.emptyState}>
+      <Text style={styles.emptyTitle}>No pudimos cargar tus reservas</Text>
+      <Pressable
+        style={({ pressed }) => [styles.retryButton, pressed && styles.pressed]}
+        onPress={onRetry}
+        accessibilityRole="button"
+      >
+        <Text style={styles.retryText}>Reintentar</Text>
+      </Pressable>
+    </View>
+  );
 }
 
 const styles = StyleSheet.create({
-  listContent: {
+  content: {
     width: '100%',
     maxWidth: driverLayout.maxContentWidth,
     alignSelf: 'center',
@@ -210,51 +418,19 @@ const styles = StyleSheet.create({
     paddingBottom: driverSpacing.lg,
   },
   header: {
-    gap: driverSpacing.md,
-    marginBottom: driverSpacing.md,
+    gap: driverSpacing.sm,
+    marginBottom: driverSpacing.xs,
   },
   title: {
     fontSize: 28,
-    fontWeight: '700',
+    fontWeight: '800',
+    letterSpacing: -0.6,
     color: driverColors.text,
     lineHeight: 34,
   },
-  copy: {
-    marginTop: 4,
-    fontSize: 14,
-    color: driverColors.textSecondary,
-    lineHeight: 20,
-  },
-  segmented: {
-    minHeight: 52,
-    padding: 5,
-    borderRadius: driverRadius.card,
-    backgroundColor: driverColors.surface,
-    borderWidth: 1,
-    borderColor: driverColors.border,
-    flexDirection: 'row',
-    gap: 4,
-  },
-  segment: {
-    flex: 1,
-    minWidth: 0,
-    borderRadius: driverRadius.control,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 4,
-  },
-  segmentActive: {
-    backgroundColor: driverColors.brand,
-  },
-  segmentText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: driverColors.textSecondary,
-  },
-  segmentTextActive: {
-    color: driverColors.surface,
-  },
+  list: { gap: 10, paddingTop: 4 },
   emptyState: {
+    marginTop: 4,
     padding: driverSpacing.lg,
     borderRadius: driverRadius.card,
     backgroundColor: driverColors.surface,
@@ -283,9 +459,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: driverColors.textSecondary,
     textAlign: 'center',
-  },
-  separator: {
-    height: driverSpacing.sm,
   },
   pressed: {
     opacity: 0.8,
