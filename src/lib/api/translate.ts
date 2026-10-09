@@ -126,6 +126,10 @@ const CODE_MESSAGES: Record<string, string> = {
   // translateValidationCode).
   VALIDATION_FAILED: 'Revisá los datos del formulario.',
 
+  // Facturación
+  INVOICE_MODE_DISABLED:
+    'La facturación está desactivada para el medio de pago de esta estadía.',
+
   // Genericos por status
   BAD_REQUEST: 'La solicitud tiene datos inválidos.',
   UNAUTHORIZED: 'No tenés autorización para esta acción.',

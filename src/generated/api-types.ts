@@ -166,11 +166,7 @@ export interface paths {
         get: operations["adminParkingsGet"];
         put?: never;
         post?: never;
-        /**
-         * Delete a parking lot
-         * @description Permanently deletes the parking lot. Dependent data (memberships, rates, entries and payment methods) is removed by cascade.
-         */
-        delete: operations["adminParkingsDelete"];
+        delete?: never;
         options?: never;
         head?: never;
         /**
@@ -178,6 +174,66 @@ export interface paths {
          * @description Updates the parking-lot basic data. Include `status` to move the lot in or out of `maintenance`.
          */
         patch: operations["adminParkingsUpdate"];
+        trace?: never;
+    };
+    "/admin/parkings/{id}/deletion": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Soft-delete a parking lot
+         * @description Marks the parking lot as deleted. It disappears from every read but the admin's and keeps returning 410 `ENTITY_DELETED` to its members, and `TenantPurgeService` erases it for good — database and bucket — once `graceDays` have passed. Reversible until then via `/restore`. Requires typing the exact parking name in `confirmName`.
+         */
+        post: operations["adminParkingsDelete"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/parkings/{id}/deletion-preflight": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * What deleting this parking lot would destroy
+         * @description Counts to show before confirming: staff, cars inside, entries, cash sessions, invoices, bucket objects and audit rows, plus whether Mercado Pago and ARCA are linked. `blockers` lists third-party money that would be stranded; it is informational and never prevents the deletion.
+         */
+        get: operations["adminParkingsDeletionPreflight"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/parkings/{id}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Undo a soft-delete
+         * @description Brings a deleted parking lot back, with its data. Only possible before the purge. Mercado Pago and ARCA are NOT re-linked and cancelled reservations stay cancelled: those are re-done by hand.
+         */
+        post: operations["adminParkingsRestore"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/admin/users": {
@@ -1193,6 +1249,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/tenants/{tenantId}/clients": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ClientsController_list"];
+        put?: never;
+        post: operations["ClientsController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tenants/{tenantId}/clients/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["ClientsController_remove"];
+        options?: never;
+        head?: never;
+        patch: operations["ClientsController_update"];
+        trace?: never;
+    };
+    "/tenants/{tenantId}/clients/changes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ClientsController_changes"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/tenants/{tenantId}/entries": {
         parameters: {
             query?: never;
@@ -1245,6 +1349,23 @@ export interface paths {
         patch: operations["EntriesController_correct"];
         trace?: never;
     };
+    "/tenants/{tenantId}/entries/{entryId}/delete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Soft-delete a stay and its payments (owner only) */
+        post: operations["EntriesController_deleteEntry"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/tenants/{tenantId}/entries/{entryId}/invoice": {
         parameters: {
             query?: never;
@@ -1256,9 +1377,43 @@ export interface paths {
         put?: never;
         /**
          * Emitir (o reintentar) la factura de una estadía cobrada
-         * @description Emite a consumidor final o, con `receiverCuit`, identificada con ese CUIT: la letra la decide el padrón (A si el emisor es RI y el receptor RI o monotributista). Los problemas de ARCA (caído, rechazo, certificado vencido, CUIT sin datos en el padrón) NO son errores HTTP: vuelven en `status` y `errorCode` de la factura; el CUIT mal formado sí es 422 ARCA_CUIT_INVALID. Conflictos: INVOICE_ALREADY_ISSUED, INVOICE_IN_PROGRESS, INVOICE_NOT_INVOICEABLE, ARCA_NOT_LINKED.
+         * @description Emite a consumidor final o, con `receiverCuit`, identificada con ese CUIT: la letra la decide el padrón (A si el emisor es RI y el receptor RI o monotributista). Los problemas de ARCA (caído, rechazo, certificado vencido, CUIT sin datos en el padrón) NO son errores HTTP: vuelven en `status` y `errorCode` de la factura; el CUIT mal formado sí es 422 ARCA_CUIT_INVALID. Conflictos: INVOICE_ALREADY_ISSUED, INVOICE_IN_PROGRESS, INVOICE_NOT_INVOICEABLE, ARCA_NOT_LINKED. Con expectedAmount, un importe distinto al confirmado devuelve 409 INVOICE_AMOUNT_CHANGED sin llamar a ARCA.
          */
         post: operations["InvoicesController_issue"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tenants/{tenantId}/entries/{entryId}/invoice/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Consultar el importe real antes de emitir una factura */
+        get: operations["InvoicesController_preview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tenants/{tenantId}/entries/{entryId}/invoice/receiver-suggestion": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Suggest the verified QR payer CUIT */
+        post: operations["invoiceReceiverSuggestion"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1498,6 +1653,54 @@ export interface paths {
         };
         /** Pull incremental LPR detection event changes for sync */
         get: operations["LprEventsController_pullChanges"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tenants/{tenantId}/lpr-ignored-plates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["LprIgnoredPlatesController_list"];
+        put?: never;
+        post: operations["LprIgnoredPlatesController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tenants/{tenantId}/lpr-ignored-plates/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["LprIgnoredPlatesController_remove"];
+        options?: never;
+        head?: never;
+        patch: operations["LprIgnoredPlatesController_update"];
+        trace?: never;
+    };
+    "/tenants/{tenantId}/lpr-ignored-plates/changes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["LprIgnoredPlatesController_changes"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2799,6 +3002,29 @@ export interface components {
             updatedAt: string;
             version: number;
         };
+        ClientChangesDto: {
+            items: components["schemas"]["ClientDto"][];
+            maxSeq: number;
+        };
+        ClientDto: {
+            /** Format: date-time */
+            createdAt: string;
+            cuit: string | null;
+            /** Format: date-time */
+            deletedAt: string | null;
+            email: string | null;
+            /** Format: uuid */
+            id: string;
+            name: string | null;
+            phone: string | null;
+            plates: string[];
+            syncSeq: number;
+            /** Format: uuid */
+            tenantId: string;
+            /** Format: date-time */
+            updatedAt: string;
+            version: number;
+        };
         CloseCashSessionDto: {
             /**
              * Format: date-time
@@ -2856,6 +3082,8 @@ export interface components {
             /** @example Rojo */
             color?: string;
             /** Format: date-time */
+            deletedAt?: string | null;
+            /** Format: date-time */
             enteredAt: string;
             entryCameraId?: string;
             /** @description URL of the entry photo captured by the LPR camera */
@@ -2868,7 +3096,11 @@ export interface components {
             invoice?: components["schemas"]["InvoiceSummaryDto"] | null;
             /** Format: date-time */
             leftAt?: string;
-            /** @description Facturada por fuera de Parkit: el checkbox «Facturada» de las playas sin ARCA. */
+            manualInvoiceNumber?: string | null;
+            manualInvoicePointOfSale?: string | null;
+            /** @enum {string|null} */
+            manualInvoiceType?: "A" | "B" | "C" | null;
+            /** @description Factura emitida fuera de Parkit. */
             manuallyInvoiced: boolean;
             /** @example Cliente frecuente */
             notes?: string;
@@ -2937,7 +3169,16 @@ export interface components {
             enteredAt?: string;
             /** Format: date-time */
             leftAt?: string;
-            /** @description Marca la estadía como facturada por fuera de Parkit (playas sin ARCA). Sólo en estadías cerradas; se permite aunque la caja esté cerrada. */
+            /** @description Número de la factura emitida fuera de Parkit. */
+            manualInvoiceNumber?: string;
+            /** @description Punto de venta de una factura emitida fuera de Parkit. */
+            manualInvoicePointOfSale?: string | null;
+            /**
+             * @description Letra de una factura emitida fuera de Parkit.
+             * @enum {string|null}
+             */
+            manualInvoiceType?: "A" | "B" | "C" | null;
+            /** @description Marca la estadía como facturada por fuera de Parkit. Con ARCA vinculada requiere dueño, tipo, punto de venta y número; se permite aunque la caja esté cerrada. */
             manuallyInvoiced?: boolean;
             /** @example Cliente frecuente */
             notes?: string;
@@ -3038,6 +3279,25 @@ export interface components {
              */
             openingCash: number;
         };
+        CreateClientDto: {
+            /** @example 20427205208 */
+            cuit?: string | null;
+            email?: string | null;
+            /** Format: uuid */
+            id: string;
+            /** @description Confirm moving plates belonging to other clients. */
+            movePlates?: boolean;
+            name?: string | null;
+            /** @description Name came from an ARCA lookup, not an owner edit. */
+            nameIsAutomatic?: boolean;
+            phone?: string | null;
+            /**
+             * @example [
+             *       "IAG574"
+             *     ]
+             */
+            plates: string[];
+        };
         CreateDriverVehicleDto: {
             brand?: string | null;
             /** @description Categoría de la plataforma (`GET /vehicle-categories`). Sólo se aceptan las reservables: una categoría que no lo es (bici, camión, otro) da 400. */
@@ -3105,6 +3365,19 @@ export interface components {
              * @description Tipo de vehículo elegido (`GET /tenants/:tenantId/vehicle-types`). Opcional: las cajas viejas no lo mandan y el ingreso queda sin tipo. Si es de otro estacionamiento o no existe se ignora, sin error. De ahí salen el nombre (`vehicleType`) y la categoría que se guardan.
              */
             vehicleTypeId?: string;
+        };
+        CreateLprIgnoredPlateDto: {
+            /** @description Defaults to true when omitted. */
+            active?: boolean;
+            /** Format: uuid */
+            id: string;
+            notes?: string | null;
+            /** @example IAG574 */
+            plate: string;
+            /** Format: date */
+            validFrom?: string | null;
+            /** Format: date */
+            validUntil?: string | null;
         };
         CreateMembershipDto: {
             /**
@@ -3384,6 +3657,31 @@ export interface components {
              */
             vehiclesOut: number;
         };
+        DeleteEntryDto: {
+            expectedVersion: number;
+            reason?: string;
+        };
+        DeleteEntryResponseDto: {
+            deletedPaymentTransactions: components["schemas"]["PaymentTransactionDto"][];
+            entry: components["schemas"]["EntryDto"];
+        };
+        DeleteParkingDto: {
+            /**
+             * @description El nombre del estacionamiento, tipeado por el admin. Se compara normalizado (NFC, sin distinguir mayúsculas ni espacios del borde). Un botón solo no alcanza para un borrado.
+             * @example Playa Centro
+             */
+            confirmName: string;
+            /**
+             * @description Días hasta que la purga pueda borrarlo definitivamente. `0` lo deja listo para la próxima corrida del job, que es lo que se usa para limpiar datos de prueba. Por defecto 30.
+             * @default 30
+             */
+            graceDays: number;
+            /**
+             * @description Motivo, para la auditoría.
+             * @example Datos de prueba previos al arranque productivo
+             */
+            reason?: string;
+        };
         DeleteVehicleTypeResultDto: {
             /**
              * Format: uuid
@@ -3392,6 +3690,58 @@ export interface components {
             reassignedToTypeId: string | null;
             /** @description Cuántos vehículos se movieron al tipo destino. Cada uno recibe su propio `syncSeq` y `version`, así que viajan por /vehicles/changes. */
             reassignedVehicles: number;
+        };
+        DeletionEffectDto: {
+            /** @description Por qué falló, si falló. En inglés: es para el log. */
+            detail: string | null;
+            /** @description Si salió bien. */
+            ok: boolean;
+            /**
+             * @description Qué se intentó.
+             * @example Desvincular Mercado Pago
+             */
+            step: string;
+        };
+        DeletionPreflightDto: {
+            /** @description Si tiene ARCA vinculado para facturar. */
+            arcaLinked: boolean;
+            /** @description Filas de auditoría. Hasta ahora NO se borraban: la FK es ON DELETE SET NULL, así que quedaban anonimizadas e irrastreables. La purga las borra de verdad. */
+            auditRows: number;
+            /**
+             * @description Plata de terceros que quedaría colgada. Se muestra en rojo y obliga a leer, pero NO impide borrar: el admin decide. La purga definitiva sí los respeta, porque ahí ya no hay vuelta atrás.
+             * @example [
+             *       "2 reembolsos pendientes",
+             *       "1 cobro acreditado sin aplicar"
+             *     ]
+             */
+            blockers: string[];
+            /** @description Autos que están adentro ahora mismo. */
+            carsInside: number;
+            /** @description Turnos de caja en total. */
+            cashSessions: number;
+            /** @description Ingresos registrados, históricos incluidos. */
+            entries: number;
+            /** @description Facturas emitidas por ARCA. */
+            invoices: number;
+            /** @description Si tiene Mercado Pago vinculado. */
+            mercadoPagoLinked: boolean;
+            /** @description Nombre exacto que hay que tipear para confirmar. Se compara normalizado (NFC, sin distinguir mayúsculas ni espacios del borde). */
+            name: string;
+            /** @description Turnos de caja abiertos sin cerrar. */
+            openCashSessions: number;
+            /** @description Reservas de conductores, históricas incluidas. */
+            reservations: number;
+            /** @description Personal con membresía en este estacionamiento. */
+            staff: number;
+            /** @description Fotos de patentes en el bucket privado. Las borra la purga: hoy ningún otro camino del backend las toca al borrar un estacionamiento. */
+            storageObjects: number;
+            /** Format: uuid */
+            tenantId: string;
+        };
+        DeletionResultDto: {
+            /** @description En orden de ejecución. El orden no es cosmético: ver el servicio. */
+            effects: components["schemas"]["DeletionEffectDto"][];
+            parking: components["schemas"]["ParkingDto"];
         };
         DesktopCameraConfigDto: {
             /**
@@ -3807,6 +4157,8 @@ export interface components {
             /** @example Rojo */
             color?: string;
             /** Format: date-time */
+            deletedAt?: string | null;
+            /** Format: date-time */
             enteredAt: string;
             entryCameraId?: string;
             /** @description URL of the entry photo captured by the LPR camera */
@@ -3817,7 +4169,11 @@ export interface components {
             id: string;
             /** Format: date-time */
             leftAt?: string;
-            /** @description Facturada por fuera de Parkit: el checkbox «Facturada» de las playas sin ARCA. */
+            manualInvoiceNumber?: string | null;
+            manualInvoicePointOfSale?: string | null;
+            /** @enum {string|null} */
+            manualInvoiceType?: "A" | "B" | "C" | null;
+            /** @description Factura emitida fuera de Parkit. */
             manuallyInvoiced: boolean;
             /** @example Cliente frecuente */
             notes?: string;
@@ -4077,9 +4433,8 @@ export interface components {
             /** Format: date-time */
             issuedAt?: string | null;
             ptoVta?: number | null;
-            /** @description CUIT del receptor, o `0` a consumidor final. */
             receptorDocNro?: string | null;
-            /** @description DocTipo de ARCA: 80 = CUIT (Factura A), 99 = consumidor final. */
+            /** @description 80 = CUIT; 99 = consumidor final. */
             receptorDocTipo?: number | null;
             /** @description A quién se emitió: «Consumidor Final» o la razón social del receptor de la A. */
             receptorNombre?: string | null;
@@ -4091,6 +4446,10 @@ export interface components {
             updatedAt: string;
             version: number;
         };
+        InvoicePreviewDto: {
+            /** @description Importe vigente que se enviara a ARCA, en pesos. */
+            amount: number;
+        };
         InvoiceReceiverDto: {
             condicionIvaReceptorId: number | null;
             /** @example 30712345671 */
@@ -4099,6 +4458,13 @@ export interface components {
             lastUsedAt: string;
             /** @example EMPRESA SA */
             razonSocial: string | null;
+        };
+        InvoiceReceiverSuggestionDto: {
+            cuit: string | null;
+        };
+        InvoiceReceiverSuggestionRequestDto: {
+            /** Format: uuid */
+            paymentIntentId?: string;
         };
         /** @enum {string} */
         InvoiceStatus: "not_required" | "pending" | "issuing" | "issued" | "error";
@@ -4120,6 +4486,9 @@ export interface components {
             /** Format: uuid */
             id: string;
             ptoVta?: number | null;
+            receptorDocNro?: string | null;
+            /** @description 80 = CUIT; 99 = consumidor final. */
+            receptorDocTipo?: number | null;
             /** @description A quién se emitió: «Consumidor Final» o la razón social del receptor de la A. */
             receptorNombre?: string | null;
             status: components["schemas"]["InvoiceStatus"];
@@ -4129,6 +4498,8 @@ export interface components {
             entryIds: string[];
         };
         IssueInvoiceDto: {
+            /** @description Importe confirmado por el operador. Si cambio, no se emite. */
+            expectedAmount?: number;
             /**
              * @description CUIT del cliente, con o sin guiones. La letra la decide el padrón: A si el emisor es RI y el receptor RI o monotributista; si no, B o C identificada con el CUIT. Sin él se emite a consumidor final.
              * @example 30-71234567-1
@@ -4233,6 +4604,32 @@ export interface components {
              * @description Tipo del estacionamiento. Si resuelve, manda sobre `vehicleType` y `vehicleCategory`.
              */
             vehicleTypeId?: string;
+        };
+        LprIgnoredPlateChangesDto: {
+            items: components["schemas"]["LprIgnoredPlateDto"][];
+            maxSeq: number;
+        };
+        LprIgnoredPlateDto: {
+            active: boolean;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            deletedAt: string | null;
+            /** Format: uuid */
+            id: string;
+            notes?: string | null;
+            /** @example IAG574 */
+            plate: string;
+            syncSeq: number;
+            /** Format: uuid */
+            tenantId: string;
+            /** Format: date-time */
+            updatedAt: string;
+            /** Format: date */
+            validFrom?: string | null;
+            /** Format: date */
+            validUntil?: string | null;
+            version: number;
         };
         MeMembershipDto: {
             /**
@@ -4826,6 +5223,11 @@ export interface components {
             createdAt: string;
             /** @description Tax id (CUIT), if any. */
             cuit: string | null;
+            /**
+             * Format: date-time
+             * @description Cuándo se dio de baja. `null` = vivo. Sólo lo ve el admin global: para el resto del producto un estacionamiento con esto seteado no existe.
+             */
+            deletedAt: string | null;
             /** @description Contact email, if any. */
             email: string | null;
             /**
@@ -4841,6 +5243,11 @@ export interface components {
             name: string;
             /** @description Contact phone, if any. */
             phone: string | null;
+            /**
+             * Format: date-time
+             * @description Desde cuándo la purga puede borrarlo definitivamente. Hasta ese momento se puede restaurar; después no queda nada que restaurar.
+             */
+            purgeAfter: string | null;
             /**
              * @description Operational status: `active` or `maintenance`.
              * @enum {string}
@@ -5005,10 +5412,10 @@ export interface components {
             maxSeq: number;
         };
         /**
-         * @description Facturación al cobrar con este medio: none = no se factura, auto = se emite al cobrar, manual = queda pendiente para el Historial.
+         * @description Qué pasa al cobrar: none = no permite facturar, manual = emisión opcional, manual_pending = queda pendiente para emitir después, auto = se emite automáticamente.
          * @enum {string}
          */
-        PaymentMethodInvoiceMode: "none" | "auto" | "manual";
+        PaymentMethodInvoiceMode: "none" | "auto" | "manual" | "manual_pending";
         PaymentMethodSliceDto: {
             /**
              * @description Total collected, in ARS.
@@ -5061,7 +5468,7 @@ export interface components {
              */
             id: string;
             /**
-             * @description Facturación al cobrar con este medio: none = no se factura, auto = se emite al cobrar, manual = queda pendiente para el Historial.
+             * @description Qué pasa al cobrar: none = no permite facturar, manual = emisión opcional, manual_pending = queda pendiente para emitir después, auto = se emite automáticamente.
              * @example none
              */
             invoiceMode: components["schemas"]["PaymentMethodInvoiceMode"];
@@ -5096,7 +5503,7 @@ export interface components {
             version: number;
         };
         /**
-         * @description Payment method type at the time of the charge (snapshot). Resolved server-side from paymentMethodId when omitted, for older clients.
+         * @description Payment method type at the time of the charge (snapshot). The desktop cash count keys off this, never off the name.
          * @enum {string}
          */
         PaymentMethodType: "transfer" | "cash" | "other" | "mercadopago_qr";
@@ -5856,7 +6263,7 @@ export interface components {
              * @example true
              */
             enabled?: boolean;
-            /** @description Qué pasa con la factura al cobrar con este medio: none = no se factura, auto = se emite al cobrar, manual = queda pendiente para el Historial. */
+            /** @description Qué pasa al cobrar: none = no permite facturar, manual = emisión opcional, manual_pending = queda pendiente para emitir después, auto = se emite automáticamente. */
             invoiceMode?: components["schemas"]["PaymentMethodInvoiceMode"];
             /**
              * @description Whether this method becomes the default for the entity.
@@ -5989,6 +6396,23 @@ export interface components {
         UpdateCashSessionDto: {
             /** @description Shift notes. Send an empty string to clear them. Omitting the field leaves them untouched. */
             notes?: string;
+        };
+        UpdateClientDto: {
+            /** @example 20427205208 */
+            cuit?: string | null;
+            email?: string | null;
+            /** @description Confirm moving plates belonging to other clients. */
+            movePlates?: boolean;
+            name?: string | null;
+            /** @description Name came from an ARCA lookup, not an owner edit. */
+            nameIsAutomatic?: boolean;
+            phone?: string | null;
+            /**
+             * @example [
+             *       "IAG574"
+             *     ]
+             */
+            plates?: string[];
         };
         UpdateDesktopCameraConfigDto: {
             /** @description Stable camera identifier sent with LPR detections. */
@@ -6188,6 +6612,17 @@ export interface components {
              * @enum {string}
              */
             status: "pending" | "registered" | "dismissed" | "suppressed_active_entry" | "suppressed_pending_event" | "suppressed_recent_exit";
+        };
+        UpdateLprIgnoredPlateDto: {
+            /** @description Defaults to true when omitted. */
+            active?: boolean;
+            notes?: string | null;
+            /** @example IAG574 */
+            plate?: string;
+            /** Format: date */
+            validFrom?: string | null;
+            /** Format: date */
+            validUntil?: string | null;
         };
         UpdateMembershipDto: {
             /**
@@ -6916,6 +7351,8 @@ export interface operations {
     adminParkingsList: {
         parameters: {
             query?: {
+                /** @description Incluir los estacionamientos dados de baja, para poder restaurarlos. Por defecto `false`: el inventario muestra sólo los vivos. */
+                includeDeleted?: boolean;
                 /** @description 1-based page number. */
                 page?: number;
                 /** @description Number of items per page (capped at 100). */
@@ -7065,54 +7502,6 @@ export interface operations {
             };
         };
     };
-    adminParkingsDelete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Parking lot id (uuid). */
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Parking lot deleted. */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Missing, malformed, or expired bearer token. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetailsDto"];
-                };
-            };
-            /** @description Authenticated caller does not hold the `admin` role. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetailsDto"];
-                };
-            };
-            /** @description No parking lot exists for the given id (`PARKING_NOT_FOUND`). */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetailsDto"];
-                };
-            };
-        };
-    };
     adminParkingsUpdate: {
         parameters: {
             query?: never;
@@ -7166,6 +7555,184 @@ export interface operations {
             };
             /** @description No parking lot exists for the given id (`PARKING_NOT_FOUND`). */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    adminParkingsDelete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Parking lot id (uuid). */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeleteParkingDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeletionResultDto"];
+                };
+            };
+            /** @description Payload failed validation, or the typed name does not match (`PARKING_CONFIRM_NAME_MISMATCH`). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblemDetailsDto"];
+                };
+            };
+            /** @description Missing, malformed, or expired bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description Authenticated caller does not hold the `admin` role. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description No parking lot exists for the given id (`PARKING_NOT_FOUND`). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description Already deleted (`PARKING_ALREADY_DELETED`). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    adminParkingsDeletionPreflight: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Parking lot id (uuid). */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeletionPreflightDto"];
+                };
+            };
+            /** @description Missing, malformed, or expired bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description Authenticated caller does not hold the `admin` role. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description No parking lot exists for the given id (`PARKING_NOT_FOUND`). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    adminParkingsRestore: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Parking lot id (uuid). */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ParkingDto"];
+                };
+            };
+            /** @description Missing, malformed, or expired bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description Authenticated caller does not hold the `admin` role. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description No parking lot exists for the given id (`PARKING_NOT_FOUND`). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description The parking lot is not deleted (`PARKING_NOT_DELETED`). */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -9463,7 +10030,7 @@ export interface operations {
         parameters: {
             query?: {
                 /** @description Filter by a single action from the catalog (`<entity>.<verb>`). Validated against the catalog, so a typo fails loudly instead of silently returning nothing. */
-                action?: "application.created" | "application.updated" | "application.submitted" | "application.document_added" | "application.rejected" | "user.promoted_to_owner" | "entity.approved" | "entity.rejected" | "entity.profile_updated" | "payment_method.toggled" | "entry.corrected" | "rate.prices_propagated" | "entry.undercharged" | "entry.reservation_unlinked" | "lpr_event.registered" | "lpr_event.dismissed" | "lpr_event.suppressed" | "lpr_event.archived" | "lpr_event.unarchived" | "lpr_event.image_purged" | "parking.created" | "parking.updated" | "parking.deleted" | "user.role_updated" | "user.deleted" | "membership.created" | "membership.updated" | "membership.deleted" | "mp_account.linked" | "mp_account.unlinked" | "mp_account.link_failed" | "arca_account.linked" | "arca_account.unlinked" | "arca_account.renewal_prepared" | "arca_account.certificate_renewed" | "arca_account.certificate_expired" | "invoice.cert_expired" | "mp_account.token_refreshed" | "mp_account.token_expired" | "payment_intent.cancel_mp_failed" | "payment_intent.refunded" | "reservation.accepted" | "reservation.rejected" | "reservation.cancelled" | "reservation.refund_retried" | "reservation.refund_confirmed" | "reservation.refund_failed" | "reservation.late_payment_refunded";
+                action?: "application.created" | "application.updated" | "application.submitted" | "application.document_added" | "application.rejected" | "user.promoted_to_owner" | "entity.approved" | "entity.rejected" | "entity.profile_updated" | "payment_method.toggled" | "entry.corrected" | "entry.deleted" | "rate.prices_propagated" | "entry.undercharged" | "entry.reservation_unlinked" | "lpr_event.registered" | "lpr_event.dismissed" | "lpr_event.suppressed" | "lpr_event.archived" | "lpr_event.unarchived" | "lpr_event.image_purged" | "parking.created" | "parking.updated" | "parking.deleted" | "parking.restored" | "parking.purged" | "user.role_updated" | "user.deleted" | "membership.created" | "membership.updated" | "membership.deleted" | "mp_account.linked" | "mp_account.unlinked" | "mp_account.link_failed" | "arca_account.linked" | "arca_account.unlinked" | "arca_account.renewal_prepared" | "arca_account.certificate_renewed" | "arca_account.certificate_expired" | "invoice.cert_expired" | "mp_account.token_refreshed" | "mp_account.token_expired" | "payment_intent.cancel_mp_failed" | "payment_intent.refunded" | "reservation.accepted" | "reservation.rejected" | "reservation.cancelled" | "reservation.refund_retried" | "reservation.refund_confirmed" | "reservation.refund_failed" | "reservation.late_payment_refunded";
                 /** @description Only events at or after this instant. ISO-8601 **with an explicit offset** (e.g. `-03:00`), matching the metrics endpoints. */
                 from?: string;
                 /** @description 1-based page number. */
@@ -9691,6 +10258,122 @@ export interface operations {
             };
         };
     };
+    ClientsController_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClientDto"][];
+                };
+            };
+        };
+    };
+    ClientsController_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateClientDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClientDto"];
+                };
+            };
+        };
+    };
+    ClientsController_remove: {
+        parameters: {
+            query: {
+                /** @description Expected current version of the row. Used for optimistic locking. */
+                expectedVersion: number;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClientDto"];
+                };
+            };
+        };
+    };
+    ClientsController_update: {
+        parameters: {
+            query: {
+                /** @description Expected current version of the row. Used for optimistic locking. */
+                expectedVersion: number;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateClientDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClientDto"];
+                };
+            };
+        };
+    };
+    ClientsController_changes: {
+        parameters: {
+            query?: {
+                afterSeq?: components["schemas"]["Object"];
+                limit?: components["schemas"]["Object"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClientChangesDto"];
+                };
+            };
+        };
+    };
     EntriesController_findAll: {
         parameters: {
             query?: never;
@@ -9799,6 +10482,33 @@ export interface operations {
             };
         };
     };
+    EntriesController_deleteEntry: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entryId: string;
+                /** @description Parking lot tenant ID */
+                tenantId: unknown;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeleteEntryDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeleteEntryResponseDto"];
+                };
+            };
+        };
+    };
     InvoicesController_issue: {
         parameters: {
             query?: never;
@@ -9822,6 +10532,87 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["InvoiceSummaryDto"];
+                };
+            };
+        };
+    };
+    InvoicesController_preview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entryId: string;
+                /** @description Parking lot tenant ID */
+                tenantId: unknown;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvoicePreviewDto"];
+                };
+            };
+        };
+    };
+    invoiceReceiverSuggestion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entryId: string;
+                tenantId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InvoiceReceiverSuggestionRequestDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvoiceReceiverSuggestionDto"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblemDetailsDto"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
                 };
             };
         };
@@ -9986,6 +10777,8 @@ export interface operations {
             query?: {
                 /** @description When false (default), archived LPR events are hidden from review lists. Set true to list archived events instead. */
                 archived?: boolean;
+                /** @description Comma-separated entry IDs. When present, only events linked to those entries are returned. */
+                entryIds?: string;
                 /** @description Only include events first detected at or after this timestamp (ISO 8601, inclusive). */
                 firstSeenFrom?: string;
                 /** @description Only include events first detected at or before this timestamp (ISO 8601, inclusive). */
@@ -10187,6 +10980,122 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["LprDetectionEventChangesResponseDto"];
+                };
+            };
+        };
+    };
+    LprIgnoredPlatesController_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LprIgnoredPlateDto"][];
+                };
+            };
+        };
+    };
+    LprIgnoredPlatesController_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateLprIgnoredPlateDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LprIgnoredPlateDto"];
+                };
+            };
+        };
+    };
+    LprIgnoredPlatesController_remove: {
+        parameters: {
+            query: {
+                /** @description Expected current version of the row. Used for optimistic locking. */
+                expectedVersion: number;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LprIgnoredPlateDto"];
+                };
+            };
+        };
+    };
+    LprIgnoredPlatesController_update: {
+        parameters: {
+            query: {
+                /** @description Expected current version of the row. Used for optimistic locking. */
+                expectedVersion: number;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateLprIgnoredPlateDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LprIgnoredPlateDto"];
+                };
+            };
+        };
+    };
+    LprIgnoredPlatesController_changes: {
+        parameters: {
+            query?: {
+                afterSeq?: components["schemas"]["Object"];
+                limit?: components["schemas"]["Object"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LprIgnoredPlateChangesDto"];
                 };
             };
         };

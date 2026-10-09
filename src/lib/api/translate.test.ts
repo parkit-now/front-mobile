@@ -29,6 +29,7 @@ describe('errores de reservas y pago', () => {
     ['RESERVATION_NOT_PAYABLE', 409, 'ya no se puede pagar'],
     ['MP_UNAVAILABLE', 502, 'Mercado Pago'],
     ['MP_NOT_LINKED', 422, 'no puede cobrar'],
+    ['INVOICE_MODE_DISABLED', 409, 'facturación está desactivada'],
   ])('%s se traduce al español', (code, status, fragment) => {
     const message = translateApiError(problem(code, status));
     expect(message).toContain(fragment);
