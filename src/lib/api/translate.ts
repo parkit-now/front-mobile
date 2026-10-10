@@ -42,6 +42,13 @@ const NETWORK_MESSAGE =
 // Catalogo estable de `code` provisto por el backend.
 // Fuente: backend/src/utils/exceptions/error-codes.ts
 const CODE_MESSAGES: Record<string, string> = {
+  ARCA_PRIMARY_REQUIRED: 'Primero vinculá la cuenta primaria de ARCA.',
+  ARCA_ACCOUNT_DUPLICATE:
+    'Ya existe una cuenta con ese CUIT, entorno y punto de venta.',
+  ARCA_ACCOUNT_UNAVAILABLE:
+    'La cuenta elegida ya no está disponible. La factura conserva su emisor y queda pendiente.',
+  INVOICE_EMITTER_LOCKED:
+    'La emisión anterior debe resolverse con su cuenta original antes de cambiar el emisor.',
   VEHICLE_NOT_FOUND: 'No encontramos el vehículo.',
   VEHICLE_DUPLICATE: 'Ya tenés un vehículo con esa marca y modelo.',
   // Tipos de vehículo (ABM por estacionamiento)
