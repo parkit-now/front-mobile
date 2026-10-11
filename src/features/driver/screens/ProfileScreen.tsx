@@ -1,5 +1,5 @@
 import type { Session } from '@supabase/supabase-js';
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { translateApiError } from '../../../lib/api/translate';
@@ -9,6 +9,7 @@ import { getErrorMessage } from '../../auth/errors';
 import { DriverIcon, vehicleIconName } from '../components/DriverIcon';
 import { VehicleFormModal } from '../components/VehicleFormModal';
 import { useDriverData } from '../hooks/useDriverData';
+import { listVehicleCatalog } from '../services/vehicleCatalog';
 import {
   driverColors,
   driverLayout,
@@ -34,6 +35,7 @@ export function ProfileScreen({ session }: Props) {
   const { showToast } = useToast();
   const [pendingSignOut, setPendingSignOut] = useState(false);
   const {
+    accessToken,
     bookings,
     vehicles,
     vehiclesStatus,
@@ -43,6 +45,10 @@ export function ProfileScreen({ session }: Props) {
     removeVehicle,
   } = useDriverData();
   const [vehicleForm, setVehicleForm] = useState<VehicleFormState>(null);
+  const loadCatalog = useCallback(
+    () => listVehicleCatalog(accessToken),
+    [accessToken],
+  );
   const editingVehicle = vehicleForm === 'new' ? null : vehicleForm;
 
   async function handleSignOut() {
@@ -178,6 +184,7 @@ export function ProfileScreen({ session }: Props) {
           vehicle={editingVehicle}
           vehicles={vehicles}
           categories={vehicleCategories}
+          loadCatalog={loadCatalog}
           lockedByReservation={
             editingVehicle !== null &&
             hasActiveReservation(editingVehicle, bookings)
