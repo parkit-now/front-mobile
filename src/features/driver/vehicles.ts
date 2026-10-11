@@ -74,7 +74,7 @@ export type VehicleDraft = Omit<
   category: ReservableCategory;
 };
 
-export type VehicleField = 'plate' | 'category';
+export type VehicleField = 'plate' | 'category' | 'vehicle';
 export type VehicleFieldErrors = Partial<Record<VehicleField, string>>;
 
 // Formatos argentinos vigentes, con el agrupado que se usa al mostrarlos.

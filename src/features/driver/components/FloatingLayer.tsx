@@ -151,6 +151,12 @@ export type PopoverProps = {
   maxHeight?: number;
   /** Borde del campo con el que se alinea el panel. */
   align?: Align;
+  /**
+   * No baja el teclado al abrir: para paneles que acompañan a un campo de
+   * texto mientras se escribe (sugerencias). El panel se ubica en el espacio
+   * que deja el teclado.
+   */
+  keepKeyboard?: boolean;
   accessibilityLabel: string;
   testID?: string;
   children: ReactNode;
@@ -252,6 +258,7 @@ function FloatingPanel({
   minWidth = 0,
   maxHeight = 360,
   align = 'start',
+  keepKeyboard = false,
   accessibilityLabel,
   testID,
   children,
@@ -308,8 +315,8 @@ function FloatingPanel({
     }
 
     // Con el teclado abierto, primero se baja: el modal se reacomoda y recién
-    // ahí se mide el campo.
-    if (Keyboard.isVisible()) {
+    // ahí se mide el campo. Salvo que el panel acompañe a lo que se escribe.
+    if (Keyboard.isVisible() && !keepKeyboard) {
       subscription = Keyboard.addListener('keyboardDidHide', measure);
       timer = setTimeout(measure, 400);
       Keyboard.dismiss();
@@ -321,7 +328,7 @@ function FloatingPanel({
       subscription?.remove();
       if (timer) clearTimeout(timer);
     };
-  }, [open, anchorRef, hostRef, onClose]);
+  }, [open, anchorRef, hostRef, onClose, keepKeyboard]);
 
   // Rotar o cambiar el tamaño de la ventana invalida la posición: se cierra.
   const lastWindow = useRef(window);

@@ -128,6 +128,8 @@ const CODE_MESSAGES: Record<string, string> = {
     'Este vehículo tiene una reserva activa: no podés cambiar la patente ni el tipo, ni eliminarlo.',
   DRIVER_VEHICLE_PRIMARY_REQUIRED:
     'Para cambiar el principal, marcá otro vehículo como principal.',
+  DRIVER_VEHICLE_NOT_IN_CATALOG:
+    'Elegí la marca y el modelo de la lista, o dejalos vacíos.',
 
   // Validacion (envoltorio — el detalle por campo se traduce con
   // translateValidationCode).

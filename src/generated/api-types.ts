@@ -3480,11 +3480,13 @@ export interface components {
             plates: string[];
         };
         CreateDriverVehicleDto: {
+            /** @description Marca del catálogo (`GET /driver/vehicle-catalog`). No se acepta texto libre: una marca que no está da 400. */
             brand?: string | null;
             /** @description Categoría de la plataforma (`GET /vehicle-categories`). Sólo se aceptan las reservables: una categoría que no lo es (bici, camión, otro) da 400. */
             category: components["schemas"]["ReservableVehicleCategory"];
             /** @description Marcarlo como principal. El primer vehículo del conductor es principal siempre. */
             isPrimary?: boolean;
+            /** @description Modelo del catálogo para esa marca. Puede ir la marca sola; un modelo sin marca, o que no es de esa marca, da 400. */
             model?: string | null;
             /**
              * @description Se normaliza (mayúsculas, sin espacios ni guiones).
@@ -6666,11 +6668,13 @@ export interface components {
             username?: string;
         };
         UpdateDriverVehicleDto: {
+            /** @description Marca del catálogo (`GET /driver/vehicle-catalog`). No se acepta texto libre: una marca que no está da 400. */
             brand?: string | null;
             /** @description Categoría de la plataforma; sólo las reservables. No se puede cambiar con una reserva activa del vehículo. */
             category?: components["schemas"]["ReservableVehicleCategory"];
             /** @description true lo marca como principal (y desmarca al anterior). Para cambiar el principal se marca otro: false no se acepta. */
             isPrimary?: boolean;
+            /** @description Modelo del catálogo para esa marca. Puede ir la marca sola; un modelo sin marca, o que no es de esa marca, da 400. */
             model?: string | null;
             /**
              * @description Se normaliza. No se puede cambiar con una reserva activa del vehículo.
