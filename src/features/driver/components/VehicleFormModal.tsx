@@ -13,6 +13,7 @@ import {
   View,
 } from 'react-native';
 import { driverColors, driverRadius, driverSpacing } from '../theme';
+import type { CatalogItem, CatalogOption } from '../vehicleCatalog';
 import {
   formatPlate,
   isReservableCategory,
@@ -26,6 +27,7 @@ import {
 import { vehicleIconName } from './DriverIcon';
 import { FloatingLayerHost, type FloatingLayerHandle } from './FloatingLayer';
 import { FloatingSelect } from './FloatingSelect';
+import { VehicleCatalogField } from './VehicleCatalogField';
 
 type Props = {
   // null = alta de un vehículo nuevo.
@@ -33,6 +35,8 @@ type Props = {
   vehicles: DriverVehicle[];
   // Categorías reservables entre las que se elige.
   categories: ReservableCategoryOption[];
+  /** Catálogo de marcas y modelos; se pide al enfocar el buscador. */
+  loadCatalog: () => Promise<CatalogItem[]>;
   // Con una reserva activa no se cambian patente ni tipo ni se elimina.
   lockedByReservation: boolean;
   onCancel: () => void;
@@ -45,6 +49,7 @@ export function VehicleFormModal({
   vehicle,
   vehicles,
   categories,
+  loadCatalog,
   lockedByReservation,
   onCancel,
   onSave,
@@ -60,6 +65,9 @@ export function VehicleFormModal({
   );
   const [brand, setBrand] = useState(vehicle?.brand ?? '');
   const [model, setModel] = useState(vehicle?.model ?? '');
+  const vehicleName = [brand, model].filter(Boolean).join(' ');
+  // Lo escrito en el buscador: sólo vale lo que se elige de la lista.
+  const [vehicleQuery, setVehicleQuery] = useState(vehicleName);
   const [makePrimary, setMakePrimary] = useState(primaryLocked);
   const [errors, setErrors] = useState<VehicleFieldErrors>({});
   const [saving, setSaving] = useState(false);
@@ -71,9 +79,31 @@ export function VehicleFormModal({
     ) ?? null;
   const selectedCode = selectedOption?.code ?? category;
 
+  function handleVehicleSelect(option: CatalogOption | null) {
+    setBrand(option?.brand ?? '');
+    setModel(option?.kind === 'model' ? option.model : '');
+    if (errors.vehicle) setErrors({});
+    // El modelo trae su tipo: se precarga (y se puede cambiar), salvo que una
+    // reserva activa lo tenga bloqueado.
+    if (
+      option?.kind === 'model' &&
+      !lockedByReservation &&
+      isReservableCategory(option.category) &&
+      categories.some((category) => category.code === option.category)
+    ) {
+      setCategory(option.category);
+    }
+  }
+
   function handleSave() {
     if (!selectedCode) {
       setErrors({ category: 'Elegí el tipo de vehículo.' });
+      return;
+    }
+    if (vehicleQuery.trim() !== vehicleName) {
+      setErrors({
+        vehicle: 'Elegí una opción de la lista o borrá el texto.',
+      });
       return;
     }
     const draft: VehicleDraft = {
@@ -191,29 +221,22 @@ export function VehicleFormModal({
                 ) : null}
               </View>
 
-              <View style={styles.row}>
-                <View style={[styles.field, styles.rowField]}>
-                  <Text style={styles.label}>Marca (opcional)</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={brand}
-                    onChangeText={setBrand}
-                    placeholder="Toyota"
-                    placeholderTextColor={driverColors.disabled}
-                    accessibilityLabel="Marca"
-                  />
-                </View>
-                <View style={[styles.field, styles.rowField]}>
-                  <Text style={styles.label}>Modelo (opcional)</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={model}
-                    onChangeText={setModel}
-                    placeholder="Etios"
-                    placeholderTextColor={driverColors.disabled}
-                    accessibilityLabel="Modelo"
-                  />
-                </View>
+              <View style={styles.field}>
+                <Text style={styles.label}>Marca y modelo (opcional)</Text>
+                <VehicleCatalogField
+                  query={vehicleQuery}
+                  onQueryChange={(value) => {
+                    setVehicleQuery(value);
+                    if (errors.vehicle) setErrors({});
+                  }}
+                  selectedLabel={vehicleName}
+                  onSelect={handleVehicleSelect}
+                  loadCatalog={loadCatalog}
+                  invalid={Boolean(errors.vehicle)}
+                />
+                {errors.vehicle ? (
+                  <Text style={styles.errorText}>{errors.vehicle}</Text>
+                ) : null}
               </View>
 
               <View style={styles.primaryRow}>
@@ -363,14 +386,6 @@ const styles = StyleSheet.create({
   },
   chevronOpen: {
     transform: [{ rotate: '180deg' }],
-  },
-  row: {
-    flexDirection: 'row',
-    gap: driverSpacing.sm,
-  },
-  rowField: {
-    flex: 1,
-    minWidth: 0,
   },
   primaryRow: {
     flexDirection: 'row',
