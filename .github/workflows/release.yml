@@ -1,0 +1,66 @@
+name: Release
+
+# Al mergear a `main`: calcula la próxima versión a partir de los Conventional
+# Commits y, si hay algo que liberar, crea el tag + GitHub Release y le adjunta
+# el APK de Android.
+#
+# A diferencia de front-desktop, semantic-release NO commitea a `main` (ni
+# CHANGELOG ni bump de versión): la versión vive sólo en el tag y se le pasa al
+# build, así `main` y `develop` no divergen. Las notas quedan en el Release.
+#
+# El build está encadenado con `needs: release` en esta misma corrida: un tag
+# creado con GITHUB_TOKEN no dispara otros workflows.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Calcular la próxima versión sin crear tag ni release'
+        type: boolean
+        default: true
+
+concurrency:
+  group: release-${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      # semantic-release/github comenta en los PRs e issues de cada commit.
+      issues: write
+      pull-requests: write
+    outputs:
+      new_release_published: ${{ steps.semantic.outputs.new_release_published }}
+      new_release_git_tag: ${{ steps.semantic.outputs.new_release_git_tag }}
+      new_release_version: ${{ steps.semantic.outputs.new_release_version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.12.0'
+      - id: semantic
+        uses: cycjimmy/semantic-release-action@v4
+        with:
+          dry_run: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  apk:
+    needs: release
+    # En dry-run semantic-release informa la versión pero no crea el tag.
+    if: >-
+      needs.release.outputs.new_release_published == 'true' &&
+      !(github.event_name == 'workflow_dispatch' && inputs.dry_run)
+    permissions:
+      contents: write
+    uses: ./.github/workflows/build-apk.yml
+    with:
+      version: ${{ needs.release.outputs.new_release_version }}
+      release_tag: ${{ needs.release.outputs.new_release_git_tag }}
+    secrets: inherit

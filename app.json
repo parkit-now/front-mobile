@@ -19,7 +19,8 @@
         {
           "locationWhenInUsePermission": "Parkit usa tu ubicación para mostrar estacionamientos cercanos."
         }
-      ]
+      ],
+      "./plugins/withReleaseSigning"
     ],
     "updates": {
       "fallbackToCacheTimeout": 0
