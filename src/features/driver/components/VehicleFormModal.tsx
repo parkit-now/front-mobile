@@ -72,8 +72,6 @@ export function VehicleFormModal({
   const [errors, setErrors] = useState<VehicleFieldErrors>({});
   const [saving, setSaving] = useState(false);
   const floating = useRef<FloatingLayerHandle>(null);
-  const scroll = useRef<ScrollView>(null);
-  const vehicleFieldY = useRef(0);
 
   const selectedOption =
     categories.find(
@@ -161,7 +159,6 @@ export function VehicleFormModal({
         >
           <View style={styles.dialog} accessibilityViewIsModal>
             <ScrollView
-              ref={scroll}
               contentContainerStyle={styles.content}
               keyboardShouldPersistTaps="handled"
             >
@@ -224,12 +221,7 @@ export function VehicleFormModal({
                 ) : null}
               </View>
 
-              <View
-                style={styles.field}
-                onLayout={(event) => {
-                  vehicleFieldY.current = event.nativeEvent.layout.y;
-                }}
-              >
+              <View style={styles.field}>
                 <Text style={styles.label}>Marca y modelo (opcional)</Text>
                 <VehicleCatalogField
                   query={vehicleQuery}
@@ -241,17 +233,6 @@ export function VehicleFormModal({
                   onSelect={handleVehicleSelect}
                   loadCatalog={loadCatalog}
                   invalid={Boolean(errors.vehicle)}
-                  onFocus={() => {
-                    floating.current?.dismiss();
-                    // Sube el campo para que las opciones queden a la vista
-                    // con el teclado abierto.
-                    setTimeout(() => {
-                      scroll.current?.scrollTo({
-                        y: vehicleFieldY.current,
-                        animated: true,
-                      });
-                    }, 250);
-                  }}
                 />
                 {errors.vehicle ? (
                   <Text style={styles.errorText}>{errors.vehicle}</Text>

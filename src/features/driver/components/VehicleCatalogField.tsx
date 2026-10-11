@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Keyboard,
@@ -17,10 +17,12 @@ import {
 } from '../vehicleCatalog';
 import { vehicleIconName } from '../vehicles';
 import { DriverIcon } from './DriverIcon';
+import { Popover } from './FloatingLayer';
 
-// Cuántas opciones se muestran debajo del campo: entran en el diálogo sin
-// taparlo, y con dos o tres letras más la lista ya se achica sola.
-const MAX_OPTIONS = 6;
+// Con dos o tres letras más la lista ya se achica sola; lo que no entra en el
+// panel se scrollea adentro.
+const MAX_OPTIONS = 8;
+const PANEL_MAX_HEIGHT = 280;
 
 type Props = {
   /** Lo que está escrito en el campo. */
@@ -33,7 +35,6 @@ type Props = {
   /** Pide el catálogo; se llama al enfocar el campo y al reintentar. */
   loadCatalog: () => Promise<CatalogItem[]>;
   invalid?: boolean;
-  onFocus?: () => void;
 };
 
 type LoadState =
@@ -44,12 +45,10 @@ type LoadState =
 
 /**
  * Marca y modelo sobre el catálogo de la plataforma (SCRUM-301). El conductor
- * escribe y las coincidencias aparecen debajo del campo, en el mismo
- * formulario. No hay texto libre: lo escrito sólo sirve para buscar, y vale lo
- * que se elige de la lista. Borrar el campo quita marca y modelo.
- *
- * Las opciones van en línea y no en un Popover: el Popover baja el teclado al
- * abrirse, y acá hace falta seguir escribiendo.
+ * escribe y las coincidencias flotan ancladas al campo, sin cambiar el tamaño
+ * del formulario (ver FloatingLayer; requiere un FloatingLayerHost arriba). No
+ * hay texto libre: lo escrito sólo sirve para buscar, y vale lo que se elige
+ * de la lista. Borrar el campo quita marca y modelo.
  */
 export function VehicleCatalogField({
   query,
@@ -58,9 +57,11 @@ export function VehicleCatalogField({
   onSelect,
   loadCatalog,
   invalid = false,
-  onFocus,
 }: Props) {
+  const anchorRef = useRef<View>(null);
   const [state, setState] = useState<LoadState>({ status: 'idle' });
+  // Tocar afuera cierra las opciones hasta que se vuelva a escribir.
+  const [dismissed, setDismissed] = useState(false);
 
   const load = useCallback(() => {
     setState({ status: 'loading' });
@@ -82,18 +83,23 @@ export function VehicleCatalogField({
       : [];
 
   return (
-    <View style={styles.wrapper}>
-      <View style={[styles.field, invalid && styles.fieldInvalid]}>
+    <>
+      <View
+        ref={anchorRef}
+        collapsable={false}
+        style={[styles.field, invalid && styles.fieldInvalid]}
+      >
         <TextInput
           style={styles.input}
           value={query}
           onChangeText={(value) => {
+            setDismissed(false);
             onQueryChange(value);
             if (value.trim().length === 0 && selectedLabel) onSelect(null);
           }}
           onFocus={() => {
             if (state.status === 'idle' || state.status === 'error') load();
-            onFocus?.();
+            setDismissed(false);
           }}
           placeholder="Buscá tu vehículo, por ejemplo Etios"
           placeholderTextColor={driverColors.disabled}
@@ -122,8 +128,18 @@ export function VehicleCatalogField({
         )}
       </View>
 
-      {searching ? (
-        <View style={styles.options} testID="vehicle-catalog-options">
+      <Popover
+        open={searching && !dismissed}
+        onClose={() => {
+          setDismissed(true);
+        }}
+        anchorRef={anchorRef}
+        maxHeight={PANEL_MAX_HEIGHT}
+        keepKeyboard
+        accessibilityLabel="Vehículos que coinciden"
+        testID="vehicle-catalog-options"
+      >
+        <View style={styles.options}>
           {state.status === 'loading' || state.status === 'idle' ? (
             <View style={styles.status}>
               <ActivityIndicator color={driverColors.brand} />
@@ -190,15 +206,12 @@ export function VehicleCatalogField({
             ))
           )}
         </View>
-      ) : null}
-    </View>
+      </Popover>
+    </>
   );
 }
 
 const styles = StyleSheet.create({
-  wrapper: {
-    gap: 6,
-  },
   field: {
     minHeight: 48,
     paddingHorizontal: driverSpacing.sm,
@@ -221,10 +234,6 @@ const styles = StyleSheet.create({
   },
   options: {
     paddingVertical: 6,
-    borderRadius: driverRadius.control,
-    borderWidth: 1,
-    borderColor: driverColors.border,
-    backgroundColor: driverColors.surface,
   },
   option: {
     minHeight: 44,
