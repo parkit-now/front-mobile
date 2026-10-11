@@ -24,10 +24,10 @@ import {
   type VehicleDraft,
   type VehicleFieldErrors,
 } from '../vehicles';
-import { DriverIcon, vehicleIconName } from './DriverIcon';
+import { vehicleIconName } from './DriverIcon';
 import { FloatingLayerHost, type FloatingLayerHandle } from './FloatingLayer';
 import { FloatingSelect } from './FloatingSelect';
-import { VehicleCatalogPicker } from './VehicleCatalogPicker';
+import { VehicleCatalogField } from './VehicleCatalogField';
 
 type Props = {
   // null = alta de un vehículo nuevo.
@@ -35,7 +35,7 @@ type Props = {
   vehicles: DriverVehicle[];
   // Categorías reservables entre las que se elige.
   categories: ReservableCategoryOption[];
-  /** Catálogo de marcas y modelos; se pide al abrir el buscador. */
+  /** Catálogo de marcas y modelos; se pide al enfocar el buscador. */
   loadCatalog: () => Promise<CatalogItem[]>;
   // Con una reserva activa no se cambian patente ni tipo ni se elimina.
   lockedByReservation: boolean;
@@ -65,11 +65,15 @@ export function VehicleFormModal({
   );
   const [brand, setBrand] = useState(vehicle?.brand ?? '');
   const [model, setModel] = useState(vehicle?.model ?? '');
+  const vehicleName = [brand, model].filter(Boolean).join(' ');
+  // Lo escrito en el buscador: sólo vale lo que se elige de la lista.
+  const [vehicleQuery, setVehicleQuery] = useState(vehicleName);
   const [makePrimary, setMakePrimary] = useState(primaryLocked);
   const [errors, setErrors] = useState<VehicleFieldErrors>({});
   const [saving, setSaving] = useState(false);
-  const [picking, setPicking] = useState(false);
   const floating = useRef<FloatingLayerHandle>(null);
+  const scroll = useRef<ScrollView>(null);
+  const vehicleFieldY = useRef(0);
 
   const selectedOption =
     categories.find(
@@ -77,28 +81,31 @@ export function VehicleFormModal({
     ) ?? null;
   const selectedCode = selectedOption?.code ?? category;
 
-  const vehicleName = [brand, model].filter(Boolean).join(' ');
-
-  function handlePick(option: CatalogOption) {
-    setBrand(option.brand);
-    setModel(option.kind === 'model' ? option.model : '');
+  function handleVehicleSelect(option: CatalogOption | null) {
+    setBrand(option?.brand ?? '');
+    setModel(option?.kind === 'model' ? option.model : '');
+    if (errors.vehicle) setErrors({});
     // El modelo trae su tipo: se precarga (y se puede cambiar), salvo que una
     // reserva activa lo tenga bloqueado.
     if (
-      option.kind === 'model' &&
+      option?.kind === 'model' &&
       !lockedByReservation &&
       isReservableCategory(option.category) &&
       categories.some((category) => category.code === option.category)
     ) {
       setCategory(option.category);
-      if (errors.category) setErrors({});
     }
-    setPicking(false);
   }
 
   function handleSave() {
     if (!selectedCode) {
       setErrors({ category: 'Elegí el tipo de vehículo.' });
+      return;
+    }
+    if (vehicleQuery.trim() !== vehicleName) {
+      setErrors({
+        vehicle: 'Elegí una opción de la lista o borrá el texto.',
+      });
       return;
     }
     const draft: VehicleDraft = {
@@ -142,207 +149,188 @@ export function VehicleFormModal({
       transparent
       animationType="fade"
       onRequestClose={() => {
-        // El atrás de Android primero cierra el buscador o el desplegable.
-        if (picking) {
-          setPicking(false);
-          return;
-        }
+        // El atrás de Android primero cierra el desplegable abierto.
         if (floating.current?.dismiss()) return;
         onCancel();
       }}
     >
-      {picking ? (
-        <VehicleCatalogPicker
-          loadCatalog={loadCatalog}
-          hasValue={vehicleName.length > 0}
-          onSelect={handlePick}
-          onClear={() => {
-            setBrand('');
-            setModel('');
-            setPicking(false);
-          }}
-          onClose={() => {
-            setPicking(false);
-          }}
-        />
-      ) : (
-        <FloatingLayerHost ref={floating}>
-          <KeyboardAvoidingView
-            style={styles.backdrop}
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          >
-            <View style={styles.dialog} accessibilityViewIsModal>
-              <ScrollView
-                contentContainerStyle={styles.content}
-                keyboardShouldPersistTaps="handled"
-              >
-                <Text style={styles.title}>
-                  {isNew ? 'Agregar vehículo' : 'Editar vehículo'}
-                </Text>
+      <FloatingLayerHost ref={floating}>
+        <KeyboardAvoidingView
+          style={styles.backdrop}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
+          <View style={styles.dialog} accessibilityViewIsModal>
+            <ScrollView
+              ref={scroll}
+              contentContainerStyle={styles.content}
+              keyboardShouldPersistTaps="handled"
+            >
+              <Text style={styles.title}>
+                {isNew ? 'Agregar vehículo' : 'Editar vehículo'}
+              </Text>
 
-                <View style={styles.field}>
-                  <Text style={styles.label}>Patente</Text>
-                  <TextInput
-                    style={[
-                      styles.input,
-                      errors.plate && styles.inputError,
-                      lockedByReservation && styles.inputLocked,
-                    ]}
-                    editable={!lockedByReservation}
-                    value={plate}
-                    onChangeText={(value) => {
-                      setPlate(value.toUpperCase());
-                      if (errors.plate) setErrors({});
-                    }}
-                    placeholder="AB 123 CD"
-                    placeholderTextColor={driverColors.disabled}
-                    autoCapitalize="characters"
-                    autoCorrect={false}
-                    maxLength={10}
-                    accessibilityLabel="Patente"
-                  />
-                  {errors.plate ? (
-                    <Text style={styles.errorText}>{errors.plate}</Text>
-                  ) : isNew ? (
-                    <Text style={styles.fieldHint}>
-                      Es la patente que lee la cámara al entrar. Revisá que esté
-                      bien.
-                    </Text>
-                  ) : null}
-                </View>
-
-                <View style={styles.field}>
-                  <Text style={styles.label}>Tipo</Text>
-                  <FloatingSelect
-                    label="Tipo"
-                    value={selectedOption?.code ?? null}
-                    options={categories.map((option) => ({
-                      value: option.code,
-                      label: option.label,
-                      icon: vehicleIconName(option.code),
-                    }))}
-                    onChange={(code) => {
-                      setCategory(code);
-                      if (errors.category) setErrors({});
-                    }}
-                    placeholder="Elegí un tipo"
-                    disabled={lockedByReservation}
-                    invalid={Boolean(errors.category)}
-                    testID="vehicle-kind"
-                  />
-                  {errors.category ? (
-                    <Text style={styles.errorText}>{errors.category}</Text>
-                  ) : null}
-                </View>
-
-                <View style={styles.field}>
-                  <Text style={styles.label}>Marca y modelo (opcional)</Text>
-                  <Pressable
-                    style={({ pressed }) => [
-                      styles.input,
-                      styles.pickerField,
-                      pressed && styles.pressed,
-                    ]}
-                    onPress={() => {
-                      floating.current?.dismiss();
-                      setPicking(true);
-                    }}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Marca y modelo: ${vehicleName || 'sin elegir'}`}
-                    accessibilityHint="Abre el buscador de vehículos"
-                    testID="vehicle-catalog-field"
-                  >
-                    <Text
-                      style={[
-                        styles.pickerValue,
-                        !vehicleName && styles.pickerPlaceholder,
-                      ]}
-                      numberOfLines={1}
-                    >
-                      {vehicleName || 'Buscá tu vehículo'}
-                    </Text>
-                    <DriverIcon
-                      name="search"
-                      size={20}
-                      color={driverColors.textMuted}
-                    />
-                  </Pressable>
-                </View>
-
-                <View style={styles.primaryRow}>
-                  <View style={styles.primaryCopy}>
-                    <Text style={styles.primaryTitle}>Vehículo principal</Text>
-                    <Text style={styles.primaryHint}>
-                      {primaryLocked && !isNew
-                        ? 'Para cambiarlo, marcá otro vehículo como principal.'
-                        : 'Se elige por defecto al reservar.'}
-                    </Text>
-                  </View>
-                  <Switch
-                    value={makePrimary}
-                    onValueChange={setMakePrimary}
-                    disabled={primaryLocked}
-                    trackColor={{ true: driverColors.brand }}
-                    accessibilityLabel="Vehículo principal"
-                  />
-                </View>
-
-                <View style={styles.actions}>
-                  <Pressable
-                    style={({ pressed }) => [
-                      styles.secondaryButton,
-                      pressed && styles.pressed,
-                    ]}
-                    onPress={onCancel}
-                    accessibilityRole="button"
-                  >
-                    <Text style={styles.secondaryText}>Cancelar</Text>
-                  </Pressable>
-                  <Pressable
-                    style={({ pressed }) => [
-                      styles.primaryButton,
-                      saving && styles.buttonDisabled,
-                      pressed && styles.pressed,
-                    ]}
-                    onPress={handleSave}
-                    disabled={saving}
-                    accessibilityRole="button"
-                    accessibilityState={{ disabled: saving, busy: saving }}
-                  >
-                    <Text style={styles.primaryText}>
-                      {saving ? 'Guardando...' : 'Guardar'}
-                    </Text>
-                  </Pressable>
-                </View>
-
-                {lockedByReservation ? (
-                  <View style={styles.lockNotice}>
-                    <Text style={styles.lockNoticeText}>
-                      Este vehículo tiene una reserva activa: hasta que termine
-                      no podés cambiar la patente ni el tipo, ni eliminarlo.
-                    </Text>
-                  </View>
-                ) : vehicle ? (
-                  <Pressable
-                    style={({ pressed }) => [
-                      styles.deleteButton,
-                      pressed && styles.pressed,
-                    ]}
-                    onPress={() => {
-                      confirmDelete(vehicle);
-                    }}
-                    disabled={saving}
-                    accessibilityRole="button"
-                    accessibilityState={{ disabled: saving }}
-                  >
-                    <Text style={styles.deleteText}>Eliminar vehículo</Text>
-                  </Pressable>
+              <View style={styles.field}>
+                <Text style={styles.label}>Patente</Text>
+                <TextInput
+                  style={[
+                    styles.input,
+                    errors.plate && styles.inputError,
+                    lockedByReservation && styles.inputLocked,
+                  ]}
+                  editable={!lockedByReservation}
+                  value={plate}
+                  onChangeText={(value) => {
+                    setPlate(value.toUpperCase());
+                    if (errors.plate) setErrors({});
+                  }}
+                  placeholder="AB 123 CD"
+                  placeholderTextColor={driverColors.disabled}
+                  autoCapitalize="characters"
+                  autoCorrect={false}
+                  maxLength={10}
+                  accessibilityLabel="Patente"
+                />
+                {errors.plate ? (
+                  <Text style={styles.errorText}>{errors.plate}</Text>
+                ) : isNew ? (
+                  <Text style={styles.fieldHint}>
+                    Es la patente que lee la cámara al entrar. Revisá que esté
+                    bien.
+                  </Text>
                 ) : null}
-              </ScrollView>
-            </View>
-          </KeyboardAvoidingView>
-        </FloatingLayerHost>
-      )}
+              </View>
+
+              <View style={styles.field}>
+                <Text style={styles.label}>Tipo</Text>
+                <FloatingSelect
+                  label="Tipo"
+                  value={selectedOption?.code ?? null}
+                  options={categories.map((option) => ({
+                    value: option.code,
+                    label: option.label,
+                    icon: vehicleIconName(option.code),
+                  }))}
+                  onChange={(code) => {
+                    setCategory(code);
+                    if (errors.category) setErrors({});
+                  }}
+                  placeholder="Elegí un tipo"
+                  disabled={lockedByReservation}
+                  invalid={Boolean(errors.category)}
+                  testID="vehicle-kind"
+                />
+                {errors.category ? (
+                  <Text style={styles.errorText}>{errors.category}</Text>
+                ) : null}
+              </View>
+
+              <View
+                style={styles.field}
+                onLayout={(event) => {
+                  vehicleFieldY.current = event.nativeEvent.layout.y;
+                }}
+              >
+                <Text style={styles.label}>Marca y modelo (opcional)</Text>
+                <VehicleCatalogField
+                  query={vehicleQuery}
+                  onQueryChange={(value) => {
+                    setVehicleQuery(value);
+                    if (errors.vehicle) setErrors({});
+                  }}
+                  selectedLabel={vehicleName}
+                  onSelect={handleVehicleSelect}
+                  loadCatalog={loadCatalog}
+                  invalid={Boolean(errors.vehicle)}
+                  onFocus={() => {
+                    floating.current?.dismiss();
+                    // Sube el campo para que las opciones queden a la vista
+                    // con el teclado abierto.
+                    setTimeout(() => {
+                      scroll.current?.scrollTo({
+                        y: vehicleFieldY.current,
+                        animated: true,
+                      });
+                    }, 250);
+                  }}
+                />
+                {errors.vehicle ? (
+                  <Text style={styles.errorText}>{errors.vehicle}</Text>
+                ) : null}
+              </View>
+
+              <View style={styles.primaryRow}>
+                <View style={styles.primaryCopy}>
+                  <Text style={styles.primaryTitle}>Vehículo principal</Text>
+                  <Text style={styles.primaryHint}>
+                    {primaryLocked && !isNew
+                      ? 'Para cambiarlo, marcá otro vehículo como principal.'
+                      : 'Se elige por defecto al reservar.'}
+                  </Text>
+                </View>
+                <Switch
+                  value={makePrimary}
+                  onValueChange={setMakePrimary}
+                  disabled={primaryLocked}
+                  trackColor={{ true: driverColors.brand }}
+                  accessibilityLabel="Vehículo principal"
+                />
+              </View>
+
+              <View style={styles.actions}>
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.secondaryButton,
+                    pressed && styles.pressed,
+                  ]}
+                  onPress={onCancel}
+                  accessibilityRole="button"
+                >
+                  <Text style={styles.secondaryText}>Cancelar</Text>
+                </Pressable>
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.primaryButton,
+                    saving && styles.buttonDisabled,
+                    pressed && styles.pressed,
+                  ]}
+                  onPress={handleSave}
+                  disabled={saving}
+                  accessibilityRole="button"
+                  accessibilityState={{ disabled: saving, busy: saving }}
+                >
+                  <Text style={styles.primaryText}>
+                    {saving ? 'Guardando...' : 'Guardar'}
+                  </Text>
+                </Pressable>
+              </View>
+
+              {lockedByReservation ? (
+                <View style={styles.lockNotice}>
+                  <Text style={styles.lockNoticeText}>
+                    Este vehículo tiene una reserva activa: hasta que termine no
+                    podés cambiar la patente ni el tipo, ni eliminarlo.
+                  </Text>
+                </View>
+              ) : vehicle ? (
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.deleteButton,
+                    pressed && styles.pressed,
+                  ]}
+                  onPress={() => {
+                    confirmDelete(vehicle);
+                  }}
+                  disabled={saving}
+                  accessibilityRole="button"
+                  accessibilityState={{ disabled: saving }}
+                >
+                  <Text style={styles.deleteText}>Eliminar vehículo</Text>
+                </Pressable>
+              ) : null}
+            </ScrollView>
+          </View>
+        </KeyboardAvoidingView>
+      </FloatingLayerHost>
     </Modal>
   );
 }
@@ -417,20 +405,6 @@ const styles = StyleSheet.create({
   },
   chevronOpen: {
     transform: [{ rotate: '180deg' }],
-  },
-  pickerField: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: driverSpacing.sm,
-  },
-  pickerValue: {
-    flex: 1,
-    minWidth: 0,
-    color: driverColors.text,
-    fontSize: 15,
-  },
-  pickerPlaceholder: {
-    color: driverColors.disabled,
   },
   primaryRow: {
     flexDirection: 'row',
