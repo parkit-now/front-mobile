@@ -32,7 +32,7 @@ El principio de experiencia es:
 | Prioridad de QA     | Android como plataforma principal de validacion              |
 | Entrada principal   | Buscar un destino, direccion o lugar                         |
 | Entrada alternativa | Buscar estacionamientos cerca de la ubicacion actual         |
-| Mapa                | Mostrarlo despues de que el usuario exprese intencion        |
+| Mapa                | Se abre al tocar el buscador del inicio, sin exigir destino  |
 | Proveedor           | Google Maps en Android e iOS                                 |
 | Autocomplete        | Google Places API (New), restringida y sesgada a CABA        |
 | Resultados          | Mostrar exclusivamente estacionamientos operados por Parkit  |
@@ -46,25 +46,52 @@ El principio de experiencia es:
 ```mermaid
 stateDiagram-v2
   [*] --> Home
-  Home --> Search: Tocar "A donde vas?"
-  Home --> MapResults: Tocar "Cerca mio"
-  Search --> MapResults: Elegir destino
-  Search --> Home: Volver
-  MapResults --> Search: Cambiar destino
-  MapResults --> MapResults: Buscar en esta zona
-  MapResults --> ParkingDetail: Elegir pin o resultado
-  ParkingDetail --> MapResults: Volver
+  Home --> Mapa: Tocar "A donde vas?"
+  Home --> Mapa: Tocar "Cerca mio" o un destino reciente
+  Home --> ParkingDetail: Elegir una cochera sugerida
+  Mapa --> Search: Tocar el buscador
+  Search --> Mapa: Elegir destino o volver
+  Mapa --> Mapa: Buscar en esta zona / mi ubicacion
+  Mapa --> ParkingDetail: Elegir pin o resultado
+  Mapa --> Home: Volver
+  ParkingDetail --> Mapa: Volver
 ```
 
 ### Estado 1: Home
 
-- Buscador `¿A donde vas?` como accion visual principal.
+- Buscador `¿A donde vas?` como accion visual principal: abre el mapa.
 - Acceso `Estacionar cerca mio`.
-- Hasta tres destinos recientes cuando existan.
+- Destinos recientes cuando existan.
+- Hasta tres cocheras sugeridas: las mas cercanas al conductor si ya dio
+  permiso de ubicacion, o las del centro de CABA si no.
 - No solicitar permiso de ubicacion al iniciar la app.
 - No renderizar un mapa interactivo detras del contenido.
 
-### Estado 2: Busqueda
+### Estado 2: Mapa
+
+Tocar el buscador del inicio abre el mapa sin exigir un destino
+(`MapResultsScreen`; el destino es un parametro opcional).
+
+- Mapa a pantalla completa con las cocheras Parkit de la zona.
+- Buscador `¿A donde vas?` flotando arriba; con un destino elegido muestra su
+  nombre. Tocarlo abre la pantalla de busqueda.
+- Hoja inferior con la cochera mas cercana y el resto de los resultados.
+- Boton de ubicacion sobre la hoja: centra el mapa en el conductor y es el
+  unico punto donde el mapa pide el permiso.
+- Sin destino el mapa arranca en el conductor si el permiso ya fue otorgado;
+  si no, o si esta fuera de la cobertura, en el centro de CABA.
+
+#### Cambio respecto de la primera version
+
+En la primera version el buscador del inicio llevaba directo a la pantalla de
+escribir, y el mapa aparecia recien despues de elegir un destino. Se cambio
+porque la busqueda solo reconoce direcciones de CABA (no lugares como
+"Monumental"): quien no conocia la direccion exacta no tenia como avanzar, y el
+inicio no mostraba ninguna cochera. Ahora el mapa se abre primero, el conductor
+puede moverse hasta la zona y usar `Buscar en esta zona`, y el inicio sugiere
+cocheras sin necesidad de buscar.
+
+### Estado 3: Busqueda
 
 - Pantalla dedicada con autofocus y teclado abierto.
 - Sugerencias de destinos de CABA con nombre y direccion secundaria.
@@ -73,7 +100,7 @@ stateDiagram-v2
 - Estados explicitos de cargando, sin resultados y error recuperable.
 - El mapa no compite visualmente con las sugerencias mientras se escribe.
 
-### Estado 3: Mapa con resultados
+### Estado 4: Mapa con un destino elegido
 
 - Mapa como superficie principal, centrado en destino o ubicacion actual.
 - Marcador distinto para destino y estacionamientos Parkit.
