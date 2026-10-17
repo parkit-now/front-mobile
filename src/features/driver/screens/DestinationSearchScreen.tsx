@@ -1,5 +1,5 @@
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import {
   FlatList,
   Keyboard,
@@ -19,6 +19,7 @@ import { useRecentDestinations } from '../hooks/useRecentDestinations';
 import { useCurrentLocation } from '../hooks/useCurrentLocation';
 import { useDestinationSearch } from '../hooks/useDestinationSearch';
 import type { DiscoveryStackParamList } from '../navigation';
+import { buildSearchRows } from '../searchRows';
 import { driverColors, driverRadius, driverSpacing } from '../theme';
 
 type Props = NativeStackScreenProps<
@@ -29,6 +30,7 @@ type Props = NativeStackScreenProps<
 export function DestinationSearchScreen({ navigation }: Props) {
   const insets = useSafeAreaInsets();
   const [query, setQuery] = useState('');
+  const inputRef = useRef<TextInput>(null);
   const currentLocation = useCurrentLocation();
   const { accessToken } = useDriverData();
   const { recents, remember } = useRecentDestinations();
@@ -36,7 +38,13 @@ export function DestinationSearchScreen({ navigation }: Props) {
   const hasQuery = query.trim().length >= 3;
   const hasError = search.status === 'error';
   const showingResults = hasQuery && !hasError;
-  const visibleDestinations = showingResults ? search.results : recents;
+  const rows = buildSearchRows({
+    query,
+    showingResults,
+    places: search.places,
+    addresses: search.results,
+    recents,
+  });
   const visibleParkings = showingResults ? search.parkings : [];
 
   function selectParking(parking: ParkingLot) {
@@ -51,10 +59,17 @@ export function DestinationSearchScreen({ navigation }: Props) {
     navigation.navigate('ParkingDetails', { parking });
   }
 
+  // Una calle sin altura no es un destino: se completa el buscador para que el
+  // conductor agregue la altura.
+  function completeStreet(street: SearchDestination) {
+    setQuery(`${street.name} `);
+    inputRef.current?.focus();
+  }
+
   function selectDestination(destination: SearchDestination) {
     Keyboard.dismiss();
     remember(destination);
-    navigation.replace('MapResults', { destination });
+    navigation.popTo('MapResults', { destination });
   }
 
   async function selectCurrentLocation() {
@@ -80,6 +95,7 @@ export function DestinationSearchScreen({ navigation }: Props) {
           <View style={styles.inputWrap}>
             <DriverIcon name="search" size={19} color={driverColors.brand} />
             <TextInput
+              ref={inputRef}
               autoFocus
               value={query}
               onChangeText={setQuery}
@@ -112,8 +128,8 @@ export function DestinationSearchScreen({ navigation }: Props) {
           </View>
         ) : (
           <FlatList
-            data={visibleDestinations}
-            keyExtractor={(destination) => destination.id}
+            data={rows}
+            keyExtractor={(row) => row.key}
             keyboardShouldPersistTaps="handled"
             ListHeaderComponent={
               <>
@@ -202,41 +218,47 @@ export function DestinationSearchScreen({ navigation }: Props) {
                     ))}
                   </>
                 ) : null}
-                {showingResults && visibleDestinations.length > 0 ? (
-                  <Text style={styles.listLabel}>DIRECCIONES</Text>
-                ) : null}
-                {!showingResults && recents.length > 0 ? (
-                  <Text style={styles.listLabel}>DESTINOS RECIENTES</Text>
-                ) : null}
               </>
             }
-            renderItem={({ item }) => (
-              <Pressable
-                style={({ pressed }) => [
-                  styles.resultRow,
-                  pressed && styles.pressed,
-                ]}
-                onPress={() => {
-                  selectDestination(item);
-                }}
-                accessibilityRole="button"
-                accessibilityLabel={`${item.name}, ${item.address}`}
-              >
-                <View style={styles.rowIcon}>
-                  <DriverIcon
-                    name={showingResults ? 'pin' : 'clock'}
-                    size={18}
-                    color={driverColors.brand}
-                  />
-                </View>
-                <View style={styles.resultCopy}>
-                  <Text style={styles.resultName}>{item.name}</Text>
-                  <Text style={styles.resultAddress} numberOfLines={1}>
-                    {item.address}
-                  </Text>
-                </View>
-              </Pressable>
-            )}
+            renderItem={({ item: row }) =>
+              row.type === 'label' ? (
+                <Text style={styles.listLabel}>{row.text}</Text>
+              ) : (
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.resultRow,
+                    pressed && styles.pressed,
+                  ]}
+                  onPress={() => {
+                    if (row.destination.kind === 'street') {
+                      completeStreet(row.destination);
+                    } else {
+                      selectDestination(row.destination);
+                    }
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${row.destination.name}, ${row.destination.address}`}
+                >
+                  <View style={styles.rowIcon}>
+                    <DriverIcon
+                      name={showingResults ? 'pin' : 'clock'}
+                      size={18}
+                      color={driverColors.brand}
+                    />
+                  </View>
+                  <View style={styles.resultCopy}>
+                    <Text style={styles.resultName}>
+                      {row.destination.name}
+                    </Text>
+                    <Text style={styles.resultAddress} numberOfLines={1}>
+                      {row.destination.kind === 'street'
+                        ? `Agregá la altura · ${row.destination.address}`
+                        : row.destination.address}
+                    </Text>
+                  </View>
+                </Pressable>
+              )
+            }
             ListEmptyComponent={
               showingResults && visibleParkings.length === 0 ? (
                 <View style={styles.emptyState}>
@@ -249,23 +271,27 @@ export function DestinationSearchScreen({ navigation }: Props) {
                     Sin resultados para “{query.trim()}”
                   </Text>
                   <Text style={styles.emptyCopy}>
-                    Probá con el nombre de la calle y la altura, o con el nombre
-                    de un estacionamiento.
+                    Probá con la calle y la altura, el nombre de un lugar o de
+                    un estacionamiento.
                   </Text>
                   <Pressable
                     style={({ pressed }) => [
                       styles.emptyAction,
                       pressed && styles.pressed,
                     ]}
+                    // "Usar mi ubicación actual" ya está arriba; la salida que
+                    // falta es ir a la zona moviendo el mapa.
                     onPress={() => {
-                      void selectCurrentLocation();
+                      Keyboard.dismiss();
+                      navigation.popTo('MapResults', {
+                        destination: undefined,
+                      });
                     }}
-                    disabled={currentLocation.pending}
                     accessibilityRole="button"
                   >
-                    <DriverIcon name="current-location" size={19} />
+                    <DriverIcon name="pin" size={19} />
                     <Text style={styles.emptyActionText}>
-                      Estacionar cerca mío
+                      Buscar en el mapa
                     </Text>
                   </Pressable>
                 </View>

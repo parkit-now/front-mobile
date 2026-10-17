@@ -8,6 +8,7 @@ type SearchStatus = 'idle' | 'loading' | 'success' | 'error';
 
 type DestinationSearchState = {
   status: SearchStatus;
+  places: SearchDestination[];
   results: SearchDestination[];
   parkings: ParkingLot[];
   retry: () => void;
@@ -21,6 +22,7 @@ export function useDestinationSearch(
   coords?: Coordinate,
 ): DestinationSearchState {
   const [status, setStatus] = useState<SearchStatus>('idle');
+  const [places, setPlaces] = useState<SearchDestination[]>([]);
   const [results, setResults] = useState<SearchDestination[]>([]);
   const [parkings, setParkings] = useState<ParkingLot[]>([]);
   const [retryKey, setRetryKey] = useState(0);
@@ -30,6 +32,7 @@ export function useDestinationSearch(
   useEffect(() => {
     if (query.trim().length < 3) {
       setStatus('idle');
+      setPlaces([]);
       setResults([]);
       setParkings([]);
       return;
@@ -45,12 +48,14 @@ export function useDestinationSearch(
       void searchDestinationSuggestions(query, accessToken, point)
         .then((suggestions) => {
           if (!active) return;
+          setPlaces(suggestions.places);
           setResults(suggestions.addresses);
           setParkings(suggestions.parkings);
           setStatus('success');
         })
         .catch(() => {
           if (!active) return;
+          setPlaces([]);
           setResults([]);
           setParkings([]);
           setStatus('error');
@@ -67,5 +72,5 @@ export function useDestinationSearch(
     setRetryKey((current) => current + 1);
   }, []);
 
-  return { status, results, parkings, retry };
+  return { status, places, results, parkings, retry };
 }

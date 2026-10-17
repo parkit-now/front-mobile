@@ -32,9 +32,9 @@ El principio de experiencia es:
 | Prioridad de QA     | Android como plataforma principal de validacion              |
 | Entrada principal   | Buscar un destino, direccion o lugar                         |
 | Entrada alternativa | Buscar estacionamientos cerca de la ubicacion actual         |
-| Mapa                | Mostrarlo despues de que el usuario exprese intencion        |
+| Mapa                | Se abre al tocar el buscador del inicio, sin exigir destino  |
 | Proveedor           | Google Maps en Android e iOS                                 |
-| Autocomplete        | Google Places API (New), restringida y sesgada a CABA        |
+| Autocomplete        | Photon (lugares y barrios) + Georef (calles); ver abajo      |
 | Resultados          | Mostrar exclusivamente estacionamientos operados por Parkit  |
 | Ubicacion           | Solicitar solamente permiso foreground y de forma contextual |
 | Disponibilidad      | Informar disponibilidad actual, no prometer cupo futuro      |
@@ -46,25 +46,52 @@ El principio de experiencia es:
 ```mermaid
 stateDiagram-v2
   [*] --> Home
-  Home --> Search: Tocar "A donde vas?"
-  Home --> MapResults: Tocar "Cerca mio"
-  Search --> MapResults: Elegir destino
-  Search --> Home: Volver
-  MapResults --> Search: Cambiar destino
-  MapResults --> MapResults: Buscar en esta zona
-  MapResults --> ParkingDetail: Elegir pin o resultado
-  ParkingDetail --> MapResults: Volver
+  Home --> Mapa: Tocar "A donde vas?"
+  Home --> Mapa: Tocar "Cerca mio" o un destino reciente
+  Home --> ParkingDetail: Elegir una cochera sugerida
+  Mapa --> Search: Tocar el buscador
+  Search --> Mapa: Elegir destino o volver
+  Mapa --> Mapa: Buscar en esta zona / mi ubicacion
+  Mapa --> ParkingDetail: Elegir pin o resultado
+  Mapa --> Home: Volver
+  ParkingDetail --> Mapa: Volver
 ```
 
 ### Estado 1: Home
 
-- Buscador `¿A donde vas?` como accion visual principal.
+- Buscador `¿A donde vas?` como accion visual principal: abre el mapa.
 - Acceso `Estacionar cerca mio`.
-- Hasta tres destinos recientes cuando existan.
+- Destinos recientes cuando existan.
+- Hasta tres cocheras sugeridas: las mas cercanas al conductor si ya dio
+  permiso de ubicacion, o las del centro de CABA si no.
 - No solicitar permiso de ubicacion al iniciar la app.
 - No renderizar un mapa interactivo detras del contenido.
 
-### Estado 2: Busqueda
+### Estado 2: Mapa
+
+Tocar el buscador del inicio abre el mapa sin exigir un destino
+(`MapResultsScreen`; el destino es un parametro opcional).
+
+- Mapa a pantalla completa con las cocheras Parkit de la zona.
+- Buscador `¿A donde vas?` flotando arriba; con un destino elegido muestra su
+  nombre. Tocarlo abre la pantalla de busqueda.
+- Hoja inferior con la cochera mas cercana y el resto de los resultados.
+- Boton de ubicacion sobre la hoja: centra el mapa en el conductor y es el
+  unico punto donde el mapa pide el permiso.
+- Sin destino el mapa arranca en el conductor si el permiso ya fue otorgado;
+  si no, o si esta fuera de la cobertura, en el centro de CABA.
+
+#### Cambio respecto de la primera version
+
+En la primera version el buscador del inicio llevaba directo a la pantalla de
+escribir, y el mapa aparecia recien despues de elegir un destino. Se cambio
+porque la busqueda solo reconoce direcciones de CABA (no lugares como
+"Monumental"): quien no conocia la direccion exacta no tenia como avanzar, y el
+inicio no mostraba ninguna cochera. Ahora el mapa se abre primero, el conductor
+puede moverse hasta la zona y usar `Buscar en esta zona`, y el inicio sugiere
+cocheras sin necesidad de buscar.
+
+### Estado 3: Busqueda
 
 - Pantalla dedicada con autofocus y teclado abierto.
 - Sugerencias de destinos de CABA con nombre y direccion secundaria.
@@ -73,7 +100,7 @@ stateDiagram-v2
 - Estados explicitos de cargando, sin resultados y error recuperable.
 - El mapa no compite visualmente con las sugerencias mientras se escribe.
 
-### Estado 3: Mapa con resultados
+### Estado 4: Mapa con un destino elegido
 
 - Mapa como superficie principal, centrado en destino o ubicacion actual.
 - Marcador distinto para destino y estacionamientos Parkit.
@@ -112,16 +139,36 @@ stateDiagram-v2
 
 ```mermaid
 flowchart LR
-  Mobile[front-mobile] -->|Autocomplete / detalle| Gateway[Backend Parkit]
-  Mobile -->|Nearby parkings| Gateway
+  Mobile[front-mobile] -->|Lugares y barrios| Photon[Photon / OpenStreetMap]
+  Mobile -->|Calles, alturas, esquinas| Georef[Georef datos.gob.ar]
+  Mobile -->|Nearby parkings / busqueda por nombre| Gateway[Backend Parkit]
   Mobile -->|Mapa nativo| Maps[Google Maps SDK]
   Mobile -->|Foreground| Location[Ubicacion del dispositivo]
-  Gateway --> Places[Google Places / Geocoding]
   Gateway --> DB[(Supabase Postgres + PostGIS)]
 ```
 
-El backend actua como gateway de Places para proteger la credencial de web
-services, aplicar limites, observabilidad y devolver solo los campos necesarios.
+### Proveedores de busqueda
+
+Se descarto Google Places: se cobra por busqueda, y para un MVP sin ingresos
+no se justifica. La busqueda combina dos servicios gratuitos y sin clave, que
+la app consulta directo (no hay credencial que proteger):
+
+- **Georef** (datos.gob.ar): calles con altura y esquinas de CABA. No entiende
+  nombres de lugares ni barrios, y escribe los titulos abreviados ("Pte.",
+  "Gral."), asi que la consulta se normaliza antes de enviarla.
+- **Photon** (komoot, sobre OpenStreetMap): lugares y barrios por nombre
+  (hospitales, estadios, teatros, comercios). Se excluyen paradas, andenes,
+  bicicleteros, tumbas y placas, y lo que cae fuera de CABA.
+
+Si el texto parece una direccion (altura, esquina con "y" o empieza con
+"Av.") se muestran primero las direcciones; si no, los lugares. Una calle sin
+altura no es un destino: tocarla completa el buscador para agregar el numero.
+
+Limitacion conocida: el servidor publico de Photon es para uso moderado.
+Alcanza para el MVP y la demo; con trafico real habria que alojar una
+instancia propia o pasar a un proveedor pago. Su calidad depende de los datos
+de OpenStreetMap: por ejemplo, "La Bombonera" no aparece con ese nombre.
+
 Las credenciales nativas de Maps se separan por plataforma y ambiente.
 
 ## Contratos backend necesarios
@@ -196,8 +243,7 @@ Crear credenciales independientes:
 
 - Android: Maps SDK, restringida por package y certificado SHA-1.
 - iOS: Maps SDK, restringida por bundle identifier.
-- Backend: Places/Geocoding, guardada como secreto y restringida por API y por
-  origen de red cuando la infraestructura lo permita.
+- Busqueda: Photon y Georef no usan clave.
 
 Configurar billing, cuotas, presupuesto y alertas antes de una prueba publica.
 
@@ -208,7 +254,7 @@ Configurar billing, cuotas, presupuesto y alertas antes de una prueba publica.
 - Una negativa al permiso no bloquea la busqueda manual.
 - La ultima consulta siempre prevalece sobre respuestas anteriores.
 - Mover el mapa no dispara solicitudes continuas.
-- Un error de Places no elimina resultados Parkit ya visibles.
+- Un error de Photon o Georef no elimina los resultados de las otras fuentes.
 - Un error de estacionamientos permite reintentar sin perder el destino.
 - Pin y resultado seleccionado permanecen sincronizados.
 - Los textos y controles no quedan ocultos por teclado, notch o bottom sheet.
@@ -244,7 +290,8 @@ una politica explicita de privacidad y retencion.
 1. Completado: validar los tres estados de UX y sus transiciones.
 2. Parcial: package Android y bundle ID iOS definidos; proyectos GCP
    pendientes.
-3. Pendiente: probar calidad de Places con destinos representativos de CABA.
+3. Completado: probar Georef y Photon con destinos representativos de CABA
+   (direcciones, esquinas, barrios, hospitales, estadios, teatros).
 4. Pendiente: incorporar coordenadas e indice PostGIS en backend.
 5. Pendiente: publicar el contrato de descubrimiento y sincronizar tipos
    OpenAPI.
@@ -257,7 +304,8 @@ una politica explicita de privacidad y retencion.
 
 - [Expo MapView](https://docs.expo.dev/versions/latest/sdk/map-view/)
 - [Expo Location](https://docs.expo.dev/versions/latest/sdk/location/)
-- [Google Places Autocomplete](https://developers.google.com/maps/documentation/places/web-service/place-autocomplete)
+- [Photon](https://photon.komoot.io/)
+- [API Georef](https://datosgobar.github.io/georef-ar-api/)
 - [Google Maps API security](https://developers.google.com/maps/api-security-best-practices)
 - [Google Maps pricing](https://developers.google.com/maps/billing-and-pricing/pricing)
 - [Supabase PostGIS](https://supabase.com/docs/guides/database/extensions/postgis)

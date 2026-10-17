@@ -13,6 +13,7 @@ import type { MapPanelProps } from './MapPanel.types';
 
 const MAP_DELTA = 0.085;
 const REDRAW_DELAYS_MS = [50, 250, 600];
+const PIN_PRESS_WINDOW_MS = 1500;
 
 // En Android `showsPointsOfInterests` no alcanza: los íconos de Google
 // (hospitales, museos, comercios) compiten con los pines de Parkit. Se ocultan
@@ -32,62 +33,68 @@ const MAP_STYLE = [
 ];
 
 export function MapPanel({
+  center,
   destination,
   parkingLots,
   selectedParking,
   onSelect,
-  onMapMoved,
   onRegionChangeComplete,
 }: MapPanelProps) {
   const [ready, setReady] = useState(false);
-  const initializedRegion = useRef(false);
   const mapRef = useRef<MapView>(null);
   const markerRefs = useRef(new Map<string, MapMarker>());
 
+  // Al tocar un pin Android centra el mapa en él. Ese movimiento se informa
+  // como causado por el pin, para que la pantalla no lo tome como que el
+  // conductor corrió el mapa. Si el pin ya estaba centrado no hay movimiento:
+  // la marca vence sola para no tragarse el próximo gesto real.
+  const pinPressed = useRef(false);
+  const pinPressedTimer = useRef<ReturnType<typeof setTimeout>>();
+  function markPinPressed() {
+    pinPressed.current = true;
+    clearTimeout(pinPressedTimer.current);
+    pinPressedTimer.current = setTimeout(() => {
+      pinPressed.current = false;
+    }, PIN_PRESS_WINDOW_MS);
+  }
+  useEffect(
+    () => () => {
+      clearTimeout(pinPressedTimer.current);
+    },
+    [],
+  );
+
   // Android convierte cada pin en una imagen y sólo la regenera cuando cambia
   // su tamaño; el marco del pin es fijo (ver `pricePin`), así que un cambio de
-  // estilo (seleccionado, color) hay que pedirlo con `redraw()`. Con Fabric el
-  // estilo nuevo llega a la vista nativa un rato DESPUÉS del render de React:
-  // una sola foto temprana captura el estado viejo y los pines quedan
-  // mezclados. Se redibujan todos varias veces; la última siempre ve el
-  // estado final.
-  const selectedId = selectedParking?.id;
+  // datos (precio, color de disponibilidad) hay que pedirlo con `redraw()`. Con
+  // Fabric el estilo nuevo llega a la vista nativa un rato DESPUÉS del render
+  // de React: una sola foto temprana captura el estado viejo. Se redibujan
+  // todos varias veces; la última siempre ve el estado final.
+  // Solución de transición hasta actualizar react-native-maps (SCRUM-289).
+  //
+  // El pin seleccionado NO cambia de aspecto por la misma razón: al elegir
+  // varios seguidos el borde quedaba pegado en los anteriores. La cochera
+  // elegida se ve en la hoja de resultados y su pin pasa al frente (zIndex).
   const markersSignature = parkingLots
     .map(
       (parking) =>
         `${parking.id}:${parking.availableSpots}:${parking.hourlyPriceArs}`,
     )
     .join('|');
-  // Selección: sólo cambian dos pines (el que se deselecciona y el nuevo), así
-  // que se redibujan sólo esos y el costo no crece con la cantidad de pines.
-  // Datos (precio, disponibilidad): cambian poco, se redibujan todos.
-  // Solución de transición hasta actualizar react-native-maps (SCRUM-289).
-  const previousSelectedId = useRef<string | undefined>(undefined);
   useEffect(() => {
-    const ids = [previousSelectedId.current, selectedId].filter(
-      (id): id is string => Boolean(id),
-    );
-    previousSelectedId.current = selectedId;
-    return scheduleRedraw(ids);
-  }, [selectedId]);
-  useEffect(() => scheduleRedraw(null), [markersSignature]);
-
-  // null = todos los pines.
-  function scheduleRedraw(ids: string[] | null): () => void {
     const timers = REDRAW_DELAYS_MS.map((delay) =>
       setTimeout(() => {
-        const targets = ids
-          ? ids.map((id) => markerRefs.current.get(id))
-          : [...markerRefs.current.values()];
-        targets.forEach((marker) => marker?.redraw());
+        markerRefs.current.forEach((marker) => {
+          marker.redraw();
+        });
       }, delay),
     );
     return () => {
       timers.forEach(clearTimeout);
     };
-  }
+  }, [markersSignature]);
   const initialRegion: Region = {
-    ...destination.coordinate,
+    ...center,
     latitudeDelta: MAP_DELTA,
     longitudeDelta: MAP_DELTA,
   };
@@ -95,7 +102,7 @@ export function MapPanel({
   return (
     <View style={styles.stage} accessibilityLabel="Mapa de estacionamientos">
       <MapView
-        key={destination.id}
+        key={destination?.id ?? 'home'}
         ref={mapRef}
         style={StyleSheet.absoluteFill}
         initialRegion={initialRegion}
@@ -103,8 +110,6 @@ export function MapPanel({
         showsCompass={false}
         showsPointsOfInterests={false}
         customMapStyle={MAP_STYLE}
-        showsUserLocation={destination.kind === 'current-location'}
-        showsMyLocationButton={false}
         toolbarEnabled={false}
         pitchEnabled={false}
         onMapReady={() => {
@@ -115,33 +120,39 @@ export function MapPanel({
           setReady(true);
         }}
         onRegionChangeComplete={(region) => {
-          onRegionChangeComplete({
-            latitude: region.latitude,
-            longitude: region.longitude,
-          });
-          if (initializedRegion.current) {
-            onMapMoved();
-          } else {
-            initializedRegion.current = true;
-          }
+          const cause = pinPressed.current ? 'pin' : 'gesture';
+          pinPressed.current = false;
+          onRegionChangeComplete(
+            { latitude: region.latitude, longitude: region.longitude },
+            cause,
+          );
         }}
       >
-        <Marker
-          coordinate={destination.coordinate}
-          // Capas: pin seleccionado (3) > destino (2) > resto de pines (1).
-          // Centrado sobre su punto: los pines de precio apuntan con la colita.
-          zIndex={2}
-          anchor={{ x: 0.5, y: 0.5 }}
-          accessibilityLabel={
-            destination.kind === 'current-location'
-              ? 'Tu ubicación aproximada'
-              : `Destino: ${destination.name}`
-          }
-        >
-          <View style={styles.destinationMarker}>
-            <DriverIcon name="pin" size={17} color={driverColors.surface} />
-          </View>
-        </Marker>
+        {destination ? (
+          <Marker
+            coordinate={destination.coordinate}
+            // Capas: pin seleccionado (3) > destino (2) > resto de pines (1).
+            // Centrado sobre su punto: los pines de precio apuntan con la colita.
+            zIndex={2}
+            anchor={{ x: 0.5, y: 0.5 }}
+            accessibilityLabel={
+              destination.kind === 'current-location'
+                ? 'Tu ubicación aproximada'
+                : `Destino: ${destination.name}`
+            }
+          >
+            {/* La ubicación del conductor se dibuja acá y no con
+                `showsUserLocation`: en Android ese modo muestra además el botón
+                nativo de "mi ubicación", que con Fabric no se puede ocultar. */}
+            {destination.kind === 'current-location' ? (
+              <View style={styles.userMarker} />
+            ) : (
+              <View style={styles.destinationMarker}>
+                <DriverIcon name="pin" size={17} color={driverColors.surface} />
+              </View>
+            )}
+          </Marker>
+        ) : null}
 
         {parkingLots.map((parking) => {
           const selected = parking.id === selectedParking?.id;
@@ -154,7 +165,7 @@ export function MapPanel({
             <Marker
               // Key estable: cambiarla recrea el marker nativo y deja pins
               // rojos por defecto de Google huérfanos en el mapa. Los cambios
-              // de estilo se redibujan con `redraw()` (ver efecto arriba).
+              // de datos se redibujan con `redraw()` (ver efecto arriba).
               key={parking.id}
               ref={(marker) => {
                 if (marker) markerRefs.current.set(parking.id, marker);
@@ -164,6 +175,7 @@ export function MapPanel({
               anchor={{ x: 0.5, y: 1 }}
               zIndex={selected ? 3 : 1}
               onPress={() => {
+                markPinPressed();
                 onSelect(parking);
               }}
               accessibilityRole="button"
@@ -174,11 +186,7 @@ export function MapPanel({
                   colita que apunta a la ubicación (anchor abajo al centro). */}
               <View collapsable={false} style={styles.pricePin}>
                 <View
-                  style={[
-                    styles.pricePill,
-                    { backgroundColor: colors.marker },
-                    selected && styles.pricePillSelected,
-                  ]}
+                  style={[styles.pricePill, { backgroundColor: colors.marker }]}
                 >
                   <Text
                     style={[styles.pricePinText, { color: colors.markerText }]}
@@ -188,14 +196,7 @@ export function MapPanel({
                   </Text>
                 </View>
                 <View
-                  style={[
-                    styles.priceTail,
-                    {
-                      borderTopColor: selected
-                        ? driverColors.text
-                        : colors.marker,
-                    },
-                  ]}
+                  style={[styles.priceTail, { borderTopColor: colors.marker }]}
                 />
               </View>
             </Marker>
@@ -229,20 +230,24 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  // Marco FIJO del tamaño del pin seleccionado, igual en ambos estados. Android
-  // convierte el marker en una imagen; si el pin cambia de tamaño al
-  // seleccionarse, la imagen puede regenerarse antes del nuevo layout y quedar
-  // mezclada (píldora dentro de píldora, sin colita). Con el marco constante,
-  // la imagen nunca cambia de dimensiones: sólo cambia lo de adentro.
+  userMarker: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 3,
+    borderColor: driverColors.surface,
+    backgroundColor: driverColors.brand,
+  },
+  // Marco de tamaño FIJO. Android convierte el marker en una imagen; si el pin
+  // cambiara de tamaño (por ejemplo, con un precio más largo), la imagen puede
+  // regenerarse antes del nuevo layout y quedar mezclada. Con el marco
+  // constante la imagen nunca cambia de dimensiones: sólo cambia lo de adentro.
   pricePin: {
     width: 96,
     height: 44,
     alignItems: 'center',
     justifyContent: 'flex-end',
   },
-  // Misma geometría en ambos estados (tamaño, borde, texto): al redibujar,
-  // Android puede dejar restos del estado anterior, y si el nuevo dibujo lo
-  // tapa píxel por píxel no se ven. La selección cambia sólo colores.
   pricePill: {
     minWidth: 68,
     height: 32,
@@ -252,9 +257,6 @@ const styles = StyleSheet.create({
     borderColor: driverColors.surface,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  pricePillSelected: {
-    borderColor: driverColors.text,
   },
   priceTail: {
     width: 0,

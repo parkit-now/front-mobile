@@ -1,6 +1,7 @@
+import { useEffect } from 'react';
 import {
+  BackHandler,
   Linking,
-  Modal,
   Pressable,
   StyleSheet,
   Text,
@@ -45,13 +46,29 @@ export function LocationIssueModal({
   const shouldOpenSettings =
     issue?.kind === 'services-disabled' || issue?.canAskAgain === false;
 
+  const open = issue !== null;
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const subscription = BackHandler.addEventListener(
+      'hardwareBackPress',
+      () => {
+        onClose();
+        return true;
+      },
+    );
+    return () => {
+      subscription.remove();
+    };
+  }, [onClose, open]);
+
+  if (!open) return null;
+
+  // Capa absoluta de la pantalla, no <Modal>: sobre el mapa (mapa +
+  // @gorhom/bottom-sheet, RN 0.76 con Fabric) el Modal nativo de Android se
+  // abre sin tamaño. Mismo criterio que OverlaySheet.
   return (
-    <Modal
-      visible={issue !== null}
-      transparent
-      animationType="fade"
-      onRequestClose={onClose}
-    >
+    <View style={styles.root}>
       <View style={styles.backdrop}>
         <View style={styles.dialog} accessibilityViewIsModal>
           <View style={styles.icon}>
@@ -102,11 +119,18 @@ export function LocationIssueModal({
           </View>
         </View>
       </View>
-    </Modal>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  // La elevación va en un contenedor sin fondo: sobre el fondo translúcido
+  // Android dibuja la sombra y oscurece el centro más que los bordes.
+  root: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 10,
+    elevation: 24,
+  },
   backdrop: {
     flex: 1,
     padding: driverSpacing.lg,

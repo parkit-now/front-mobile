@@ -9,15 +9,27 @@ import {
   Text,
   View,
 } from 'react-native';
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+} from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useToast } from '../../../lib/notifications/ToastProvider';
 import { availabilityLabel, availabilityLevel } from '../availability';
 import { DriverIcon } from '../components/DriverIcon';
+import { LocationIssueModal } from '../components/LocationIssueModal';
 import { MapPanel } from '../components/MapPanel';
 import { formatArs, PriceFilterSheet } from '../components/PriceFilterSheet';
-import type { Coordinate } from '../geo';
+import {
+  DEFAULT_DISCOVERY_CENTER,
+  isSearchedDestination,
+  type SearchDestination,
+} from '../discovery';
+import { calculateDistanceMeters, type Coordinate } from '../geo';
+import { useCurrentLocation } from '../hooks/useCurrentLocation';
 import { useDriverData } from '../hooks/useDriverData';
 import { useNearbyParkings } from '../hooks/useNearbyParkings';
+import { useStartLocation } from '../hooks/useStartLocation';
 import type { ParkingLot } from '../mock';
 import type { DiscoveryStackParamList } from '../navigation';
 import { filterMapParkingLots, priceSliderBounds } from '../selectors';
@@ -32,10 +44,100 @@ import {
 
 type Props = NativeStackScreenProps<DiscoveryStackParamList, 'MapResults'>;
 
+/**
+ * Mapa con las cocheras Parkit, el buscador flotando arriba y los resultados
+ * en la hoja inferior. Sin destino se centra en el conductor si ya dio permiso
+ * de ubicación, o en el centro de CABA si no; el permiso sólo se pide cuando
+ * toca el botón de ubicación.
+ */
 export function MapResultsScreen({ navigation, route }: Props) {
+  const currentLocation = useCurrentLocation();
+  const startLocation = useStartLocation();
+  // Ubicación pedida con el botón del mapa; pisa a la de arranque.
+  const [locatedAt, setLocatedAt] = useState<SearchDestination | null>(null);
+  // Volver a tocar "mi ubicación" tiene que recentrar aunque el destino no
+  // cambie; el mapa se recentra remontándose, así que se cambia su key.
+  const [recenterCount, setRecenterCount] = useState(0);
+
+  const destination = route.params?.destination;
+  const searched = isSearchedDestination(destination);
+  const focus = destination ?? locatedAt ?? startLocation.location;
+
+  async function locate() {
+    const location = await currentLocation.request();
+    if (!location) return;
+    setLocatedAt(location);
+    setRecenterCount((count) => count + 1);
+    navigation.setParams({ destination: undefined });
+  }
+
+  // Hasta saber si hay una ubicación ya permitida no se monta el mapa: evita
+  // que arranque en el Obelisco y salte a la posición real un instante después.
+  if (!startLocation.checked && !destination) {
+    return <View style={styles.page} />;
+  }
+
+  return (
+    <>
+      <DiscoveryMap
+        key={`${focus?.id ?? 'home'}:${recenterCount}`}
+        focus={focus}
+        searched={searched}
+        locating={currentLocation.pending}
+        onSearch={() => {
+          navigation.navigate('DestinationSearch');
+        }}
+        onBack={navigation.goBack}
+        onLocate={() => {
+          void locate();
+        }}
+        onOpenParking={(parking) => {
+          navigation.navigate('ParkingDetails', { parking });
+        }}
+      />
+      <LocationIssueModal
+        issue={currentLocation.issue}
+        pending={currentLocation.pending}
+        onClose={currentLocation.clearIssue}
+        onRetry={() => {
+          void locate();
+        }}
+      />
+    </>
+  );
+}
+
+// Cuánto hay que correr el mapa para que valga la pena buscar de nuevo.
+const SEARCH_AREA_MIN_DISTANCE_METERS = 300;
+
+// Alto del botón de ubicación más el aire que lo separa de la hoja.
+const LOCATE_BUTTON_OFFSET = 60;
+
+type DiscoveryMapProps = {
+  focus: SearchDestination | null;
+  searched: boolean;
+  locating: boolean;
+  onSearch: () => void;
+  onBack: () => void;
+  onLocate: () => void;
+  onOpenParking: (parking: ParkingLot) => void;
+};
+
+// Cada destino (o recentrado) monta un mapa nuevo: el centro de búsqueda, la
+// selección y los filtros arrancan de cero.
+function DiscoveryMap({
+  focus,
+  searched,
+  locating,
+  onSearch,
+  onBack,
+  onLocate,
+  onOpenParking,
+}: DiscoveryMapProps) {
   const insets = useSafeAreaInsets();
   const { showToast } = useToast();
   const { accessToken } = useDriverData();
+  const center = focus?.coordinate ?? DEFAULT_DISCOVERY_CENTER;
   const [availableOnly, setAvailableOnly] = useState(false);
   const [maxHourlyPriceArs, setMaxHourlyPriceArs] = useState<number | null>(
     null,
@@ -43,19 +145,36 @@ export function MapResultsScreen({ navigation, route }: Props) {
   // Sin selección explícita se destaca la primera según el orden actual (la
   // más cercana al destino por defecto).
   const [selectedParkingId, setSelectedParkingId] = useState<string>();
-  const [mapMoved, setMapMoved] = useState(false);
-  const [searchCenter, setSearchCenter] = useState<Coordinate>(
-    route.params.destination.coordinate,
-  );
-  const [visibleRegionCenter, setVisibleRegionCenter] = useState<Coordinate>(
-    route.params.destination.coordinate,
-  );
+  const [searchCenter, setSearchCenter] = useState<Coordinate>(center);
+  const [visibleRegionCenter, setVisibleRegionCenter] =
+    useState<Coordinate>(center);
+  // Cuánto se corrió el mapa por centrarse en los pines tocados: ese
+  // desplazamiento no cuenta como que el conductor cambió de zona.
+  const [pinShift, setPinShift] = useState({ latitude: 0, longitude: 0 });
+  // Se ofrece buscar en la zona sólo si el conductor llevó el mapa lejos de la
+  // última búsqueda. Comparar posiciones, y no contar eventos del mapa, evita
+  // que el botón aparezca solo: al montarse el mapa informa su región más de
+  // una vez.
+  const mapMoved =
+    calculateDistanceMeters(
+      {
+        latitude: visibleRegionCenter.latitude - pinShift.latitude,
+        longitude: visibleRegionCenter.longitude - pinShift.longitude,
+      },
+      searchCenter,
+    ) > SEARCH_AREA_MIN_DISTANCE_METERS;
   const [updatedAt, setUpdatedAt] = useState(() => new Date());
   const updatedTime = updatedAt.toLocaleTimeString('es-AR', {
     hour: '2-digit',
     minute: '2-digit',
   });
   const sheetSnapPoints = useMemo(() => ['34%', '58%'], []);
+  // Borde superior de la hoja de resultados, medido desde arriba de la
+  // pantalla: el botón de ubicación viaja pegado a ella.
+  const sheetTop = useSharedValue(0);
+  const locateButtonStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: sheetTop.value - LOCATE_BUTTON_OFFSET }],
+  }));
   const nearby = useNearbyParkings(searchCenter, accessToken);
   const showingNearest = false;
   const discoveredParkingLots = nearby.parkings;
@@ -101,16 +220,28 @@ export function MapResultsScreen({ navigation, route }: Props) {
   return (
     <View style={styles.page}>
       <MapPanel
-        destination={route.params.destination}
+        center={center}
+        destination={focus}
         parkingLots={parkingLots}
         selectedParking={selectedParking}
         onSelect={(parking) => {
           setSelectedParkingId(parking.id);
         }}
-        onMapMoved={() => {
-          setMapMoved(true);
+        onRegionChangeComplete={(coordinate, cause) => {
+          if (cause === 'pin') {
+            setPinShift((shift) => ({
+              latitude:
+                shift.latitude +
+                coordinate.latitude -
+                visibleRegionCenter.latitude,
+              longitude:
+                shift.longitude +
+                coordinate.longitude -
+                visibleRegionCenter.longitude,
+            }));
+          }
+          setVisibleRegionCenter(coordinate);
         }}
-        onRegionChangeComplete={setVisibleRegionCenter}
       />
 
       <View
@@ -122,7 +253,7 @@ export function MapResultsScreen({ navigation, route }: Props) {
               styles.backButton,
               pressed && styles.pressed,
             ]}
-            onPress={navigation.goBack}
+            onPress={onBack}
             accessibilityRole="button"
             accessibilityLabel="Volver"
           >
@@ -133,18 +264,28 @@ export function MapResultsScreen({ navigation, route }: Props) {
               styles.destinationButton,
               pressed && styles.pressed,
             ]}
-            onPress={() => {
-              navigation.replace('DestinationSearch');
-            }}
+            onPress={onSearch}
             accessibilityRole="button"
-            accessibilityLabel={`Cambiar destino, actual ${route.params.destination.name}`}
+            accessibilityLabel={
+              searched && focus
+                ? `Cambiar destino, actual ${focus.name}`
+                : 'Buscar destino'
+            }
           >
-            <Text style={styles.destinationName} numberOfLines={1}>
-              {route.params.destination.name}
-            </Text>
-            <Text style={styles.destinationHint} numberOfLines={1}>
-              Cocheras Parkit cerca de tu destino
-            </Text>
+            {searched && focus ? (
+              <>
+                <Text style={styles.destinationName} numberOfLines={1}>
+                  {focus.name}
+                </Text>
+                <Text style={styles.destinationHint} numberOfLines={1}>
+                  Cocheras Parkit cerca de tu destino
+                </Text>
+              </>
+            ) : (
+              <Text style={styles.searchPlaceholder} numberOfLines={1}>
+                ¿A dónde vas?
+              </Text>
+            )}
           </Pressable>
         </View>
 
@@ -228,7 +369,7 @@ export function MapResultsScreen({ navigation, route }: Props) {
             ]}
             onPress={() => {
               setSearchCenter(visibleRegionCenter);
-              setMapMoved(false);
+              setPinShift({ latitude: 0, longitude: 0 });
               setUpdatedAt(new Date());
               showToast({
                 message: 'Resultados actualizados en esta zona.',
@@ -243,8 +384,34 @@ export function MapResultsScreen({ navigation, route }: Props) {
         ) : null}
       </View>
 
+      <Animated.View style={[styles.locateButtonWrap, locateButtonStyle]}>
+        <Pressable
+          style={({ pressed }) => [
+            styles.locateButton,
+            locating && styles.disabled,
+            pressed && styles.pressed,
+          ]}
+          onPress={onLocate}
+          disabled={locating}
+          accessibilityRole="button"
+          accessibilityLabel="Centrar en mi ubicación"
+          accessibilityState={{ disabled: locating, busy: locating }}
+        >
+          {locating ? (
+            <ActivityIndicator color={driverColors.brand} />
+          ) : (
+            <DriverIcon
+              name="current-location"
+              size={22}
+              color={driverColors.text}
+            />
+          )}
+        </Pressable>
+      </Animated.View>
+
       <BottomSheet
         index={0}
+        animatedPosition={sheetTop}
         snapPoints={sheetSnapPoints}
         enablePanDownToClose={false}
         backgroundStyle={styles.sheetBackground}
@@ -268,9 +435,7 @@ export function MapResultsScreen({ navigation, route }: Props) {
                   void handleDirections(selectedParking);
                 }}
                 onDetails={() => {
-                  navigation.navigate('ParkingDetails', {
-                    parking: selectedParking,
-                  });
+                  onOpenParking(selectedParking);
                 }}
               />
               {parkingLots.length > 1 ? (
@@ -544,6 +709,29 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 5 },
     elevation: 4,
   },
+  searchPlaceholder: {
+    color: driverColors.textSecondary,
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  locateButtonWrap: {
+    position: 'absolute',
+    top: 0,
+    right: driverSpacing.sm,
+  },
+  locateButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: driverColors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: driverColors.text,
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 5 },
+    elevation: 4,
+  },
   backButton: {
     width: 48,
     height: 48,
@@ -805,4 +993,5 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   pressed: { opacity: 0.75 },
+  disabled: { opacity: 0.62 },
 });
