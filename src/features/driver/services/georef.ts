@@ -80,12 +80,24 @@ export function mapGeorefAddresses(
       address: [address.departamento?.nombre, 'CABA']
         .filter(Boolean)
         .join(', '),
-      kind: 'address',
+      kind: isWholeStreet(address.nomenclatura) ? 'street' : 'address',
       coordinate: { latitude: lat, longitude: lon },
     });
     if (destinations.length === MAX_RESULTS) break;
   }
   return destinations;
+}
+
+/**
+ * "AV SANTA FE, Comuna 2, …" es la calle entera: Georef la devuelve con la
+ * coordenada de un tramo cualquiera, que no sirve como destino. Con altura
+ * ("AV SANTA FE 3200") o esquina ("… (ESQUINA AV CALLAO)") es un punto.
+ */
+export function isWholeStreet(nomenclatura: string): boolean {
+  const [street] = nomenclatura.split(',');
+  // La altura es el número del final: "9 DE JULIO" tiene un número y es una
+  // calle entera.
+  return !/\s\d+$/.test(street.trim()) && !/\(ESQUINA\s/i.test(street);
 }
 
 /**

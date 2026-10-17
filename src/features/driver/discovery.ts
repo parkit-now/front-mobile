@@ -2,7 +2,11 @@ export type SearchDestination = {
   id: string;
   name: string;
   address: string;
-  kind: 'address' | 'place' | 'current-location';
+  /**
+   * `street`: una calle sin altura. No es un destino todavía: elegirla completa
+   * el buscador para que el conductor escriba la altura.
+   */
+  kind: 'address' | 'place' | 'street' | 'current-location';
   coordinate: {
     latitude: number;
     longitude: number;

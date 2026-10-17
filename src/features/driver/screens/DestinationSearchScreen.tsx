@@ -1,5 +1,5 @@
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import {
   FlatList,
   Keyboard,
@@ -30,6 +30,7 @@ type Props = NativeStackScreenProps<
 export function DestinationSearchScreen({ navigation }: Props) {
   const insets = useSafeAreaInsets();
   const [query, setQuery] = useState('');
+  const inputRef = useRef<TextInput>(null);
   const currentLocation = useCurrentLocation();
   const { accessToken } = useDriverData();
   const { recents, remember } = useRecentDestinations();
@@ -56,6 +57,13 @@ export function DestinationSearchScreen({ navigation }: Props) {
       coordinate: parking.coordinate,
     });
     navigation.navigate('ParkingDetails', { parking });
+  }
+
+  // Una calle sin altura no es un destino: se completa el buscador para que el
+  // conductor agregue la altura.
+  function completeStreet(street: SearchDestination) {
+    setQuery(`${street.name} `);
+    inputRef.current?.focus();
   }
 
   function selectDestination(destination: SearchDestination) {
@@ -87,6 +95,7 @@ export function DestinationSearchScreen({ navigation }: Props) {
           <View style={styles.inputWrap}>
             <DriverIcon name="search" size={19} color={driverColors.brand} />
             <TextInput
+              ref={inputRef}
               autoFocus
               value={query}
               onChangeText={setQuery}
@@ -221,7 +230,11 @@ export function DestinationSearchScreen({ navigation }: Props) {
                     pressed && styles.pressed,
                   ]}
                   onPress={() => {
-                    selectDestination(row.destination);
+                    if (row.destination.kind === 'street') {
+                      completeStreet(row.destination);
+                    } else {
+                      selectDestination(row.destination);
+                    }
                   }}
                   accessibilityRole="button"
                   accessibilityLabel={`${row.destination.name}, ${row.destination.address}`}
@@ -238,7 +251,9 @@ export function DestinationSearchScreen({ navigation }: Props) {
                       {row.destination.name}
                     </Text>
                     <Text style={styles.resultAddress} numberOfLines={1}>
-                      {row.destination.address}
+                      {row.destination.kind === 'street'
+                        ? `Agregá la altura · ${row.destination.address}`
+                        : row.destination.address}
                     </Text>
                   </View>
                 </Pressable>
