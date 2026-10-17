@@ -14,13 +14,16 @@ const TIMEOUT_MS = 6000;
 const CABA = 'Ciudad Autónoma de Buenos Aires';
 
 // Ruido que no es un destino: paradas, andenes y bicicleteros con el nombre
-// del lugar ("Hospital Garrahan" es también una parada de colectivo).
+// del lugar ("Hospital Garrahan" es también una parada de colectivo), y
+// tumbas y placas conmemorativas ("Juan Pedro Garrahan" en la Recoleta).
 const EXCLUDED_TAGS = [
   '!highway',
   '!public_transport',
   '!railway:stop',
   '!railway:platform',
   '!amenity:bicycle_rental',
+  '!historic:tomb',
+  '!historic:memorial',
 ];
 
 export type PhotonFeature = {
