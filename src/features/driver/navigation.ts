@@ -5,9 +5,8 @@ import type { ParkingLot } from './mock';
 export type DiscoveryStackParamList = {
   DiscoveryHome: undefined;
   DestinationSearch: undefined;
-  MapResults: {
-    destination: SearchDestination;
-  };
+  /** Sin destino el mapa se centra en el conductor o en el centro de CABA. */
+  MapResults: { destination?: SearchDestination } | undefined;
   ParkingDetails: {
     parking: ParkingLot;
   };
