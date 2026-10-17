@@ -19,7 +19,7 @@ export async function searchGeorefAddresses(
   query: string,
 ): Promise<SearchDestination[]> {
   const params = new URLSearchParams({
-    direccion: query,
+    direccion: normalizeGeorefQuery(query),
     provincia: CABA_PROVINCE_ID,
     max: '20',
     campos: 'nomenclatura,ubicacion,departamento.nombre',
@@ -38,6 +38,24 @@ export async function searchGeorefAddresses(
   } finally {
     clearTimeout(timeout);
   }
+}
+
+// Georef guarda los títulos abreviados ("AV PTE FIGUEROA ALCORTA") y no
+// encuentra la calle escrita completa ni con otra abreviatura ("Pres.").
+const TITLE_ABBREVIATIONS: [RegExp, string][] = [
+  [/\b(presidente|pres\.?)(?=\s)/gi, 'pte'],
+  [/\b(general|grl\.?)(?=\s)/gi, 'gral'],
+  [/\b(teniente)(?=\s)/gi, 'tte'],
+  [/\b(doctor)(?=\s)/gi, 'dr'],
+  [/\b(ingeniero)(?=\s)/gi, 'ing'],
+];
+
+/** "Av. Presidente Figueroa Alcorta 7597" → "Av. pte Figueroa Alcorta 7597". */
+export function normalizeGeorefQuery(query: string): string {
+  return TITLE_ABBREVIATIONS.reduce(
+    (text, [pattern, abbreviation]) => text.replace(pattern, abbreviation),
+    query.trim(),
+  );
 }
 
 /**

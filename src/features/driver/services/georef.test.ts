@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { georefName, mapGeorefAddresses } from './georef';
+import { georefName, mapGeorefAddresses, normalizeGeorefQuery } from './georef';
 
 vi.mock('../../../lib/api/client', () => ({ apiRequest: vi.fn() }));
 
@@ -35,5 +35,26 @@ describe('georef', () => {
         coordinate: { latitude: -34.54, longitude: -58.47 },
       },
     ]);
+  });
+
+  it('lleva los títulos a la abreviatura que entiende Georef', () => {
+    expect(normalizeGeorefQuery('Av. Pres. Figueroa Alcorta 7597')).toBe(
+      'Av. pte Figueroa Alcorta 7597',
+    );
+    expect(normalizeGeorefQuery('Presidente Roque Sáenz Peña 600')).toBe(
+      'pte Roque Sáenz Peña 600',
+    );
+    expect(normalizeGeorefQuery('General Paz 5000')).toBe('gral Paz 5000');
+    expect(normalizeGeorefQuery('Teniente General Perón 1500')).toBe(
+      'tte gral Perón 1500',
+    );
+    expect(normalizeGeorefQuery('Doctor Honorio Pueyrredón 1000')).toBe(
+      'dr Honorio Pueyrredón 1000',
+    );
+  });
+
+  it('no toca palabras que sólo empiezan igual', () => {
+    expect(normalizeGeorefQuery('Generalísimo 100')).toBe('Generalísimo 100');
+    expect(normalizeGeorefQuery('Corrientes 1234')).toBe('Corrientes 1234');
   });
 });
