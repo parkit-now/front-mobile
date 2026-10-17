@@ -54,7 +54,7 @@ export function DestinationSearchScreen({ navigation }: Props) {
   function selectDestination(destination: SearchDestination) {
     Keyboard.dismiss();
     remember(destination);
-    navigation.replace('MapResults', { destination });
+    navigation.popTo('MapResults', { destination });
   }
 
   async function selectCurrentLocation() {

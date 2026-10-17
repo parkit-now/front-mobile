@@ -12,9 +12,13 @@ import logo from '../../../../images/logo.jpeg';
 import { useToast } from '../../../lib/notifications/ToastProvider';
 import { DriverIcon } from '../components/DriverIcon';
 import { LocationIssueModal } from '../components/LocationIssueModal';
-import type { SearchDestination } from '../discovery';
+import { DEFAULT_DISCOVERY_CENTER, type SearchDestination } from '../discovery';
 import { useCurrentLocation } from '../hooks/useCurrentLocation';
+import { useDriverData } from '../hooks/useDriverData';
+import { useNearbyParkings } from '../hooks/useNearbyParkings';
 import { useRecentDestinations } from '../hooks/useRecentDestinations';
+import { useStartLocation } from '../hooks/useStartLocation';
+import type { ParkingLot } from '../mock';
 import type { DiscoveryStackParamList } from '../navigation';
 import {
   driverColors,
@@ -25,11 +29,14 @@ import {
 
 type Props = NativeStackScreenProps<DiscoveryStackParamList, 'DiscoveryHome'>;
 
+const MAX_HOME_PARKINGS = 3;
+
 export function DiscoveryHomeScreen({ navigation }: Props) {
   const insets = useSafeAreaInsets();
   const { showToast } = useToast();
   const currentLocation = useCurrentLocation();
   const { recents, remember } = useRecentDestinations();
+  const startLocation = useStartLocation();
 
   function openMap(destination: SearchDestination) {
     remember(destination);
@@ -85,7 +92,7 @@ export function DiscoveryHomeScreen({ navigation }: Props) {
               pressed && styles.pressed,
             ]}
             onPress={() => {
-              navigation.navigate('DestinationSearch');
+              navigation.navigate('MapResults');
             }}
             accessibilityRole="button"
             accessibilityLabel="Buscar destino"
@@ -158,6 +165,18 @@ export function DiscoveryHomeScreen({ navigation }: Props) {
           </View>
         ) : null}
 
+        {startLocation.checked ? (
+          <HomeParkings
+            nearUser={startLocation.location !== null}
+            center={
+              startLocation.location?.coordinate ?? DEFAULT_DISCOVERY_CENTER
+            }
+            onOpen={(parking) => {
+              navigation.navigate('ParkingDetails', { parking });
+            }}
+          />
+        ) : null}
+
         <Text style={styles.networkCopy}>
           Mostramos sólo cocheras operadas por Parkit.
         </Text>
@@ -171,6 +190,65 @@ export function DiscoveryHomeScreen({ navigation }: Props) {
         }}
       />
     </>
+  );
+}
+
+type HomeParkingsProps = {
+  /** Si el centro es la ubicación del conductor (y no el centro de CABA). */
+  nearUser: boolean;
+  center: { latitude: number; longitude: number };
+  onOpen: (parking: ParkingLot) => void;
+};
+
+// Cocheras para elegir sin buscar. Si falla o no hay ninguna, la sección no se
+// muestra: el buscador sigue siendo el camino principal.
+function HomeParkings({ nearUser, center, onOpen }: HomeParkingsProps) {
+  const { accessToken } = useDriverData();
+  const nearby = useNearbyParkings(center, accessToken);
+  const parkings = nearby.parkings.slice(0, MAX_HOME_PARKINGS);
+
+  if (nearby.status !== 'success' || parkings.length === 0) return null;
+
+  return (
+    <View style={styles.recentSection}>
+      <Text style={styles.sectionLabel}>
+        {nearUser ? 'COCHERAS CERCA TUYO' : 'COCHERAS PARKIT'}
+      </Text>
+      <View style={styles.recentList}>
+        {parkings.map((parking, index) => (
+          <Pressable
+            key={parking.id}
+            style={({ pressed }) => [
+              styles.recentRow,
+              index < parkings.length - 1 && styles.recentBorder,
+              pressed && styles.pressed,
+            ]}
+            onPress={() => {
+              onOpen(parking);
+            }}
+            accessibilityRole="button"
+            accessibilityLabel={`${parking.name}, ${parking.address}, ${parking.priceLabel}`}
+          >
+            <View style={styles.recentIcon}>
+              <DriverIcon name="car" size={18} color={driverColors.brand} />
+            </View>
+            <View style={styles.recentCopy}>
+              <Text style={styles.recentName} numberOfLines={1}>
+                {parking.name}
+              </Text>
+              <Text style={styles.recentAddress} numberOfLines={1}>
+                {/* La distancia se mide desde el centro de la búsqueda: sólo
+                    tiene sentido mostrarla si ese centro es el conductor. */}
+                {nearUser
+                  ? `${parking.distance} · ${parking.address}`
+                  : parking.address}
+              </Text>
+            </View>
+            <Text style={styles.parkingPrice}>{parking.priceLabel}</Text>
+          </Pressable>
+        ))}
+      </View>
+    </View>
   );
 }
 
@@ -306,6 +384,11 @@ const styles = StyleSheet.create({
   recentAddress: {
     color: driverColors.textSecondary,
     fontSize: 13,
+  },
+  parkingPrice: {
+    color: driverColors.text,
+    fontSize: 14,
+    fontWeight: '700',
   },
   networkCopy: {
     marginTop: 'auto',
