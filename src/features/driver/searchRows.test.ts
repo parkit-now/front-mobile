@@ -29,6 +29,12 @@ describe('looksLikeAddress', () => {
     expect(looksLikeAddress('Santa Fe y Callao')).toBe(true);
   });
 
+  it('una calle sin altura también, si empieza con "Av."', () => {
+    expect(looksLikeAddress('Av Santa Fe')).toBe(true);
+    expect(looksLikeAddress('avenida de mayo')).toBe(true);
+    expect(looksLikeAddress('Avellaneda')).toBe(false);
+  });
+
   it('un nombre de lugar no es una dirección', () => {
     expect(looksLikeAddress('Hospital Garrahan')).toBe(false);
     expect(looksLikeAddress('Palermo')).toBe(false);

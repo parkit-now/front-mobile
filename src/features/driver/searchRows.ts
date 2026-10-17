@@ -14,12 +14,16 @@ type Input = {
 };
 
 /**
- * Si el texto parece una dirección ("Corrientes 1234", "Santa Fe y Callao")
- * conviene ver primero las direcciones; si no ("Garrahan", "Palermo"), los
- * lugares.
+ * Si el texto parece una dirección ("Corrientes 1234", "Santa Fe y Callao",
+ * "Av. Santa Fe") conviene ver primero las direcciones; si no ("Garrahan",
+ * "Palermo"), los lugares.
  */
 export function looksLikeAddress(query: string): boolean {
-  return /\d/.test(query) || /\sy\s/i.test(query);
+  return (
+    /\d/.test(query) ||
+    /\sy\s/i.test(query) ||
+    /^\s*(av|avda|avenida|calle|pje|pasaje)\b/i.test(query)
+  );
 }
 
 /** Filas de la lista de búsqueda: secciones con su título, en orden. */
