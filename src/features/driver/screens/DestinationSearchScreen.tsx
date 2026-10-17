@@ -279,15 +279,19 @@ export function DestinationSearchScreen({ navigation }: Props) {
                       styles.emptyAction,
                       pressed && styles.pressed,
                     ]}
+                    // "Usar mi ubicación actual" ya está arriba; la salida que
+                    // falta es ir a la zona moviendo el mapa.
                     onPress={() => {
-                      void selectCurrentLocation();
+                      Keyboard.dismiss();
+                      navigation.popTo('MapResults', {
+                        destination: undefined,
+                      });
                     }}
-                    disabled={currentLocation.pending}
                     accessibilityRole="button"
                   >
-                    <DriverIcon name="current-location" size={19} />
+                    <DriverIcon name="pin" size={19} />
                     <Text style={styles.emptyActionText}>
-                      Estacionar cerca mío
+                      Buscar en el mapa
                     </Text>
                   </Pressable>
                 </View>
