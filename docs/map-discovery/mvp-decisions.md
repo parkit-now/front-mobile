@@ -34,7 +34,7 @@ El principio de experiencia es:
 | Entrada alternativa | Buscar estacionamientos cerca de la ubicacion actual         |
 | Mapa                | Se abre al tocar el buscador del inicio, sin exigir destino  |
 | Proveedor           | Google Maps en Android e iOS                                 |
-| Autocomplete        | Google Places API (New), restringida y sesgada a CABA        |
+| Autocomplete        | Photon (lugares y barrios) + Georef (calles); ver abajo      |
 | Resultados          | Mostrar exclusivamente estacionamientos operados por Parkit  |
 | Ubicacion           | Solicitar solamente permiso foreground y de forma contextual |
 | Disponibilidad      | Informar disponibilidad actual, no prometer cupo futuro      |
@@ -139,16 +139,36 @@ cocheras sin necesidad de buscar.
 
 ```mermaid
 flowchart LR
-  Mobile[front-mobile] -->|Autocomplete / detalle| Gateway[Backend Parkit]
-  Mobile -->|Nearby parkings| Gateway
+  Mobile[front-mobile] -->|Lugares y barrios| Photon[Photon / OpenStreetMap]
+  Mobile -->|Calles, alturas, esquinas| Georef[Georef datos.gob.ar]
+  Mobile -->|Nearby parkings / busqueda por nombre| Gateway[Backend Parkit]
   Mobile -->|Mapa nativo| Maps[Google Maps SDK]
   Mobile -->|Foreground| Location[Ubicacion del dispositivo]
-  Gateway --> Places[Google Places / Geocoding]
   Gateway --> DB[(Supabase Postgres + PostGIS)]
 ```
 
-El backend actua como gateway de Places para proteger la credencial de web
-services, aplicar limites, observabilidad y devolver solo los campos necesarios.
+### Proveedores de busqueda
+
+Se descarto Google Places: se cobra por busqueda, y para un MVP sin ingresos
+no se justifica. La busqueda combina dos servicios gratuitos y sin clave, que
+la app consulta directo (no hay credencial que proteger):
+
+- **Georef** (datos.gob.ar): calles con altura y esquinas de CABA. No entiende
+  nombres de lugares ni barrios, y escribe los titulos abreviados ("Pte.",
+  "Gral."), asi que la consulta se normaliza antes de enviarla.
+- **Photon** (komoot, sobre OpenStreetMap): lugares y barrios por nombre
+  (hospitales, estadios, teatros, comercios). Se excluyen paradas, andenes,
+  bicicleteros, tumbas y placas, y lo que cae fuera de CABA.
+
+Si el texto parece una direccion (altura, esquina con "y" o empieza con
+"Av.") se muestran primero las direcciones; si no, los lugares. Una calle sin
+altura no es un destino: tocarla completa el buscador para agregar el numero.
+
+Limitacion conocida: el servidor publico de Photon es para uso moderado.
+Alcanza para el MVP y la demo; con trafico real habria que alojar una
+instancia propia o pasar a un proveedor pago. Su calidad depende de los datos
+de OpenStreetMap: por ejemplo, "La Bombonera" no aparece con ese nombre.
+
 Las credenciales nativas de Maps se separan por plataforma y ambiente.
 
 ## Contratos backend necesarios
@@ -223,8 +243,7 @@ Crear credenciales independientes:
 
 - Android: Maps SDK, restringida por package y certificado SHA-1.
 - iOS: Maps SDK, restringida por bundle identifier.
-- Backend: Places/Geocoding, guardada como secreto y restringida por API y por
-  origen de red cuando la infraestructura lo permita.
+- Busqueda: Photon y Georef no usan clave.
 
 Configurar billing, cuotas, presupuesto y alertas antes de una prueba publica.
 
@@ -235,7 +254,7 @@ Configurar billing, cuotas, presupuesto y alertas antes de una prueba publica.
 - Una negativa al permiso no bloquea la busqueda manual.
 - La ultima consulta siempre prevalece sobre respuestas anteriores.
 - Mover el mapa no dispara solicitudes continuas.
-- Un error de Places no elimina resultados Parkit ya visibles.
+- Un error de Photon o Georef no elimina los resultados de las otras fuentes.
 - Un error de estacionamientos permite reintentar sin perder el destino.
 - Pin y resultado seleccionado permanecen sincronizados.
 - Los textos y controles no quedan ocultos por teclado, notch o bottom sheet.
@@ -271,7 +290,8 @@ una politica explicita de privacidad y retencion.
 1. Completado: validar los tres estados de UX y sus transiciones.
 2. Parcial: package Android y bundle ID iOS definidos; proyectos GCP
    pendientes.
-3. Pendiente: probar calidad de Places con destinos representativos de CABA.
+3. Completado: probar Georef y Photon con destinos representativos de CABA
+   (direcciones, esquinas, barrios, hospitales, estadios, teatros).
 4. Pendiente: incorporar coordenadas e indice PostGIS en backend.
 5. Pendiente: publicar el contrato de descubrimiento y sincronizar tipos
    OpenAPI.
@@ -284,7 +304,8 @@ una politica explicita de privacidad y retencion.
 
 - [Expo MapView](https://docs.expo.dev/versions/latest/sdk/map-view/)
 - [Expo Location](https://docs.expo.dev/versions/latest/sdk/location/)
-- [Google Places Autocomplete](https://developers.google.com/maps/documentation/places/web-service/place-autocomplete)
+- [Photon](https://photon.komoot.io/)
+- [API Georef](https://datosgobar.github.io/georef-ar-api/)
 - [Google Maps API security](https://developers.google.com/maps/api-security-best-practices)
 - [Google Maps pricing](https://developers.google.com/maps/billing-and-pricing/pricing)
 - [Supabase PostGIS](https://supabase.com/docs/guides/database/extensions/postgis)
