@@ -64,7 +64,7 @@ export async function searchPhotonPlaces(
     });
     if (!response.ok) throw new Error(`Photon ${response.status}`);
     const body = (await response.json()) as { features?: PhotonFeature[] };
-    return mapPhotonFeatures(body.features ?? []);
+    return mapPhotonFeatures(body.features ?? [], query);
   } finally {
     clearTimeout(timeout);
   }
@@ -73,10 +73,13 @@ export async function searchPhotonPlaces(
 /**
  * Respuesta de Photon → destinos. Sólo lugares con nombre dentro de CABA (el
  * rectángulo también toma parte del conurbano) y sin repetir nombre en el
- * mismo barrio. Las direcciones sueltas, sin nombre, las resuelve Georef.
+ * mismo barrio. Las direcciones sueltas, sin nombre, las resuelve Georef. Con
+ * `query`, se ordenan por coincidencia de palabras (ver `rankByQuery`) antes
+ * de quedarse con los primeros.
  */
 export function mapPhotonFeatures(
   features: PhotonFeature[],
+  query = '',
 ): SearchDestination[] {
   const seen = new Set<string>();
   const destinations: SearchDestination[] = [];
@@ -95,9 +98,53 @@ export function mapPhotonFeatures(
       kind: 'place',
       coordinate: { latitude, longitude },
     });
-    if (destinations.length === MAX_RESULTS) break;
   }
-  return destinations;
+  return rankByQuery(destinations, query).slice(0, MAX_RESULTS);
+}
+
+/**
+ * Photon prioriza nombres parecidos: para "teatro colon" pone "Teatro
+ * Colonial" antes que "Teatro Colón". Se reordena (sin descartar nada) por
+ * cuántas palabras de la búsqueda aparecen en el nombre, sin importar
+ * mayúsculas ni tildes. Una palabra entera vale el doble que un comienzo de
+ * palabra, que sólo cuenta para la última (el conductor puede estar
+ * escribiéndola): "colon" es entera en "Colón" pero sólo comienzo en
+ * "Colonial". Con empate queda el orden de Photon.
+ */
+export function rankByQuery(
+  destinations: SearchDestination[],
+  query: string,
+): SearchDestination[] {
+  const queryWords = words(query);
+  if (queryWords.length === 0) return destinations;
+  const last = queryWords.length - 1;
+  const score = (name: string) => {
+    const nameWords = words(name);
+    return queryWords.reduce((total, word, index) => {
+      if (nameWords.includes(word)) return total + 2;
+      const prefix =
+        index === last &&
+        nameWords.some((nameWord) => nameWord.startsWith(word));
+      return total + (prefix ? 1 : 0);
+    }, 0);
+  };
+  return destinations
+    .map((destination, index) => ({
+      destination,
+      index,
+      score: score(destination.name),
+    }))
+    .sort((a, b) => b.score - a.score || a.index - b.index)
+    .map(({ destination }) => destination);
+}
+
+function words(text: string): string[] {
+  return text
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLocaleLowerCase('es-AR')
+    .split(/[^a-z0-9ñ]+/)
+    .filter(Boolean);
 }
 
 function isInCaba(properties: PhotonFeature['properties']): boolean {

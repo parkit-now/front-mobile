@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { mapPhotonFeatures, type PhotonFeature } from './photon';
+import { mapPhotonFeatures, rankByQuery, type PhotonFeature } from './photon';
 
 const CABA = 'Ciudad Autónoma de Buenos Aires';
 
@@ -90,5 +90,55 @@ describe('mapPhotonFeatures', () => {
       feature({ name: `Lugar ${index}`, state: CABA }),
     );
     expect(mapPhotonFeatures(many)).toHaveLength(5);
+  });
+});
+
+describe('rankByQuery', () => {
+  const place = (name: string) => ({
+    id: name,
+    name,
+    address: 'CABA',
+    kind: 'place' as const,
+    coordinate: { latitude: -34.6, longitude: -58.4 },
+  });
+  const names = (query: string, list: string[]) =>
+    rankByQuery(list.map(place), query).map((item) => item.name);
+
+  it('sube el nombre con todas las palabras, sin importar tildes', () => {
+    expect(names('teatro colon', ['Teatro Colonial', 'Teatro Colón'])).toEqual([
+      'Teatro Colón',
+      'Teatro Colonial',
+    ]);
+  });
+
+  it('la última palabra cuenta mientras se escribe', () => {
+    expect(names('teatro col', ['Teatro Colonial', 'Teatro Colón'])).toEqual([
+      'Teatro Colonial',
+      'Teatro Colón',
+    ]);
+    expect(names('don jul', ['Parrilla Don Benito', 'Don Julio'])).toEqual([
+      'Don Julio',
+      'Parrilla Don Benito',
+    ]);
+  });
+
+  it('con empate respeta el orden original y no descarta nada', () => {
+    expect(names('obelisco', ['Obelisco', 'Obelisco City', 'Otro'])).toEqual([
+      'Obelisco',
+      'Obelisco City',
+      'Otro',
+    ]);
+  });
+
+  it('ordena antes de recortar a cinco resultados', () => {
+    const features = [
+      ...Array.from({ length: 6 }, (_, index) =>
+        feature({ name: `Teatro Colonial ${index}`, state: CABA }),
+      ),
+      feature({ name: 'Teatro Colón', state: CABA }),
+    ];
+    const result = mapPhotonFeatures(features, 'teatro colon');
+    expect(result).toHaveLength(5);
+    expect(result[0].name).toBe('Teatro Colón');
   });
 });
