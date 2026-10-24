@@ -5,5 +5,5 @@
     "types": ["vitest/globals"],
     "moduleResolution": "bundler"
   },
-  "include": ["App.tsx", "src", "scripts"]
+  "include": ["App.tsx", "src", "scripts", "vitest.config.ts"]
 }
